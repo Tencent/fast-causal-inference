@@ -1,0 +1,2 @@
+global-include requirements.txt fast_causal_inference/conf/*
+global-exclude test/*
