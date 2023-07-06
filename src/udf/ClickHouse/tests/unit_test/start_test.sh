@@ -1,4 +1,4 @@
-client=~/mmdcch_v52834/mmdcch/build/programs/clickhouse-client
+client=clickhouse-client
 
 $client -nm < unit_test_tbl.sql
 # input test data
