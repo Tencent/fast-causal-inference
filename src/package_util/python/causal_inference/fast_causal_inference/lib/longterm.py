@@ -11,7 +11,7 @@ import time
 import threading
 
 class LongTerm:
-    def __init__(self, sql, table, sample_num, bs_num, cluster='mmdcchsvrnewtest'): # 临时版本，需要cluster参数, 后续UDF更新后会去掉
+    def __init__(self, sql, table, sample_num, bs_num, cluster):
         self.sql_instance = AllInSqlConn(use_sql_forward = False)
         self.exe_table = table + "_longterm"
         num = self.sql_instance.sql("select count() from " + self.exe_table)

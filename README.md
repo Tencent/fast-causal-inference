@@ -9,8 +9,8 @@ It is an OLAP-based high-performance causal inference (statistical model) comput
 which solves the performance bottleneck of existing statistical model libraries (R/Python) under big data, 
 and provides causal inference capabilities for massive data execution in seconds and sub-seconds. 
 At the same time, the threshold for using statistical models is lowered through the SQL language, 
-making it easy to use in production environments. At present, it has supported the causal analysis of WeChat search, 
-WeChat video account and other businesses, greatly improving the work efficiency of data scientists.
+making it easy to use in production environments. At present, it has supported the causal analysis of WeChat-Search, 
+WeChat-Video-Account and other businesses, greatly improving the work efficiency of data scientists.
 
 #### Main advantages of the project:
 1. Provides the causal inference capability of second-level and sub-second level execution for massive data
@@ -35,7 +35,7 @@ Advanced causal inference tools
 3. Data simulation frameworks such as bootstrap/permutation are being developed to solve the problem of variance estimation without a displayed solution
 
 #### Project application:
-Already supported multiple businesses within WeChat, such as WeChat video account, WeChat Souyisou, etc.
+Already supported multiple businesses within WeChat, such as WeChat-Video-Account, WeChat-Search, etc.
 
 #### Project open source address
 github: https://github.com/Tencent/fast-causal-inference
@@ -47,7 +47,13 @@ One-Click Deployment:
 > sh bin/build.sh 
 
 If the following log is displayed, fast-causal-inference is successfully deployed.
-> build success
+> build success  
+
+Running:  
+This will create executable ${deploy_path}/clickhouse which can be used with client or server arguments.
+> clickhouse server  
+> clickhouse client
+
 
 other evironment reference: https://clickhouse.com/docs/en/install#from-sources
 
