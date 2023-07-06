@@ -1,6 +1,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionDeltamethod.h>
 #include <AggregateFunctions/FactoryHelpers.h>
+#include "base/types.h"
 
 namespace ErrorCodes
 {
@@ -11,7 +12,7 @@ namespace ErrorCodes
 namespace DB
 {
 
-bool FunctionParser::parse(std::string_view expr, int arg_num)
+bool FunctionParser::parse(std::string_view expr, UInt64 arg_num)
 {
     rpn_expr.clear();
     std::set<std::string> xargs;
@@ -71,11 +72,11 @@ bool FunctionParser::parse(std::string_view expr, int arg_num)
         op_stack.pop_back();
     }
     // check if the data matches the function
-    if (arg_num != -1)
+    if (arg_num != 0)
     {
-        if (xargs.size() != static_cast<size_t>(arg_num))
+        if (xargs.size() != arg_num)
             return false;
-        for (int i = 1; i <= arg_num; ++i)
+        for (UInt64 i = 1; i <= arg_num; ++i)
         {
             std::string arg = "x" + std::to_string(i);
             if (xargs.find(arg) == xargs.end())
@@ -101,7 +102,7 @@ std::vector<Float64> FunctionParser::getPartialDeriv(const std::vector<Float64>&
         var_map["x" + std::to_string(i+1)] = means[i];
     for (const auto & t : rpn_expr)
         if (isNumbers(t)) var_map[t] = std::stof(t);
-    int div_num = std::count(rpn_expr.begin(), rpn_expr.end(), "/");
+    auto div_num = std::count(rpn_expr.begin(), rpn_expr.end(), "/");
 
     auto is_zero_poly = [](const polynomial & poly) -> bool
     {
@@ -129,7 +130,7 @@ std::vector<Float64> FunctionParser::getPartialDeriv(const std::vector<Float64>&
             else
             {
                 if (calc_stack.size() < 2)
-                    throw Exception("Invalid expression of g", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid expression of g");
                 auto left = calc_stack.back();
                 calc_stack.pop_back();
                 auto right = calc_stack.back();
@@ -138,12 +139,12 @@ std::vector<Float64> FunctionParser::getPartialDeriv(const std::vector<Float64>&
                 if (t == "-") calc_stack.emplace_back(right - left);
                 if (t == "*") calc_stack.emplace_back((left*right) >> div_num);
                 if (is_zero_poly(left))
-                    throw Exception("Division by zero, please check the data.", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Division by zero, please check the data.");
                 if (t == "/") calc_stack.emplace_back((right<<div_num) / left);
             }
         }
         if (calc_stack.size() != 1)
-            throw Exception("Invalid expression of g", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid expression of g");
         auto poly = calc_stack.back();
         Float64 result = 0;
         for (size_t j = 0; j < poly.size(); ++j)
@@ -167,7 +168,7 @@ Float64 FunctionParser::getExpressionResult(const std::vector<Float64>& x) const
         else
         {
             if (stack.size() < 2)
-                throw Exception("Invalid expression of g", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid expression of g");
             auto left = stack.back();
             stack.pop_back();
             auto right = stack.back();
@@ -179,7 +180,7 @@ Float64 FunctionParser::getExpressionResult(const std::vector<Float64>& x) const
         }
     }
     if (stack.size() != 1)
-        throw Exception("Invalid expression of g", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid expression of g");
     return stack.back();
 }
 
@@ -192,20 +193,18 @@ AggregateFunctionPtr createAggregateFunctionDeltaMethod(
     const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     if (argument_types.empty())
-        throw Exception("Aggregate function " + name + " requires at least one argument", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires at least one argument", name);
 
     for (const auto & argument_type : argument_types)
     {
         if (!isNumber(argument_type))
-            throw Exception("Illegal type " + argument_type->getName() + " of argument of aggregate function " + name,
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of aggregate function {}." ,
+                            argument_type->getName(), name);
     }
     AggregateFunctionPtr res = std::make_shared<AggregateFunctionDeltaMethod>(argument_types, parameters);
     if (!res)
-        throw Exception(
-        "Illegal types arguments of aggregate function " + name
-            + ", must be Native Ints, Native UInts or Floats",
-        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+        "Illegal types arguments of aggregate function {}, must be Native Ints, Native UInts or Floats", name);
     return res;
 }
 
@@ -214,33 +213,30 @@ AggregateFunctionPtr createAggregateFunctionTtestSamp(
     const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     if (argument_types.empty())
-        throw Exception("Aggregate function " + name + " requires at least one argument", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires at least one argument", name);
     for (const auto & argument_type : argument_types)
     {
         if (!isNumber(argument_type))
-            throw Exception("Illegal type " + argument_type->getName() + " of argument of aggregate function " + name,
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of argument of aggregate function {}",
+                            argument_type->getName(), name);
     }
-    std::vector<Field::Types::Which> require_types = {Field::Types::String, Field::Types::String, Field::Types::Float64};
-    if constexpr (use_index)
-        require_types.erase(require_types.end() - 2);
+    std::vector<Field::Types::Which> require_types = {Field::Types::String, Field::Types::String};
 
     if (use_index && !isInteger(argument_types.back()))
-        throw Exception("Illegal type " + argument_types.back()->getName() + " of index argument of aggregate function, It must be Integer as [0/1]" + name,
-                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Illegal type {} of index argument of aggregate function, "
+                                                              "It must be Integer as [0/1] {}", argument_types.back()->getName(), name);
 
     if (parameters.empty())
-        throw Exception("Aggregate function " + name + " requires at least one parameter, String, [String]," + (!use_index ? " [Float64]," : "") + " [String]", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires at least one parameter, String, [String], {} [String]", name, (!use_index ? " [Float64]," : ""));
     for (size_t i = 0; i < parameters.size() && i < require_types.size(); ++i)
-        if (require_types[i] == Field::Types::String && parameters[i].getType() != require_types[i])
-            throw Exception("Aggregate function " + name + " requires parameter: String, [String]," + (!use_index ? " [Float64]," : "") + " [String]", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        if (parameters[i].getType() != require_types[i])
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Aggregate function {} requires parameter: String, [String], {} [String]", name, (!use_index ? " [Float64]," : ""));
 
     AggregateFunctionPtr res = std::make_shared<AggregateFunctionTtestSamp<Op, use_index>>(argument_types, parameters);
     if (!res)
-        throw Exception(
-        "Illegal types arguments of aggregate function " + name
-            + ", must be Native Ints, Native UInts or Floats",
-        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+        "Illegal types arguments of aggregate function {}, must be Native Ints, Native UInts or Floats", name);
     return res;
 }
 
@@ -249,16 +245,15 @@ AggregateFunctionPtr createAggregateFunctionXexptTtest2Samp(
 {
     AggregateFunctionPtr res;
     if (argument_types.size() < 4)
-        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Aggregate function {} requires at least 4 arguments [numerator, denominator, uin, groupname]", name);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Aggregate function {} requires at least 4 arguments \
+            [numerator, denominator, uin, groupname]", name);
     if (isString(argument_types.back()))
         res = std::make_shared<AggregateFunctionXexptTtest2Samp<String>>(argument_types, parameters);
     else
         res = std::make_shared<AggregateFunctionXexptTtest2Samp<Int64>>(argument_types, parameters);
     if (!res)
-        throw Exception(
-        "Illegal types arguments of aggregate function " + name
-            + ", must be Native Ints, Native UInts or Floats",
-        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+        "Illegal types arguments of aggregate function {}, must be Native Ints, Native UInts or Floats", name);
     return res;
 }
 }

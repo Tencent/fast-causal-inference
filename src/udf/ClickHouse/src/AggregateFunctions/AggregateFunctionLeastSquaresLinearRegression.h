@@ -52,8 +52,10 @@ public:
 
     LeastSquaresParams() = delete;
 
-    LeastSquaresParams(const size_t arg_num_, const size_t use_bias_, const UInt64 count_, Matrix && dot_product_matrix_, Matrix && covariance_matrix_, Matrix && xx_inverse_, Matrix && xx_weighted_)
-        :  arg_num(arg_num_), use_bias(use_bias_), count(count_), data(dot_product_matrix_), covar_ma(covariance_matrix_), xx_inverse(xx_inverse_), xx_weighted(xx_weighted_)
+    LeastSquaresParams(const size_t arg_num_, const size_t use_bias_, const UInt64 count_,
+        Matrix && dot_product_matrix_, Matrix && covariance_matrix_, Matrix && xx_inverse_, Matrix && xx_weighted_)
+        : arg_num(arg_num_), use_bias(use_bias_), count(count_),
+        data(dot_product_matrix_), covar_ma(covariance_matrix_), xx_inverse(xx_inverse_), xx_weighted(xx_weighted_)
     {
         parser();
     }
@@ -66,14 +68,14 @@ public:
         size_t size_xx = arg_num - 1 + use_bias;
         Matrix xx(size_xx, size_xx);
         if (size_xx >= matrix.size1() || size_xx >= matrix.size2())
-            throw Exception("LeastSquaresParams: matrix size error", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "LeastSquaresParams: matrix size error");
         for (size_t i = 0; i < size_xx; ++i)
             for (size_t j = 0; j < size_xx; ++j)
                 xx(i, j) = matrix(i+1, j+1);
 
         Matrix xx_1(size_xx, size_xx);
         if (!invertMatrix(xx, xx_1))
-            throw Exception("InvertMatrix failed. some variables in the table are perfectly collinear.", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "InvertMatrix failed. some variables in the table are perfectly collinear.");
         params.xx_1 = xx_1;
 
         Matrix xy(size_xx, 1);
@@ -126,7 +128,7 @@ public:
         {
             if (!(xx_inverse.size1() == xx_inverse.size2() && xx_inverse.size1() == xx.size1() &&
                   xx_weighted.size1() == xx_weighted.size2() && xx_weighted.size1() == xx.size1()))
-                throw Exception("xx_inverse size error", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "xx_inverse size error");
             Matrix tmp = prod(static_cast<Matrix>(prod(xx_inverse, xx_weighted)), xx_inverse);
             for (size_t i = 0; i < xx.size1(); ++i)
                 std(0, i) = tmp(i, i);
@@ -194,8 +196,10 @@ public:
 
     LeastSquaresLinearRegressionData() = default;
 
-    explicit LeastSquaresLinearRegressionData(size_t arg_num_, bool use_bias_, const Matrix & xx_inverse_, const Matrix & xx_weighted_) :
-        arg_num(arg_num_), use_bias(static_cast<size_t>(use_bias_)), data(arg_num), covar_ma(arg_num), xx_inverse(xx_inverse_), xx_weighted(xx_weighted_) {}
+    explicit LeastSquaresLinearRegressionData(size_t arg_num_, bool use_bias_,
+        const Matrix & xx_inverse_, const Matrix & xx_weighted_) 
+        : arg_num(arg_num_), use_bias(static_cast<size_t>(use_bias_)), data(arg_num),
+        covar_ma(arg_num), xx_inverse(xx_inverse_), xx_weighted(xx_weighted_) {}
 
     void add(const IColumn ** column, size_t row_num)
     {
@@ -230,7 +234,8 @@ public:
         Matrix data_matrix = data.getMatrix();
         Matrix covar_matrix = covar_ma.getMatrix();
         UInt64 count = data.getCount();
-        LeastSquaresParams<Float64> params(arg_num-use_weights, use_bias, count, std::move(data_matrix), std::move(covar_matrix), Matrix{xx_inverse}, Matrix{xx_weighted});
+        LeastSquaresParams<Float64> params(arg_num-use_weights, use_bias, count, std::move(data_matrix),
+            std::move(covar_matrix), Matrix{xx_inverse}, Matrix{xx_weighted});
         return Op::apply(params.getParams());
     }
 
@@ -243,7 +248,8 @@ public:
         Matrix data_matrix = data.getMatrix();
         Matrix covar_matrix = covar_ma.getMatrix();
         UInt64 count = data.getCount();
-        LeastSquaresParams<Float64> params(arg_num-use_weights, use_bias, count, std::move(data_matrix), std::move(covar_matrix), Matrix{xx_inverse}, Matrix{xx_weighted});
+        LeastSquaresParams<Float64> params(arg_num-use_weights, use_bias, count, std::move(data_matrix),
+            std::move(covar_matrix), Matrix{xx_inverse}, Matrix{xx_weighted});
         Op::predict(to, arguments, offset, limit, params);
     }
 
@@ -270,16 +276,25 @@ struct AggregateFunctionOls
         result.pop_back();
         result += ")\n\n";
         result += "  Coefficients:\n";
-        result += "  " +  to_string_with_precision<16>(".") + to_string_with_precision("Estimate") + to_string_with_precision("Std. Error") + to_string_with_precision("t value") + to_string_with_precision("Pr(>|t|)") + "\n";
+        result += "  " +  to_string_with_precision<16>(".") + to_string_with_precision("Estimate") 
+               + to_string_with_precision("Std. Error") + to_string_with_precision("t value") 
+               + to_string_with_precision("Pr(>|t|)") + "\n";
         if (params.use_bias)
-            result += "  " + to_string_with_precision<16>("(Intercept)") + to_string_with_precision(params.coef.back()) + to_string_with_precision(params.std.back()) + to_string_with_precision(params.t_value.back()) + to_string_with_precision(params.p_value.back()) + "\n";
+            result += "  " + to_string_with_precision<16>("(Intercept)") + to_string_with_precision(params.coef.back())
+              + to_string_with_precision(params.std.back()) + to_string_with_precision(params.t_value.back()) 
+              + to_string_with_precision(params.p_value.back()) + "\n";
         for (size_t i = 0; i < params.arg_num - 1; ++i)
         {
-            result += "  " + to_string_with_precision<16>("x" + std::to_string(i + 1)) + to_string_with_precision(params.coef[i]) + to_string_with_precision(params.std[i]) + to_string_with_precision(params.t_value[i]) + to_string_with_precision(params.p_value[i]) + "\n";
+            result += "  " + to_string_with_precision<16>("x" + std::to_string(i + 1)) 
+                   + to_string_with_precision(params.coef[i]) + to_string_with_precision(params.std[i]) 
+                   + to_string_with_precision(params.t_value[i]) + to_string_with_precision(params.p_value[i]) + "\n";
         }
-        result += "\n  Residual standard error: " + std::to_string(params.standard_error) + " on " + std::to_string(params.degrees_of_freedom) + " degrees of freedom\n";
-        result += "  Multiple R-squared: " + std::to_string(params.r_squared) + ", Adjusted R-squared: " + std::to_string(params.adjusted_r_squared) + "\n";
-        result += "  F-statistic: " + std::to_string(params.f_statistic) + " on " + std::to_string(params.k) + " and " + std::to_string(params.degrees_of_freedom) + " DF,  p-value: " + std::to_string(params.f_value) + "\n";
+        result += "\n  Residual standard error: " + std::to_string(params.standard_error) 
+               + " on " + std::to_string(params.degrees_of_freedom) + " degrees of freedom\n";
+        result += "  Multiple R-squared: " + std::to_string(params.r_squared) 
+               + ", Adjusted R-squared: " + std::to_string(params.adjusted_r_squared) + "\n";
+        result += "  F-statistic: " + std::to_string(params.f_statistic) + " on " + std::to_string(params.k) + " and "
+               + std::to_string(params.degrees_of_freedom) + " DF,  p-value: " + std::to_string(params.f_value) + "\n";
         return result;
     }
 
@@ -297,31 +312,32 @@ struct AggregateFunctionOls
     {
         size_t rows_num = arguments.front().column->size();
         if (params.getParams().arg_num != arguments.size())
-            throw Exception("Number of arguments is not equal to the number of model", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                            "Number of arguments is not equal to the number of model");
 
         if (offset > rows_num || offset + limit > rows_num)
-            throw Exception("Invalid offset and limit for predict. "
-                            "Block has " + toString(rows_num) + " rows, but offset is " + toString(offset) +
-                            " and limit is " + toString(limit), ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid offset and limit for predict. "
+                            "Block has {} rows, but offset is {}  and limit is {}",
+                            toString(rows_num), toString(offset), toString(limit));
 
         const auto & coef = params.getParams().coef;
         if (offset > rows_num || offset + limit > rows_num)
-            throw Exception("Invalid offset and limit for predict. "
-                            "Block has " + toString(rows_num) + " rows, but offset is " + toString(offset) +
-                            " and limit is " + toString(limit), ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid offset and limit for predict. "
+                            "Block has {} rows, but offset is {}  and limit is {}",
+                            toString(rows_num), toString(offset), toString(limit));
 
         std::vector<Float64> results(limit, params.getParams().use_bias ? coef.back() : 0);
         auto * column = typeid_cast<ColumnFloat64 *>(&to);
         if (!column)
-            throw Exception("Cast of column of predictions is incorrect. getReturnTypeToPredict must return same value as it is casted to",
-                        ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cast of column of predictions is incorrect. \
+                getReturnTypeToPredict must return same value as it is casted to");
         auto & container = column->getData();
         for (size_t i = 1; i < arguments.size(); ++i)
         {
             const ColumnWithTypeAndName & cur_col = arguments[i];
 
             if (!isNativeNumber(cur_col.type))
-                throw Exception("Prediction arguments must have numeric type", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Prediction arguments must have numeric type" );
 
             const auto & features_column = cur_col.column;
             for (size_t row_num = 0; row_num < limit; ++row_num)
@@ -351,12 +367,11 @@ struct AggregateFunctionOlsInterval : AggregateFunctionOls
     {
         size_t rows_num = arguments.front().column->size();
         if (params.getParams().arg_num + 2 < arguments.size())
-            throw Exception("Number of arguments is not equal to the number of model", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Number of arguments is not equal to the number of model");
         if (offset > rows_num || offset + limit > rows_num)
-            throw Exception("Invalid offset and limit for predict. "
-                            "Block has " + toString(rows_num) + " rows, but offset is " + toString(offset) +
-                            " and limit is " + toString(limit), ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid offset and limit for predict. "
+                                                       "Block has {} rows, but offset is {}  and limit is {}",
+                            toString(rows_num), toString(offset), toString(limit));
         const auto & coef = params.getParams().coef;
         auto use_bias = params.getParams().use_bias;
         auto arg_num = params.getParams().arg_num;
@@ -365,13 +380,13 @@ struct AggregateFunctionOlsInterval : AggregateFunctionOls
 
         ColumnArray * column = typeid_cast<ColumnArray *>(&to);
         if (!column)
-            throw Exception("Cast of column of predictions is incorrect. getReturnTypeToPredict must return same value as it is casted to",
-                        ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cast of column of predictions is incorrect. "
+                                                       "getReturnTypeToPredict must return same value as it is casted to");
         for (size_t row_num = 0; row_num < limit; ++row_num)
         {
             const ColumnWithTypeAndName & first_col = arguments[1];
             if (!isString(first_col.type))
-                throw Exception("Prediction arguments must have string type", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Prediction arguments must have string type");
 
             auto tmp = first_col.column->getDataAt(offset + row_num);
             std::string interval = tmp.toString();
@@ -391,7 +406,7 @@ struct AggregateFunctionOlsInterval : AggregateFunctionOls
                 const ColumnWithTypeAndName & cur_col = arguments[i];
 
                 if (!isNativeNumber(cur_col.type))
-                    throw Exception("Prediction arguments must have numeric type", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Prediction arguments must have numeric type");
 
                 const auto & features_column = cur_col.column;
                 result += features_column->getFloat64(offset + row_num) * coef[pos];
@@ -422,7 +437,7 @@ struct AggregateFunctionOlsInterval : AggregateFunctionOls
                 upper = result + sqrt(params.getParams().sigma2 + se * se) * qt;
             }
             else
-                throw Exception("Invalid interval type", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid interval type");
 
             column->getOffsets().push_back(column->getOffsets().back() + 3);
             column->getData().insert(result);
@@ -439,7 +454,8 @@ struct AggregateFunctionWls : public AggregateFunctionOls
 
 template <typename T, typename Op, bool use_weights = false>
 class AggregateFunctionLeastSquaresLinearRegression final:
-    public IAggregateFunctionDataHelper<LeastSquaresLinearRegressionData<T, Op, use_weights>, AggregateFunctionLeastSquaresLinearRegression<T, Op, use_weights>>
+    public IAggregateFunctionDataHelper<LeastSquaresLinearRegressionData<T, Op, use_weights>,
+           AggregateFunctionLeastSquaresLinearRegression<T, Op, use_weights>>
 {
 private:
     using Data = LeastSquaresLinearRegressionData<T, Op, use_weights>;
@@ -448,7 +464,8 @@ private:
     Matrix xx_inverse, xx_weighted;
 public:
     explicit AggregateFunctionLeastSquaresLinearRegression(const DataTypes & arguments, const Array & params)
-        :IAggregateFunctionDataHelper<LeastSquaresLinearRegressionData<T, Op, use_weights>, AggregateFunctionLeastSquaresLinearRegression<T, Op, use_weights>> ({arguments}, {})
+        :IAggregateFunctionDataHelper<LeastSquaresLinearRegressionData<T, Op, use_weights>, 
+        AggregateFunctionLeastSquaresLinearRegression<T, Op, use_weights>> ({arguments}, {}, createResultType())
     {
         arguments_num = arguments.size();
         if (!params.empty())
@@ -458,8 +475,8 @@ public:
         {
             // unparse str format with 2d-matrix like '[[1,2],[3,4]]' to matrix
             if (str[0] != '[' || str.back() != ']')
-                throw Exception("Invalid matrix format", ErrorCodes::BAD_ARGUMENTS);
-                
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid matrix format");
+
             std::vector<std::vector<Float64>> tmp_ma;
             size_t s = 1;
             while (s < str.size())
@@ -476,15 +493,15 @@ public:
                 s = e + 1 + (str[e] == ']');
             }
             if (tmp_ma.empty())
-                throw Exception("Invalid matrix format", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid matrix format");
 
             matrix.resize(tmp_ma.size(), tmp_ma[0].size());
             for (size_t i = 0; i < tmp_ma.size(); ++i)
             {
                 if (i && tmp_ma[i].size() != tmp_ma[i-1].size())
-                    throw Exception("Invalid matrix format", ErrorCodes::BAD_ARGUMENTS);
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid matrix format");
                 for (size_t j = 0; j < tmp_ma[0].size(); ++j)
-                   matrix(i, j) = tmp_ma[i][j];
+                    matrix(i, j) = tmp_ma[i][j];
             }
         };
 
@@ -496,7 +513,7 @@ public:
                 initailize_matrix(xx_weighted, params[3].get<String>());
             }
             else
-                throw Exception("Invalid type of input matrix", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid type of input matrix");
         }
     }
 
@@ -515,7 +532,8 @@ public:
     {
         if (arguments.size() < arguments_num - use_weights)
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
-                  "Predict got incorrect number of arguments. Got: {}. Required: {}",  arguments.size(), arguments_num - use_weights);
+                  "Predict got incorrect number of arguments. Got: {}. Required: {}",
+                  arguments.size(), arguments_num - use_weights);
         this->data(place).predict(to, arguments, offset, limit);
     }
 
@@ -526,7 +544,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeString>();
     }
@@ -546,12 +564,12 @@ public:
         this->data(place).merge(this->data(rhs));
     }
 
-    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t>) const override
     {
         this->data(place).serialize(buf);
     }
 
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t>, Arena *) const override
     {
         this->data(place).deserialize(buf);
     }

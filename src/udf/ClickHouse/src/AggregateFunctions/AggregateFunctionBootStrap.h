@@ -116,12 +116,13 @@ private:
 
 public:
     explicit AggregateFunctionDistributedNodeRowNumber(const DataTypes & arguments, const Array & params)
-      :IAggregateFunctionDataHelper<DistributedNodeRowNumberData, AggregateFunctionDistributedNodeRowNumber> ({arguments}, {params}) 
+        :IAggregateFunctionDataHelper<DistributedNodeRowNumberData, AggregateFunctionDistributedNodeRowNumber> 
+        ({arguments}, {params}, createResultType()) 
     {
         if (!params.empty())
             seed = params[0].get<UInt64>();
         else
-           seed = std::chrono::system_clock::now().time_since_epoch().count();
+            seed = std::chrono::system_clock::now().time_since_epoch().count();
         if (params.size() > 1)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "This aggregate function neeed only one parameters [seed]");
     }
@@ -133,7 +134,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeString>();
     }
@@ -145,7 +146,7 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-         this->data(place).add(columns, row_num);
+        this->data(place).add(columns, row_num);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -175,7 +176,8 @@ class BootStrapBinomialDistribution
 public:
     BootStrapBinomialDistribution() = default;
 
-    BootStrapBinomialDistribution(size_t total_row_num_, size_t rest_row_num_, size_t seed_) : random_get(seed_), total_row_num(total_row_num_), sample_num(rest_row_num_) {}
+    BootStrapBinomialDistribution(size_t total_row_num_, size_t rest_row_num_, size_t seed_) 
+        : random_get(static_cast<UInt32>(seed_)), total_row_num(total_row_num_), sample_num(rest_row_num_) {}
 
     size_t operator()(const size_t & row_num)
     {
@@ -196,7 +198,8 @@ class BootStrapBinomialDistributionWithLock : public BootStrapBinomialDistributi
 public:
     BootStrapBinomialDistributionWithLock() = default;
 
-    BootStrapBinomialDistributionWithLock(size_t total_row_num_, size_t rest_row_num_, size_t seed_) : BootStrapBinomialDistribution(total_row_num_, rest_row_num_, seed_) {} 
+    BootStrapBinomialDistributionWithLock(size_t total_row_num_, size_t rest_row_num_, size_t seed_) 
+        : BootStrapBinomialDistribution(total_row_num_, rest_row_num_, seed_) {} 
 
     size_t operator()(const size_t & row_num)
     {
@@ -300,7 +303,7 @@ public:
             data_to.resize(old_size + nested_to.size());
 
             for (size_t i = 0; i < nested_to.size(); ++i)
-                data_to[old_size + i] = nested_to[i].get<T>();
+                data_to[old_size + i] = static_cast<T>(nested_to[i].get<T>());
             offsets_to.push_back(offsets_to.back() + nested_to.size());
         }
     }
@@ -353,29 +356,10 @@ private:
 
 public:
     explicit AggregateFunctionBootStrap(const DataTypes & arguments, const Array & params)
-        :IAggregateFunctionDataHelper<BootStrapData, AggregateFunctionBootStrap> ({arguments}, {params}) 
+        :IAggregateFunctionDataHelper<BootStrapData, AggregateFunctionBootStrap> ({arguments}, {params}, createResultType(arguments, params)) 
     {
         if (params.size() != 4)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Aggregate function " + getName() + " requires 4 paramers");
-        String aggregate_function_name_with_params;
-        String aggregate_function_name;
-        aggregate_function_name_with_params = params[0].get<String>();
-        for (auto & ch : aggregate_function_name_with_params)
-            if (ch == '\"')
-                ch = '\'';
-
-        boost::algorithm::trim(aggregate_function_name_with_params);
-        if (boost::algorithm::contains(aggregate_function_name_with_params, "State"))
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Params of aggregate_name is not support for funcState, please use BootStrapState");
-
-        Array params_row;
-        getAggregateFunctionNameAndParametersArray(aggregate_function_name_with_params,
-                                                   aggregate_function_name, params_row, "function " + getName(), nullptr);
-        AggregateFunctionProperties properties;
-        aggregate_function = AggregateFunctionFactory::instance().get(aggregate_function_name, argument_types, params_row, properties);
-        if (!aggregate_function)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "The aggregate function is invalid");
-
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Aggregate function {} requires 4 paramers", getName());
         bs_num = params[2].get<UInt64>();
         if (bs_num == 0 || bs_num > 1000)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "BootStrap num must in [1, 1000]");
@@ -410,7 +394,7 @@ public:
                 auto ratio = params[1].get<Float64>();
                 if (ratio < 0. || ratio > 1.)
                     throw Exception(ErrorCodes::BAD_ARGUMENTS, "The ratio must in [0, 1]");
-                sample_num = ratio * total_row_number;
+                sample_num = static_cast<UInt64>(std::floor(ratio * total_row_number));
             }
             else
                 sample_num = params[1].get<UInt64>();
@@ -437,6 +421,7 @@ public:
         for (size_t i = 0; i < bs_num; ++i)
             batch_schedulers.emplace_back(total_row_number_this_node, sample_num, seed + i + 1);
 
+        aggregate_function = parseAggregateFunction(arguments, params);
     }
 
     void create(AggregateDataPtr __restrict place) const override
@@ -462,8 +447,8 @@ public:
             if (batch_sample_num <= 100000)
             {
                 use_uniform = true;
-                std::default_random_engine generator(seed + j + 1);
-                std::uniform_int_distribution<UInt32> distribution(0, batch_size - 1);
+                std::default_random_engine generator(static_cast<UInt32>(seed + j + 1));
+                std::uniform_int_distribution<UInt64> distribution(0, batch_size - 1);
                 uniform_count.resize_fill(batch_size, 0);
                 for (size_t i = 0; i < batch_sample_num; ++i)
                     uniform_count[distribution(generator)]++;
@@ -507,9 +492,37 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    DataTypePtr getReturnType() const override
+    AggregateFunctionPtr parseAggregateFunction(const DataTypes & arguments, const Array & params) const
     {
-        return std::make_shared<DataTypeArray>(aggregate_function->getReturnType());
+        if (params.empty())
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, 
+                "Aggregate function {} requires at least one parameter: ", getName());
+        String aggregate_function_name_with_params;
+        String aggregate_function_name;
+        aggregate_function_name_with_params = params[0].get<String>();
+        for (auto & ch : aggregate_function_name_with_params)
+            if (ch == '\"')
+                ch = '\'';
+
+        boost::algorithm::trim(aggregate_function_name_with_params);
+        if (boost::algorithm::contains(aggregate_function_name_with_params, "State"))
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Params of aggregate_name is not support for funcState,\
+                please use BootStrapState");
+
+        Array params_row;
+        getAggregateFunctionNameAndParametersArray(aggregate_function_name_with_params,
+                                                   aggregate_function_name, params_row, "function " + getName(), nullptr);
+        AggregateFunctionProperties properties;
+        auto res = AggregateFunctionFactory::instance().get(aggregate_function_name, arguments,
+                                                                      params_row, properties);
+        if (!res)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "The aggregate function is invalid");
+        return res;
+    }
+
+    DataTypePtr createResultType(const DataTypes & arguments, const Array & params) const
+    {
+        return std::make_shared<DataTypeArray>(parseAggregateFunction(arguments, params)->getResultType());
     }
 
     DataTypePtr getReturnTypeToPredict() const override
@@ -519,9 +532,9 @@ public:
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
     {
-        MutableColumnPtr nested_col_ptr = aggregate_function->getReturnType()->createColumn();
+        MutableColumnPtr nested_col_ptr = aggregate_function->getResultType()->createColumn();
         IColumn & nested_col = *nested_col_ptr;
-        auto nested_type = aggregate_function->getReturnType();
+        auto nested_type = aggregate_function->getResultType();
 #define PUBLISH(type) \
         if (WhichDataType(nested_type).is##type()) \
             this->data(place).publish<type>(to, arena, nested_col);
@@ -557,6 +570,8 @@ public:
     {
         this->data(place).deserialize(buf);
     }
+
+    bool hasTrivialDestructor() const override { return aggregate_function->hasTrivialDestructor(); }
 
     void destroy(AggregateDataPtr __restrict place) const noexcept override
     {

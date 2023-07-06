@@ -40,12 +40,12 @@ struct SRMData
             group2sum[column[1]->getInt(row_num)] += column[0]->getFloat64(row_num);
         const ColumnArray * column_arr = checkAndGetColumn<ColumnArray>(*(column[2]));
         if (!column_arr)
-            throw Exception("Illegal column " + column[2]->getName() + " of argument of aggregate function SRM",
-                            ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Illegal column {} of argument of aggregate function SRM",
+                            column[2]->getName());
 
         const ColumnArray::Offsets & offsets = column_arr->getOffsets();
         if (offsets.size() <= row_num)
-            throw Exception("Array offsets error", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Array offsets error");
         size_t start = offsets[row_num - 1];
         if (ratios.empty())
         {
@@ -60,7 +60,7 @@ struct SRMData
         for (const auto & [index, sum] : source.group2sum)
             group2sum[index] += sum;
         if (group2sum.size() > 1000)
-            throw Exception("Too many groups", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Too many groups");
         if (ratios.empty())
             ratios.insert(ratios.begin(), source.ratios.begin(), source.ratios.end());
     }
@@ -134,7 +134,8 @@ struct SRMData
         Float64 dof = f_obs.size() - 0 - 1;
         p_value = 1 - boost::math::cdf(boost::math::chi_squared{dof}, chisquare);
         String result;
-        result = to_string_with_precision("groupname") + to_string_with_precision("f_obs") + to_string_with_precision("ratio") + to_string_with_precision("chisquare") + to_string_with_precision("p-value") + "\n";
+        result = to_string_with_precision("groupname") + to_string_with_precision("f_obs") + to_string_with_precision("ratio") 
+               + to_string_with_precision("chisquare") + to_string_with_precision("p-value") + "\n";
         size_t pos = 0;
         for (const auto & [group, ob] : group2sum)
         {
@@ -161,7 +162,7 @@ private:
 
 public:
     explicit AggregateFunctionSRM(const DataTypes & arguments, const Array &)
-        :IAggregateFunctionDataHelper<SRMData<Key>, AggregateFunctionSRM<Key>> ({arguments}, {}) {}
+        :IAggregateFunctionDataHelper<SRMData<Key>, AggregateFunctionSRM<Key>> ({arguments}, {}, createResultType()) {}
 
     String getName() const override
     {
@@ -170,19 +171,19 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeString>();
     }
 
-    void create(AggregateDataPtr __restrict place) const override
+    void create(AggregateDataPtr __restrict place) const override // NOLINT
     {
         new (place) Data();
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-         this->data(place).add(columns, row_num);
+        this->data(place).add(columns, row_num);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override

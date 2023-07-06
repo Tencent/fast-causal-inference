@@ -23,25 +23,25 @@ AggregateFunctionPtr createAggregateFunctionLeastSquaresLinearRegression(
     const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     if (argument_types.size() <= 1)
-        throw Exception("Aggregate function " + name + " requires at least two arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, 
+            "Aggregate function {} requires at least two arguments", name);
 
     for (const auto & argument_type : argument_types)
     {
         if (!isNumber(argument_type))
-            throw Exception("Illegal type " + argument_type->getName() + " of argument of aggregate function " + name,
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Illegal type {} of argument of aggregate function {}", argument_type->getName(), name);
     }
 
-    if (!(parameters.empty() || (parameters.size() >= 1 && parameters[0].getType() == Field::Types::Bool)))
-        throw Exception("Aggregate function " + name + " requires no parameters or a single boolean parameter",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+    if (!(parameters.empty() || (!parameters.empty() && parameters[0].getType() == Field::Types::Bool)))
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, 
+            "Aggregate function {} requires no parameters or a single boolean parameter", name);
 
     auto res = std::make_shared<AggregateFunctionLeastSquaresLinearRegression<T, Op, use_weights>>(argument_types, parameters);
     if (!res)
-        throw Exception(
-        "Illegal types arguments of aggregate function " + name
-            + ", must be Native Ints, Native UInts or Floats",
-        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+        "Illegal types arguments of aggregate function {}\
+            , must be Native Ints, Native UInts or Floats", name);
     return res;
 }
 }
@@ -49,8 +49,10 @@ AggregateFunctionPtr createAggregateFunctionLeastSquaresLinearRegression(
 void registerAggregateFunctionLeastSquaresLinearRegression(AggregateFunctionFactory & factory)
 {
     factory.registerFunction("Ols", createAggregateFunctionLeastSquaresLinearRegression<Float64, AggregateFunctionOls>);
-    factory.registerFunction("OlsInterval", createAggregateFunctionLeastSquaresLinearRegression<Float64, AggregateFunctionOlsInterval>);
-    factory.registerFunction("Wls", createAggregateFunctionLeastSquaresLinearRegression<Float64, AggregateFunctionWls, true>);
+    factory.registerFunction("OlsInterval", 
+                            createAggregateFunctionLeastSquaresLinearRegression<Float64, AggregateFunctionOlsInterval>);
+    factory.registerFunction("Wls", 
+                            createAggregateFunctionLeastSquaresLinearRegression<Float64, AggregateFunctionWls, true>);
 }
 
 }

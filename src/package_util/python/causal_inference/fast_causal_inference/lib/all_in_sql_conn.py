@@ -92,7 +92,7 @@ class AllInSqlConn:
         return result
 
     # with sql forward and format all_in_sql result
-    def sql(self, sql):
+    def sql(self, sql, use_output_format=True):
         is_recursive_forcasting = False
         if sql.find("recursiveForcasting") != -1:
             is_recursive_forcasting = True
@@ -114,6 +114,8 @@ class AllInSqlConn:
             return Ols(res)
         else:
             res = self.format_sql_result(res)
+            if use_output_format == False:
+                return res
             filter = ['estimate', 'stderr', 't-statistic', 'p-value', 'lower', 'upper']
             final_res = []
             tmp = []

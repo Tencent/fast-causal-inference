@@ -10,7 +10,7 @@ with open("requirements.txt", "r") as f:
         requirements.append(line.strip('\n').strip())
 
 setup(name='fast-causal-inference',
-      version='1.7.0',
+      version='1.7.15',
       description='fast causal inference package',
       long_description=long_description,
       long_description_content_type='text/markdown',

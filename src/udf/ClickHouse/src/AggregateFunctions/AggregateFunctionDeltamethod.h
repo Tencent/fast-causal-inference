@@ -80,7 +80,7 @@ public:
         return index;
     }
 
-    bool parse(std::string_view expr, int arg_num = -1);
+    bool parse(std::string_view expr, UInt64 arg_num = 0);
 
     std::vector<Float64> getPartialDeriv(const std::vector<Float64>& means) const;
 
@@ -104,7 +104,8 @@ struct DeltaMethod
         Matrix cov = cov_ma.getMatrix();
         auto partial_derivatives = partial_deriv.getPartialDeriv(means);
         if (partial_derivatives.size() != cov.size1() || partial_derivatives.size() != cov.size2())
-            throw Exception("The number of partial derivatives is not equal to the number of covariance", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "The number of partial derivatives is not equal to the number of covariance");
+                
         for (size_t i = 0; i < cov.size2(); ++i)
             for (size_t j = 0; j < cov.size1(); ++j)
                 result += partial_derivatives[j] * partial_derivatives[i] * (cov(j, i) / count);
@@ -156,14 +157,14 @@ private:
 
 public:
     explicit AggregateFunctionDeltaMethod(const DataTypes & arguments, const Array & params)
-        :IAggregateFunctionDataHelper<DeltaMethodData, AggregateFunctionDeltaMethod> ({arguments}, {})
+        :IAggregateFunctionDataHelper<DeltaMethodData, AggregateFunctionDeltaMethod> ({arguments}, {}, createResultType())
     {
         arguments_num = arguments.size();
         if (!((params.size() == 1 && params[0].getType() == Field::Types::String) ||
               (params.size() == 2 && params[0].getType() == Field::Types::String && params[1].getType() == Field::Types::Bool)))
-            throw Exception("Aggregate function " + getName() + " requires 1 or 2 parameters: String, [Bool].", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 1 or 2 parameters: String, [Bool].", getName());
         if (!partial_derivatives.parse(params[0].get<const String &>(), arguments_num))
-            throw Exception("params of g is not valid", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "params of g is not valid");
         if (params.size() > 1)
             is_std = params[1].get<bool>();
     }
@@ -175,7 +176,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeFloat64>();
     }
@@ -217,7 +218,8 @@ struct TtestSampData : public DeltaMethodData
 {
     TtestSampData() = default;
 
-    explicit TtestSampData(const size_t arguments_num) : DeltaMethodData(arguments_num - static_cast<size_t>(use_index)), arg_num(arguments_num) {}
+    explicit TtestSampData(const size_t arguments_num) 
+        : DeltaMethodData(arguments_num - use_index), arg_num(arguments_num) {}
 
     void add(const IColumn ** column, size_t row_num)
     {
@@ -236,9 +238,10 @@ struct TtestSampData : public DeltaMethodData
         covar_ma.add(row);
         if constexpr (use_index)
         {
-            if (!index2covs.contains(row.back()))
-                index2covs[row.back()] = CovarianceMatrix{arg_num - 1};
-            index2covs[row.back()].add(row);
+            Int32 index = static_cast<Int32>(std::floor(row.back() + 0.5));
+            if (!index2covs.contains(index))
+                index2covs[index] = CovarianceMatrix{arg_num - 1};
+            index2covs[index].add(row);
         }
     }
 
@@ -256,7 +259,7 @@ struct TtestSampData : public DeltaMethodData
             }
         }
         if (index2covs.size() > 100)
-            throw Exception("Too many indexes", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Too many indexes");
     }
 
     void serialize(WriteBuffer & buf) const
@@ -286,7 +289,7 @@ struct TtestSampData : public DeltaMethodData
             {
                 size_t index = 0;
                 readVarUInt(index, buf);
-                if (!index2covs.count(index))
+                if (!index2covs.contains(index))
                     index2covs[index] = CovarianceMatrix{arg_num - 1};
                 index2covs[index].deserialize(buf);
             }
@@ -299,7 +302,7 @@ struct TtestSampData : public DeltaMethodData
     }
 
     size_t arg_num;
-    std::map<Int32, CovarianceMatrix> index2covs;
+    std::map<UInt64, CovarianceMatrix> index2covs;
 };
 
 struct Ttest1Samp
@@ -343,7 +346,7 @@ struct Ttest1Samp
         }
         FunctionParser total_g_parser;
         if (!total_g_parser.parse(total_g))
-            throw Exception("params of g is not valid", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "params of g is not valid");
         auto deriv_result = total_g_parser.getPartialDeriv(means);
 
         size_t n = calc_elements.size();
@@ -365,7 +368,7 @@ struct Ttest1Samp
         {
               FunctionParser parser;
               if (!parser.parse(g))
-                  throw Exception("params of a is not valid", ErrorCodes::BAD_ARGUMENTS);
+                  throw Exception(ErrorCodes::BAD_ARGUMENTS, "params of a is not valid");
               auto derivs = parser.getPartialDeriv(means);
               std::vector<Float64> result(indexs.size(), 0);
               for (size_t i = 0; i < indexs.size(); i++)
@@ -395,7 +398,8 @@ struct Ttest1Samp
         return covs;
     }
 
-    inline static std::tuple<std::vector<std::vector<Float64>>, Matrix, Matrix, Matrix> getCovxy(CovarianceMatrix& cov_ma, const Params& params)
+    inline static std::tuple<std::vector<std::vector<Float64>>, Matrix, Matrix, Matrix> 
+        getCovxy(CovarianceMatrix& cov_ma, const Params& params)
     {
         auto covs = getCovs(cov_ma, params);
         size_t n = covs.size();
@@ -410,7 +414,7 @@ struct Ttest1Samp
 
         Matrix cov_xx_inv(cov_xx.size1(), cov_xx.size2());
         if (!invertMatrix(cov_xx, cov_xx_inv))
-            throw Exception("InvertMatrix failed. some variables in the table are perfectly collinear.", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "InvertMatrix failed. some variables in the table are perfectly collinear.");
         return std::make_tuple(covs, cov_xy, cov_xx, cov_xx_inv);
     }
 
@@ -421,7 +425,7 @@ struct Ttest1Samp
         Matrix theta = prod(cov_xy, cov_xx_inv);
         FunctionParser y_parser;
         if (!y_parser.parse(params.g))
-            throw Exception("params of g is not valid", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "params of g is not valid");
         Float64 result_mean = y_parser.getExpressionResult(means);
         Float64 result_var = covs[0][0] + prod(static_cast<Matrix>(prod(theta, cov_xx)), tMatrix(theta))(0, 0)
                              - 2*(static_cast<Matrix>(prod(theta, tMatrix(cov_xy)))(0, 0));
@@ -440,13 +444,14 @@ struct Ttest1Samp
         {
             FunctionParser parser;
             if (!parser.parse(cuped_elements[i]))
-                throw Exception("params of cuped is not valid", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "params of cuped is not valid");
             result(i, 0) = parser.getExpressionResult(means);
         }
         return result;
     }
 
-    static inline std::string getTtestResult(Float64 estimate, Float64 stderr_var, Alternative alternative, Float64 alpha, UInt64 count, bool only_data = false)
+    static inline std::string getTtestResult(Float64 estimate, Float64 stderr_var, Alternative alternative,
+        Float64 alpha, UInt64 count, bool only_data = false)
     {
         Float64 t_stat = estimate / stderr_var;
         Float64 p_value = 0;
@@ -490,7 +495,9 @@ struct Ttest1Samp
 
         std::string result;
         if (!only_data)
-          result += to_string_with_precision("estimate") + to_string_with_precision("stderr") + to_string_with_precision("t-statistic") + to_string_with_precision("p-value") + to_string_with_precision("lower") + to_string_with_precision("upper") + "\n  ";
+          result += to_string_with_precision("estimate") + to_string_with_precision("stderr") 
+                 + to_string_with_precision("t-statistic") + to_string_with_precision("p-value") 
+                 + to_string_with_precision("lower") + to_string_with_precision("upper") + "\n  ";
 
         result += to_string_with_precision(estimate) + to_string_with_precision(stderr_var)
                + to_string_with_precision(t_stat) + to_string_with_precision(p_value)
@@ -498,7 +505,7 @@ struct Ttest1Samp
         return result;
     }
 
-    static inline std::string apply(CovarianceMatrix& cov_ma, std::map<Int32, CovarianceMatrix>&, const Params& params)
+    static inline std::string apply(CovarianceMatrix& cov_ma, std::map<UInt64, CovarianceMatrix>&, const Params& params)
     {
         auto [mean, var] = getMeanAndVar(cov_ma, params);
         Float64 estimate = mean - params.mu;
@@ -511,7 +518,9 @@ struct Ttest2Samp : public Ttest1Samp
 {
     static constexpr auto name = "Ttest_2samp";
 
-    static inline std::tuple<Float64, Float64, Float64, Float64> getEstimateAndStderr(std::vector<CovarianceMatrix> & single_cov_ma, const Params & params, const CovarianceMatrix & theta_cov = CovarianceMatrix())
+    static inline std::tuple<Float64, Float64, Float64, Float64>
+        getEstimateAndStderr(std::vector<CovarianceMatrix> & single_cov_ma, const Params & params,
+                             const CovarianceMatrix & theta_cov = CovarianceMatrix())
     {
         auto cov_ma = single_cov_ma[0];
         cov_ma.merge(single_cov_ma[1]);
@@ -538,7 +547,7 @@ struct Ttest2Samp : public Ttest1Samp
                     vars[index] = var;
                     FunctionParser y_parser;
                     if (!y_parser.parse(params.g))
-                        throw Exception("params of g is not valid", ErrorCodes::BAD_ARGUMENTS);
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "params of g is not valid");
                     means[index] = y_parser.getExpressionResult(single_cov_ma[index].getMeans())
                                    - prod(theta, getCupedMean(single_cov_ma[index], params) - cuped_mean)(0, 0);
                 }
@@ -547,10 +556,11 @@ struct Ttest2Samp : public Ttest1Samp
         return {means[0], means[1], vars[0], vars[1]};
     }
 
-    static inline String getTtest2SampResult(std::vector<CovarianceMatrix> & single_cov_ma, const Params & params, bool only_data = false)
+    static inline String getTtest2SampResult(std::vector<CovarianceMatrix> & single_cov_ma, 
+                                             const Params & params, bool only_data = false)
     {
         if (single_cov_ma.size() != 2)
-            throw Exception("Ttest_2samp only support two samples", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Ttest_2samp only support two samples");
         if (single_cov_ma[0].isEmpty() || single_cov_ma[1].isEmpty())
             return "error: at least 2 groups are required for 2-sample t-test, please check the argument of index";
         Float64 estimate;
@@ -563,7 +573,7 @@ struct Ttest2Samp : public Ttest1Samp
         return getTtestResult(estimate, stderr_var, params.alternative, params.alpha, single_cov_ma[0].getCount(), only_data);
     }
 
-    static inline String apply(CovarianceMatrix &, std::map<Int32, CovarianceMatrix>& index2covs, const Params& params)
+    static inline String apply(CovarianceMatrix &, std::map<UInt64, CovarianceMatrix>& index2covs, const Params& params)
     {
         std::vector<CovarianceMatrix> single_cov_ma;
         single_cov_ma.push_back(index2covs[0]);
@@ -577,7 +587,7 @@ struct Ttests2Samp : Ttest2Samp
 {
     static constexpr auto name = "Ttests_2samp";
 
-    static inline String apply(CovarianceMatrix &, std::map<Int32, CovarianceMatrix>& index2covs, const Params& params)
+    static inline String apply(CovarianceMatrix &, std::map<UInt64, CovarianceMatrix>& index2covs, const Params& params)
     {
         String result = to_string_with_precision("control") + to_string_with_precision("treatment")
                         + to_string_with_precision("estimate") + to_string_with_precision("stderr")
@@ -612,7 +622,7 @@ private:
 
 public:
     explicit AggregateFunctionTtestSamp(const DataTypes & arguments, const Array & params)
-        :IAggregateFunctionDataHelper<TtestSampData<Op, use_index>, AggregateFunctionTtestSamp<Op, use_index>> ({arguments}, {})
+        :IAggregateFunctionDataHelper<TtestSampData<Op, use_index>, AggregateFunctionTtestSamp<Op, use_index>> ({arguments}, {}, createResultType())
     {
         arguments_num = arguments.size();
         ttest_params.g = params[0].get<String>();
@@ -628,8 +638,8 @@ public:
             else if (param == "greater")
                 ttest_params.alternative = Op::Alternative::Greater;
             else
-                throw Exception("Unknown alternative parameter in aggregate function " + getName() +
-                        ". It must be one of: 'two-sided', 'less', 'greater'", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown alternative parameter in aggregate function {}.\
+                        It must be one of: 'two-sided', 'less', 'greater'", getName());
         }
 
         size_t index = 2;
@@ -659,7 +669,7 @@ public:
         if (!cuped.empty())
         {
             if (!(cuped.size() >= 2 && std::tolower(cuped[0]) == 'x'  && cuped[1] == '=') || cuped.size() < 2)
-                throw Exception("Cuped params is not valid", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cuped params is not valid");
             cuped = cuped.substr(2);
         }
 
@@ -668,7 +678,7 @@ public:
         if (!ttest_params.cuped.empty())
             total_g += " + " + ttest_params.cuped;
         if (!partial_derivatives.parse(total_g, arguments_num - static_cast<size_t>(use_index)))
-            throw Exception("params of g is not valid", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "params of g is not valid");
     }
 
     String getName() const override
@@ -678,7 +688,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeString>();
     }
@@ -722,7 +732,8 @@ class XexptTtest2Samp
 public:
     XexptTtest2Samp() = default;
 
-    explicit XexptTtest2Samp(const size_t & arguments_num) : calc_col_num(arguments_num - 2), hash(std::make_shared<HashFunction>(0)) 
+    explicit XexptTtest2Samp(const size_t & arguments_num) 
+        : calc_col_num(arguments_num - 2), hash(std::make_shared<HashFunction>(0)) 
     {
         if (arguments_num < 4)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Requires at least 4 arguments [numerator, denominator, uin, groupname]");
@@ -730,7 +741,7 @@ public:
 
     void add(const IColumn ** column, size_t row_num)
     {
-        Int32 uin = column[calc_col_num]->getInt(row_num);
+        Int32 uin = static_cast<Int32>(column[calc_col_num]->getInt(row_num));
         UInt32 uin_ha = (*hash)(uin) / bucket_divisor;
         Key index;
         if constexpr (std::is_same_v<Key, String>)
@@ -741,7 +752,7 @@ public:
         {
             index2group[index] = GroupData(calc_col_num);
             if (index2group.size() > 2)
-                throw Exception("The number of group is not equal to two, please check the input data.", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "The number of group is not equal to two, please check the input data.");
         }
 
         auto & group = index2group[index];
@@ -785,7 +796,7 @@ public:
             {
                 writeVarUInt(group.col_data[i].size(), buf);
                 for (size_t j = 0; j < group.col_data[i].size(); j++)
-                    writeVarInt(group.col_data[i][j], buf);
+                    writeFloatBinary(group.col_data[i][j], buf);
             }
         }
     }
@@ -816,8 +827,8 @@ public:
                 bucket_data.resize_fill(bucket_size, 0);
                 for (size_t bucket_i = 0; bucket_i < bucket_size; ++bucket_i)
                 {
-                    Int64 sum;
-                    readVarInt(sum, buf);
+                    Float64 sum;
+                    readFloatBinary(sum, buf);
                     bucket_data[bucket_i] += sum;
                 }
             }
@@ -838,12 +849,12 @@ public:
 
         for (const auto & [index, group] : index2group)
         {
-            if (group.col_data.size() != calc_col_num || group.col_data[0].size() != bucket_num) 
+            if (group.col_data.size() != calc_col_num || group.col_data[0].size() != bucket_num)
                 throw Exception(ErrorCodes::BAD_ARGUMENTS, "Logical error: col_data is incomplete");
 
             if constexpr (std::is_same_v<String, Key>)
                 groupnames.push_back(index);
-            else 
+            else
                 groupnames.push_back(std::to_string(index));
             std::vector<PaddedPODArray<Float64>> bucket_datas(bucket_num);
             for (size_t i = 0; i < group.col_data.size(); i++)
@@ -878,13 +889,13 @@ public:
         CovarianceMatrix theta_cov(calc_col_num);
         for (size_t i = 0; i < bucket_num; ++i)
             theta_cov.add(args[i]);
-        
+
         FunctionParser partial_derivatives;
         String total_g = param.g;
         if (!param.cuped.empty())
             total_g += " + " + param.cuped;
         if (!partial_derivatives.parse(total_g, calc_col_num))
-            throw Exception("params of g is not valid", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "params of g is not valid");
 
         std::vector<CovarianceMatrix> single_cov_ma;
         single_cov_ma.push_back(ttest_2samp.index2covs[0]);
@@ -899,7 +910,7 @@ public:
             std_samp.push_back(sqrt(DeltaMethod::apply(ttest_2samp.index2covs[0], partial_derivatives)) * sqrt(denominators[0]));
             std_samp.push_back(sqrt(DeltaMethod::apply(ttest_2samp.index2covs[1], partial_derivatives)) * sqrt(denominators[1]));
         }
-        else 
+        else
         {
             std_samp.push_back(sqrt(vars[0] * denominators[0]));
             std_samp.push_back(sqrt(vars[1] * denominators[1]));
@@ -932,33 +943,62 @@ public:
         Float64 upper_relative = upper / means[0];
         Float64 mde = param.mde;
         Float64 alpha = param.alpha;
-        Float64 power = 1 - cdf(normal_dist, quantile(normal_dist, 1 - alpha / 2) - fabs(means[0] * param.mde) / stderr_var) + cdf(normal_dist, quantile(normal_dist, alpha / 2) - fabs(means[0] * param.mde) / stderr_var); 
+        Float64 power = 1 - cdf(normal_dist, quantile(normal_dist, 1 - alpha / 2) 
+                      - fabs(means[0] * param.mde) / stderr_var) + cdf(normal_dist, quantile(normal_dist, alpha / 2) 
+                      - fabs(means[0] * param.mde) / stderr_var); 
         Float64 std0 = std_samp[0];
         Float64 std1 = std_samp[1];
         Float64 std_ratio = std0 / std1;
         Float64 cnt_ratio = denominators[0] / denominators[1];
         Float64 alpha_power = quantile(normal_dist, 1 - alpha / 2) - quantile(normal_dist, 1 - param.power);
-        Float64 recommend_samplesize = ((std_ratio * std_ratio + cnt_ratio) / cnt_ratio) * pow(alpha_power, 2) * pow(std1 / means[0], 2) / pow(mde, 2);
+        Float64 recommend_samplesize = ((std_ratio * std_ratio + cnt_ratio) / cnt_ratio)
+                                     * pow(alpha_power, 2) * pow(std1 / means[0], 2) / pow(mde, 2);
 
-        String title = to_string_with_precision("groupname") + to_string_with_precision<12>("numerator") + to_string_with_precision<13>("denominator");
-        String group0 = "  " + to_string_with_precision(index2group.begin()->first) + to_string_with_precision<12>(static_cast<UInt64>(floor(numerators[0] + 0.5))) + to_string_with_precision<13>(static_cast<UInt64>(floor(denominators[0] + 0.5)));
-        String group1 = "  " + to_string_with_precision(next(index2group.begin())->first) + to_string_with_precision<12>(static_cast<UInt64>(floor(numerators[1] + 0.5))) + to_string_with_precision<13>(static_cast<UInt64>(floor(denominators[1] + 0.5)));
+
+        String title = to_string_with_precision("groupname")
+                     + to_string_with_precision<12>("numerator")
+                     + to_string_with_precision<13>("denominator");
+        String group0 = "  " + to_string_with_precision(index2group.begin()->first)
+                      + to_string_with_precision<12>(static_cast<UInt64>(floor(numerators[0] + 0.5)))
+                      + to_string_with_precision<13>(static_cast<UInt64>(floor(denominators[0] + 0.5)));
+        String group1 = "  " + to_string_with_precision(next(index2group.begin())->first)
+                      + to_string_with_precision<12>(static_cast<UInt64>(floor(numerators[1] + 0.5)))
+                      + to_string_with_precision<13>(static_cast<UInt64>(floor(denominators[1] + 0.5)));
         if (!denominators_pre.empty())
         {
             title += to_string_with_precision<15>("numerator_pre") + to_string_with_precision<16>("denominator_pre");
-            group0 += to_string_with_precision<15>(static_cast<UInt64>(floor(numerators_pre[0] + 0.5))) + to_string_with_precision<16>(static_cast<UInt64>(floor(denominators[0] + 0.5)));
-            group1 += to_string_with_precision<15>(static_cast<UInt64>(floor(numerators_pre[1] + 0.5))) + to_string_with_precision<16>(static_cast<UInt64>(floor(denominators[1] + 0.5)));
+            group0 += to_string_with_precision<15>(static_cast<UInt64>(floor(numerators_pre[0] + 0.5)))
+                   + to_string_with_precision<16>(static_cast<UInt64>(floor(denominators[0] + 0.5)));
+            group1 += to_string_with_precision<15>(static_cast<UInt64>(floor(numerators_pre[1] + 0.5)))
+                   + to_string_with_precision<16>(static_cast<UInt64>(floor(denominators[1] + 0.5)));
         }
+
 
         title += to_string_with_precision("mean") + to_string_with_precision("std_samp");
         group0 += to_string_with_precision(means[0]) + to_string_with_precision(std_samp[0]);
         group1 += to_string_with_precision(means[1]) + to_string_with_precision(std_samp[1]);
 
+        String ci_prefix = std::to_string((1 - param.alpha) * 100);
+        while (!ci_prefix.empty() && ci_prefix.back() == '0')
+            ci_prefix.pop_back();
+        if (!ci_prefix.empty() && ci_prefix.back() == '.')
+            ci_prefix.pop_back();
+
         String res = title + '\n' + group0 + '\n' + group1 + '\n' + '\n';
-        res += "  " + to_string_with_precision<16>("diff_relative") + to_string_with_precision<16>("lower_relative") + to_string_with_precision<16>("upper_relative") + to_string_with_precision("p-value") + to_string_with_precision<13>("t-statistic") + to_string_with_precision("diff") + to_string_with_precision("lower") + to_string_with_precision("upper") 
-             + to_string_with_precision("power") + to_string_with_precision<18>("recommend_samplesize") + '\n';
-        res += "  " + to_string_with_precision<16>(std::to_string(diff_relative * 100) + "%") + to_string_with_precision<16>(std::to_string(lower_relative * 100) + "%") + to_string_with_precision<16>(std::to_string(upper_relative * 100) + "%") + to_string_with_precision(p_value) + to_string_with_precision<13>(t_stat) + to_string_with_precision(estimate) + to_string_with_precision(lower) + to_string_with_precision(upper)
-               + to_string_with_precision(power) + to_string_with_precision<18>(static_cast<UInt64>(recommend_samplesize)) + '\n';
+        res += "  " + to_string_with_precision<16>("diff_relative") + to_string_with_precision<27>(ci_prefix + "%_relative_CI")
+            + to_string_with_precision("p-value")
+            + to_string_with_precision<13>("t-statistic") + to_string_with_precision("diff")
+            + to_string_with_precision<25>(ci_prefix + "%_CI")
+            + to_string_with_precision("power") + to_string_with_precision<18>("recommend_samplesize") + '\n';
+
+        res += "  " + to_string_with_precision<16>(std::to_string(diff_relative * 100) + "%")
+            + to_string_with_precision<14>("[" + std::to_string(lower_relative * 100) + "%,")
+            + to_string_with_precision<13>(std::to_string(upper_relative * 100) + "%]")
+            + to_string_with_precision(p_value) + to_string_with_precision<13>(t_stat)
+            + to_string_with_precision(estimate) 
+            + to_string_with_precision<13>("[" + std::to_string(lower) + ",") + to_string_with_precision<12>(std::to_string(upper) + "]")
+            + to_string_with_precision(power)
+            + to_string_with_precision<18>(static_cast<UInt64>(recommend_samplesize)) + '\n';
 
         return res;
     }
@@ -982,7 +1022,7 @@ private:
                 data.resize_fill(bucket_num, 0);
         }
 
-        using Buckets = PaddedPODArray<Int64>;
+        using Buckets = PaddedPODArray<Float64>;
         std::vector<Buckets> col_data;
         UInt64 count = 0;
     };
@@ -1004,7 +1044,7 @@ private:
 
 public:
     explicit AggregateFunctionXexptTtest2Samp(const DataTypes & arguments, const Array & params)
-        :IAggregateFunctionDataHelper<XexptTtest2Samp<Key>, AggregateFunctionXexptTtest2Samp> ({arguments}, {params})
+        :IAggregateFunctionDataHelper<XexptTtest2Samp<Key>, AggregateFunctionXexptTtest2Samp> ({arguments}, {params}, createResultType())
     {
         arguments_num = arguments.size();
         param.g = "x1/x2";
@@ -1023,7 +1063,7 @@ public:
         if (!cuped.empty())
         {
             if (cuped.size() < 2 || std::tolower(cuped[0]) != 'x'  || cuped[1] != '=')
-                throw Exception("Cuped params is not valid", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cuped params is not valid");
             cuped = cuped.substr(2);
         }
         FunctionParser partial_derivatives;
@@ -1031,7 +1071,7 @@ public:
         if (!param.cuped.empty())
             total_g += " + " + param.cuped;
         if (!partial_derivatives.parse(total_g, arguments_num - 2))
-            throw Exception("params of g is not valid", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "params of g is not valid");
     }
 
     String getName() const override
@@ -1041,7 +1081,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeString>();
     }
@@ -1053,7 +1093,7 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-         this->data(place).add(columns, row_num);
+        this->data(place).add(columns, row_num);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -1066,7 +1106,7 @@ public:
         this->data(place).serialize(buf);
     }
 
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> , Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t>, Arena *) const override
     {
         this->data(place).deserialize(buf);
     }

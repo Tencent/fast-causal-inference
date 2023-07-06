@@ -148,7 +148,8 @@ struct GroupSetData
     void publish(IColumn & to)
     {
         if (col_name.size() != group_set.size())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Logical Error: col_name: {} not equal to group_set: {}", col_name.size(), group_set.size());
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Logical Error: col_name: {} not equal to group_set: {}", 
+                                                        col_name.size(), group_set.size());
 
         auto & to_array = assert_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = to_array.getOffsets();
@@ -215,14 +216,15 @@ private:
 
 public:
     explicit AggregateFunctionGroupSet(const DataTypes & arguments, const Array & params)
-      :IAggregateFunctionDataHelper<GroupSetData, AggregateFunctionGroupSet> ({arguments}, {params}) 
+      :IAggregateFunctionDataHelper<GroupSetData, AggregateFunctionGroupSet> ({arguments}, {params}, createResultType()) 
     {
         arguments_num = arguments.size();
         if (!params.empty())
         {
             for (size_t i = 0; i < params.size(); ++i)
                 if (params[i].getType() != Field::Types::String)
-                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Illegal type {} of argument #{} of function {}", params[i].getTypeName(), i + 1, getName());
+                    throw Exception(ErrorCodes::BAD_ARGUMENTS, "Illegal type {} of argument #{} of function {}",
+                                                               params[i].getTypeName(), i + 1, getName());
                 else
                     col_name.push_back(params[i].get<String>());
         }
@@ -231,7 +233,8 @@ public:
                 col_name.push_back("col" + std::to_string(i + 1));
 
         if (col_name.size() != arguments_num - 2)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Number of column names {} doesn't match number of arguments {} of function {}", col_name.size(), arguments_num - 2, getName());
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Number of column names {} doesn't match number of arguments {} of function {}",
+                                                       col_name.size(), arguments_num - 2, getName());
     }
 
     String getName() const override
@@ -241,7 +244,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         DataTypes types
         {
@@ -274,7 +277,7 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-         this->data(place).add(columns, row_num);
+        this->data(place).add(columns, row_num);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override

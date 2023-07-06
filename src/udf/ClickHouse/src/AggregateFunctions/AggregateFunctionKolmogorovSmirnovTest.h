@@ -108,15 +108,16 @@ struct KolmogorovSmirnov : public StatisticalSample<Float64, Float64>
 
         if (method == "exact")
         {
-            /* reference:
-             * Gunar Schröer and Dietrich Trenkler
-             * Exact and Randomization Distributions of Kolmogorov-Smirnov, Tests for Two or Three Samples
-             *
-             * and
-             *
-             * Thomas Viehmann
-             * Numerically more stable computation of the p-values for the two-sample Kolmogorov-Smirnov test
-             */
+            /* 
+            reference:
+            Gunar Schröer and Dietrich Trenkler
+            Exact and Randomization Distributions of Kolmogorov-Smirnov, Tests for Two or Three Samples
+            
+            and
+            
+            Thomas Viehmann
+            Numerically more stable computation of the p-values for the two-sample Kolmogorov-Smirnov test
+            */
             if (n2 > n1)
                 std::swap(n1, n2);
 
@@ -127,7 +128,7 @@ struct KolmogorovSmirnov : public StatisticalSample<Float64, Float64>
 
             auto check = alternative == Alternative::TwoSided ?
                          [](const Float64 & q, const Float64 & r, const Float64 & s) { return fabs(r - s) >= q; }
-                       : [](const Float64 & q, const Float64 & r, const Float64 & s) { return r - s >= q; };
+                         : [](const Float64 & q, const Float64 & r, const Float64 & s) { return r - s >= q; };
 
             c[0] = 0;
             for (UInt64 j = 1; j <= n1; j++)
@@ -160,10 +161,11 @@ struct KolmogorovSmirnov : public StatisticalSample<Float64, Float64>
 
             if (alternative == Alternative::TwoSided)
             {
-                /* reference:
-                 * J.DURBIN
-                 * Distribution theory for tests based on the sample distribution function
-                 */
+                /* 
+                reference:
+                J.DURBIN
+                Distribution theory for tests based on the sample distribution function
+                */
                 Float64 new_val, old_val, s, w, z;
                 UInt64 k_max = static_cast<UInt64>(sqrt(2 - log(tol)));
 
@@ -196,10 +198,11 @@ struct KolmogorovSmirnov : public StatisticalSample<Float64, Float64>
             }
             else
             {
-                /* reference:
-                 * J. L. HODGES, Jr
-                 * The significance probability of the Smirnov two-sample test
-                 */
+                /* 
+                reference:
+                J. L. HODGES, Jr
+                The significance probability of the Smirnov two-sample test
+                */
 
                 // Use Hodges' suggested approximation Eqn 5.3
                 // Requires m to be the larger of (n1, n2)
@@ -222,16 +225,18 @@ private:
 
 public:
     explicit AggregateFunctionKolmogorovSmirnov(const DataTypes & arguments, const Array & params)
-        : IAggregateFunctionDataHelper<KolmogorovSmirnov, AggregateFunctionKolmogorovSmirnov> ({arguments}, {params})
+        : IAggregateFunctionDataHelper<KolmogorovSmirnov, AggregateFunctionKolmogorovSmirnov> ({arguments}, {params}, createResultType())
     {
         if (params.size() > 2)
-            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} require two parameter or less", getName());
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} require\
+                two parameter or less", getName());
 
         if (params.empty())
             return;
 
         if (params[0].getType() != Field::Types::String)
-            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Aggregate function {} require first parameter to be a String", getName());
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Aggregate function {} require\
+                first parameter to be a String", getName());
 
         const auto & param = params[0].get<String>();
         if (param == "two-sided")
@@ -248,7 +253,8 @@ public:
             return;
 
         if (params[1].getType() != Field::Types::String)
-                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Aggregate function {} require second parameter to be a String", getName());
+                throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Aggregate function {} require\
+                    second parameter to be a String", getName());
 
         method = params[1].get<String>();
         if (method != "auto" && method != "exact" && method != "asymp" && method != "asymptotic")
@@ -263,7 +269,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return true; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         DataTypes types
         {
@@ -298,12 +304,12 @@ public:
         this->data(place).merge(this->data(rhs), arena);
     }
 
-    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t>) const override
     {
         this->data(place).write(buf);
     }
 
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena * arena) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t>, Arena * arena) const override
     {
         this->data(place).read(buf, arena);
     }

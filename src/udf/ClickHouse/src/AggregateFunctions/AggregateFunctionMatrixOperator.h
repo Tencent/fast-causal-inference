@@ -40,7 +40,8 @@ public:
     {
         PaddedPODArray<Float64> arguments;
         for (size_t i = 0; i < arg_num; ++i)
-            arguments.push_back(use_weights ? column[i]->getFloat64(row_num) * column[arg_num]->getFloat64(row_num) : column[i]->getFloat64(row_num));
+            arguments.push_back(use_weights ? column[i]->getFloat64(row_num) * column[arg_num]->getFloat64(row_num) :
+                                                                               column[i]->getFloat64(row_num));
         data.add(arguments);
     }
 
@@ -67,9 +68,11 @@ public:
     {
         Matrix data_matrix = data.getMatrix();
         if (to_inverse && !invertMatrix(data_matrix, data_matrix)) 
-          throw Exception("InvertMatrix failed. some variables in the table are perfectly collinear.", ErrorCodes::BAD_ARGUMENTS);
+          throw Exception(ErrorCodes::BAD_ARGUMENTS, "InvertMatrix failed. some variables in the table are perfectly collinear.");
 
-        auto & data_to = assert_cast<ColumnFloat64 &>(assert_cast<ColumnArray &>(assert_cast<ColumnArray &>(to).getData()).getData()).getData();
+        auto & data_to = assert_cast<ColumnFloat64 &>(assert_cast<ColumnArray &>(
+              assert_cast<ColumnArray &>(to).getData()).getData()
+              ).getData();
         auto & root_offsets_to = assert_cast<ColumnArray &>(to).getOffsets();
         auto & nested_offsets_to = assert_cast<ColumnArray &>(assert_cast<ColumnArray &>(to).getData()).getOffsets();
         for (size_t i = 0; i < data_matrix.size1(); ++i)
@@ -89,7 +92,8 @@ private:
 
 template <typename AggregateFunctionMatrixOperatorData>
 class AggregateFunctionMatrixOperator final:
-    public IAggregateFunctionDataHelper<AggregateFunctionMatrixOperatorData, AggregateFunctionMatrixOperator<AggregateFunctionMatrixOperatorData>>
+    public IAggregateFunctionDataHelper<AggregateFunctionMatrixOperatorData, 
+        AggregateFunctionMatrixOperator<AggregateFunctionMatrixOperatorData>>
 {
 private:
     using Data = AggregateFunctionMatrixOperatorData;
@@ -98,7 +102,8 @@ private:
     bool use_weights = false;
 public:
     explicit AggregateFunctionMatrixOperator(const DataTypes & arguments, const Array & params)
-        :IAggregateFunctionDataHelper<AggregateFunctionMatrixOperatorData, AggregateFunctionMatrixOperator<AggregateFunctionMatrixOperatorData>> ({arguments}, {})
+        :IAggregateFunctionDataHelper<AggregateFunctionMatrixOperatorData, 
+        AggregateFunctionMatrixOperator<AggregateFunctionMatrixOperatorData>> ({arguments}, {}, createResultType())
     {
         arguments_num = arguments.size();
         if (!params.empty())
@@ -114,19 +119,19 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; } 
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat64>()));
     }
 
-    void create(AggregateDataPtr __restrict place) const override 
+    void create(AggregateDataPtr __restrict place) const override // NOLINT
     {
         new (place) Data(arguments_num, use_weights);
     }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-         this->data(place).add(columns, row_num);
+        this->data(place).add(columns, row_num);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -134,12 +139,12 @@ public:
         this->data(place).merge(this->data(rhs));
     }
 
-    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
+    void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t>) const override
     {
         this->data(place).serialize(buf);
     }
 
-    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena *) const override
+    void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t>, Arena *) const override
     {
         this->data(place).deserialize(buf);
     }

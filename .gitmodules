@@ -1,5 +1,4 @@
 [submodule "contrib/ClickHouse"]
 	path = contrib/ClickHouse
 	url = https://github.com/ClickHouse/ClickHouse.git
-#     branch = v23.3.7.5-lts
-	branch = v22.8.17.17-lts
+	branch = 23.3

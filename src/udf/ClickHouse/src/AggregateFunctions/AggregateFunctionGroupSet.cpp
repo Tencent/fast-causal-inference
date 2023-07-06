@@ -25,25 +25,22 @@ AggregateFunctionPtr createAggregateFunctionGroupSet(
 {
     for (const auto & arg : argument_types)
         if (!isNativeNumber(arg))
-            throw Exception(
-            "Illegal types of arguments of aggregate function " + name
-                + ", must be Native Ints, Native UInts or Floats",
-            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+            "Illegal types of arguments of aggregate function {}\
+                , must be Native Ints, Native UInts or Floats", name);
 
     if (argument_types.size() < 3)
-        throw Exception(
-        "Incorrect number of arguments for aggregate function " + name
-            + ", should be at least 3 : Y, treutment, group",
-        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+        "Incorrect number of arguments for aggregate function {}\
+            , should be at least 3 : Y, treutment, group", name);
 
     AggregateFunctionPtr res;
     res = std::make_shared<AggregateFunctionGroupSet>(argument_types, parameters);
 
     if (!res)
-        throw Exception(
-        "Illegal types arguments of aggregate function " + name
-            + ", must be Native Ints, Native UInts or Floats",
-        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+        "Illegal types arguments of aggregate function {}\
+            , must be Native Ints, Native UInts or Floats", name);
     return res;
 }
 

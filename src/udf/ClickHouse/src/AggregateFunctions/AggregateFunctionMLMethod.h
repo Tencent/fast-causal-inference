@@ -252,7 +252,8 @@ public:
             const IColumn ** columns,
             size_t row_num) override;
 
-    void update(UInt64 batch_size, std::vector<Float64> & weights, Float64 & bias, Float64 learning_rate, const std::vector<Float64> & batch_gradient) override;
+    void update(UInt64 batch_size, std::vector<Float64> & weights, Float64 & bias, Float64 learning_rate,
+                const std::vector<Float64> & batch_gradient) override;
 
 private:
     const Float64 alpha = 0.0001;
@@ -329,7 +330,7 @@ public:
         UInt64 batch_size_,
         const DataTypes & arguments_types,
         const Array & params)
-        : IAggregateFunctionDataHelper<Data, AggregateFunctionMLMethod<Data, Name>>(arguments_types, params)
+        : IAggregateFunctionDataHelper<Data, AggregateFunctionMLMethod<Data, Name>>(arguments_types, params, createResultType())
         , param_num(param_num_)
         , learning_rate(learning_rate_)
         , l2_reg_coef(l2_reg_coef_)
@@ -340,7 +341,7 @@ public:
     }
 
     /// This function is called when SELECT linearRegression(...) is called
-    DataTypePtr getReturnType() const override
+    static DataTypePtr createResultType()
     {
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat64>());
     }
@@ -367,7 +368,7 @@ public:
         else if (weights_updater_name == "Lasso")
             new_weights_updater = std::make_shared<Lasso>(l2_reg_coef);
         else
-            throw Exception("Illegal name of weights updater (should have been checked earlier)", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Illegal name of weights updater (should have been checked earlier)");
 
         new (place) Data(learning_rate, l2_reg_coef, param_num, batch_size, gradient_computer, new_weights_updater);
     }
@@ -392,16 +393,15 @@ public:
         ContextPtr context) const override
     {
         if (arguments.size() != param_num + 1)
-            throw Exception(
-                "Predict got incorrect number of arguments. Got: " + std::to_string(arguments.size())
-                    + ". Required: " + std::to_string(param_num + 1),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH,
+                "Predict got incorrect number of arguments. Got: {},\
+                     . Required: {}", std::to_string(arguments.size()), std::to_string(param_num + 1));
 
         /// This cast might be correct because column type is based on getReturnTypeToPredict.
         auto * column = typeid_cast<ColumnFloat64 *>(&to);
         if (!column)
-            throw Exception("Cast of column of predictions is incorrect. getReturnTypeToPredict must return same value as it is casted to",
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, 
+                            "Cast of column of predictions is incorrect. getReturnTypeToPredict must return same value as it is casted to");
 
         this->data(place).predict(column->getData(), arguments, offset, limit, context);
     }

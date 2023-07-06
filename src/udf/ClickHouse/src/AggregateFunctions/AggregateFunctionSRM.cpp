@@ -24,12 +24,12 @@ AggregateFunctionPtr createAggregateFunctionSRM(
     const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     if (argument_types.size() != 3)
-        throw Exception("Aggregate function " + name + " requires 3 arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function {} requires 3 arguments", name);
 
     if (!isNativeNumber(argument_types[0]) || 
         (!isString(argument_types[1]) && !isInteger(argument_types[1])) || 
         !isArray(argument_types[2]))
-        throw Exception("Aggregate function " + name + " requires arguments of types: Number, Integer or String, Array", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "Aggregate function {} requires arguments of types: Number, Integer or String, Array", name);
 
     AggregateFunctionPtr res;
     if (isString(argument_types[1]))
@@ -38,10 +38,10 @@ AggregateFunctionPtr createAggregateFunctionSRM(
         res = std::make_shared<AggregateFunctionSRM<Int64>>(argument_types, parameters);
 
     if (!res)
-        throw Exception(
-        "Illegal types arguments of aggregate function " + name
-            + ", must be Native Ints, Native UInts or Floats",
-        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, 
+        "Illegal types arguments of aggregate function {},\
+            must be Native Ints, Native UInts or Floats", name
+        );
     return res;
 }
 
