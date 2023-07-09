@@ -49,6 +49,10 @@ github: https://github.com/Tencent/fast-causal-inference
 If the following log is displayed, fast-causal-inference is successfully deployed.
 > build success  
 
+#### Examples
+use examples data:
+> clickhouse client --multiquery < examples/test_data_small.sql  
+
 ##### Building on Any Linux:  
 For other evironment refer to: https://clickhouse.com/docs/en/install#from-sources
 
@@ -59,10 +63,10 @@ This will create executable ${deploy_path}/clickhouse which can be used with cli
 
 #### Install From Docker Image  
 ##### Docker Image Pull Command:
-> docker pull fast-causal-inference/clickhouse-server:23.3-alpine
+> docker pull fastcausalinference/clickhouse-server:23.3-alpine
 
 ##### start server instance:
-> docker run -d --network=host --name fast-causal-inference-server --ulimit nofile=262144:262144 fast-causal-inference/clickhouse-server:23.3-alpine
+> docker run -d --network=host --name fast-causal-inference-server --ulimit nofile=262144:262144 fastcausalinference/clickhouse-server:23.3-alpine
 
 For more information refer to: docker run --help
 
@@ -70,14 +74,12 @@ For more information refer to: docker run --help
 > docker exec -it fast-causal-inference-server clickhouse-client
 
 ##### stopping / removing the container:
-> docker stop some-clickhouse-server  
-> docker rm some-clickhouse-server
-
-For more information refer to: https://hub.docker.com/r/clickhouse/clickhouse-server
+> docker stop fast-causal-inference-server
+> docker rm fast-causal-inference-server
 
 #### Examples
 use examples data:
-> clickhouse client --multiquery < examples/test_data_small.sql
+> docker exec -i fast-causal-inference-server clickhouse-client --multiquery < examples/test_data_small.sql 
 
 #### A Note About Fast-Causal-Reference Project Version
 The current version 0.1.0-rc only releases the Fast Causal Inference Clickhouse module, 
