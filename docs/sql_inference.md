@@ -73,7 +73,7 @@ FROM
   lm( formula = y ~ x1 + x2 + x3 )
 
   Coefficients:
-  .		Estimate		Std. Error	t value		Pr(>|t|)
+  .		Estimate	Std. Error	t value		Pr(>|t|)
   (Intercept)	351.038825  	67.626843   	5.190821    	0.000000
   x1		-45.850440  	7.927278    	-5.783882   	0.000000
   x2		-55.279399  	33.750086   	-1.637904   	0.101442
