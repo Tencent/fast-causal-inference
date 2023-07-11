@@ -53,6 +53,8 @@ If the following log is displayed, fast-causal-inference is successfully deploye
 use examples data:
 > clickhouse client --multiquery < examples/test_data_small.sql  
 
+please refer to the documentation for specific algorithms: [sql_inference](docs/sql_inference.md)
+
 ##### Building on Any Linux:  
 For other evironment refer to: https://clickhouse.com/docs/en/install#from-sources
 
@@ -80,6 +82,8 @@ For more information refer to: docker run --help
 #### Examples
 use examples data:
 > docker exec -i fast-causal-inference-server clickhouse-client --multiquery < examples/test_data_small.sql 
+
+please refer to the documentation for specific algorithms: [sql_inference](docs/sql_inference.md)
 
 #### A Note About Fast-Causal-Reference Project Version
 The current version 0.1.0-rc only releases the Fast Causal Inference Clickhouse module, 
