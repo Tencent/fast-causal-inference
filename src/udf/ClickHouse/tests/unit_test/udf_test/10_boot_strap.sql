@@ -1,7 +1,3 @@
-SELECT 
-  DistributedNodeRowNumber(123)(0)
-FROM causal_inference_test;
-
 WITH (
   SELECT DistributedNodeRowNumber(1)(0)
   FROM numbers(10000000)

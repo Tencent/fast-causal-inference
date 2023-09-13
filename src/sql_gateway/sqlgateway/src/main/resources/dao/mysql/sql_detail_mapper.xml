@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.tencent.weixin.dao.mysql.SqlDetailMapper">
+    <sql id="tableName">sql_detail</sql>
+
+    <select id="select"
+            resultType="com.tencent.weixin.model.SqlDetailModel">
+        select * from
+        <include refid="tableName"/>
+    </select>
+
+    <select id="selectById"
+            resultType="com.tencent.weixin.model.SqlDetailModel">
+        select * from
+        <include refid="tableName"/>
+        where id = #{id}
+    </select>
+
+    <select id="selectByCreator"
+            resultType="com.tencent.weixin.model.SqlDetailModel">
+        select * from
+        <include refid="tableName"/>
+        where creator = #{creator}
+    </select>
+
+    <select id="selectByCode"
+            resultType="com.tencent.weixin.model.SqlDetailModel">
+        select * from
+        <include refid="tableName"/>
+        where retcode = #{retcode}
+    </select>
+
+    <insert id="insert"
+            parameterType="com.tencent.weixin.model.SqlDetailModel">
+        <selectKey keyProperty="id" resultType="int" order="AFTER">
+            select LAST_INSERT_ID()
+        </selectKey>
+        INSERT INTO
+        <include refid="tableName"/>
+        (device_id,`database`,raw_sql,execute_sql,calcite_sql_cost_time,calcite_sql_cost_time_readable,execute_sql_cost_time,execute_sql_cost_time_readable,total_time,total_time_readable,
+        creator, retcode)
+        VALUES(
+        #{deviceId}, #{database}, #{rawSql}, #{executeSql}, #{calciteSqlCostTime}, #{calciteSqlCostTimeReadable}, #{executeSqlCostTime},
+        #{executeSqlCostTimeReadable}, #{totalTime}, #{totalTimeReadable}, #{creator}, #{retcode})
+    </insert>
+
+    <update id="update"
+            parameterType="com.tencent.weixin.model.SqlDetailModel">
+        UPDATE
+        <include refid="tableName"/>
+        SET id = #{id}, device_id = #{deviceId}, `database` = #{database}, raw_sql = #{rawSql}, execute_sql = #{executeSql}, calcite_sql_cost_time = #{calciteSqlCostTime},
+        calcite_sql_cost_time_readable = #{calciteSqlCostTimeReadable},
+        execute_sql_cost_time = #{executeSqlCostTime}, execute_sql_cost_time_readable = #{executeSqlCostTimeReadable},
+        total_time = #{totalTime}, total_time_readable = #{totalTimeReadable},
+        creator = #{creator}, retcode = #{retcode}, create_time = #{createTime}, update_time = #{updateTime}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="delete"
+            parameterType="com.tencent.weixin.model.SqlDetailModel">
+        DELETE FROM
+        <include refid="tableName"/>
+        WHERE id = #{id}
+    </delete>
+</mapper>

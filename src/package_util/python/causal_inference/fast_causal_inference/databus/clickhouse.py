@@ -5,38 +5,40 @@ import random
 import time
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
 from ..common.exception import handle_exception
-from datetime import datetime
+from ..util.utils import get_user
 
 from clickhouse_driver import Client
 from .. import logger
-from .. import RAINBOW_CONF
+from .. import PROJECT_CONF
+import datetime
 
 """
-支持导入hive, 不支持thive，因为thive的ORC是魔改的，并且thive不支持parquet
-clickhouse导出parquet没问题,  orc会有乱码问题,csv会有字符串双引号问题
-csv默认导入到单节点
 dataframe和tdw默认操作的是Clickhouse分布式表
+reference: https://clickhouse.com/docs/en/integrations/python
 """
-
 
 class ClickHouseUtils(object):
-    DEFAULT_DATABASE = RAINBOW_CONF["all"]["ch_database"]
-    DEFAULT_HOST = RAINBOW_CONF["clickhouse"]["launch_host"]
-    DEFAULT_PORT = RAINBOW_CONF["clickhouse"]["port"]
-    DEFAULT_HTTP_PORT = RAINBOW_CONF["clickhouse"]["http_port"]
-    DEFAULT_USER = RAINBOW_CONF["clickhouse"]["user"]
-    DEFAULT_PASSWORD = RAINBOW_CONF["clickhouse"]["password"]
-    CLUSTER = RAINBOW_CONF["all"]["ch_cluster_name"]
+    DEFAULT_DATABASE = PROJECT_CONF["all"]["ch_database"]
+    DEFAULT_HOST = PROJECT_CONF["clickhouse"]["launch_host"]
+    DEFAULT_PORT = PROJECT_CONF["clickhouse"]["port"]
+    DEFAULT_HTTP_PORT = PROJECT_CONF["clickhouse"]["http_port"]
+    DEFAULT_USER = PROJECT_CONF["clickhouse"]["user"]
+    DEFAULT_PASSWORD = PROJECT_CONF["clickhouse"]["password"]
+    CLUSTER = PROJECT_CONF["all"]["ch_cluster_name"]
     # 5min
-    JDBC_ARGS = "?socket_timeout=3603000&max_execution_time=3602"
+    JDBC_ARGS = "?socket_timeout=7203000&max_execution_time=7202&compress=0"
     JDBC_PROPERTIES = {
         "driver": "com.clickhouse.jdbc.ClickHouseDriver",
         "user": DEFAULT_USER,
-        "password": DEFAULT_PASSWORD}
+        "password": DEFAULT_PASSWORD,
+        "socket_timeout": "7203000",
+        "max_execution_time": "7202",
+        "compress": "0"}
     MAX_ROWS = 150 * 10000 * 10000
     MAX_CSV_ROWS = 100 * 10000
     MAX_VIEW_MATERIALIZE_ROWS = MAX_CSV_ROWS
     DEFAULT_TTL_DAY = 14
+    MAX_EXECUTION_TIME = 15 * 60
 
     def __init__(self, host=None, database=None, rand=False):
         if not database:
@@ -45,17 +47,21 @@ class ClickHouseUtils(object):
             self.host = ClickHouseUtils.DEFAULT_HOST
         else:
             self.host = host
+        # connect_timeout. Default is 10 seconds.
+        # send_receive_timeout. Default is 300 seconds.
+        # sync_request_timeout. Default is 5 seconds.
+        settings = {'connect_timeout': 120}
         self.client = Client(host=self.host, port=ClickHouseUtils.DEFAULT_PORT,
                              database=database, user=ClickHouseUtils.DEFAULT_USER,
-                             password=ClickHouseUtils.DEFAULT_PASSWORD)
+                             password=ClickHouseUtils.DEFAULT_PASSWORD, settings=settings)
         self.cluster_hosts = self.system_clusters(ClickHouseUtils.CLUSTER)
         self.cluster_hosts_len = self.cluster_hosts.__len__()
         if rand:
             self.close()
             self.host = self.cluster_hosts[random.randint(0, self.cluster_hosts_len - 1)]
             self.client = Client(host=self.host, port=ClickHouseUtils.DEFAULT_PORT,
-                                 database=database, user=ClickHouseUtils.DEFAULT_USER,
-                                 password=ClickHouseUtils.DEFAULT_PASSWORD)
+                             database=database, user=ClickHouseUtils.DEFAULT_USER,
+                             password=ClickHouseUtils.DEFAULT_PASSWORD, settings=settings)
 
     @classmethod
     def get_jdbc_connect_string(self, database=None):
@@ -74,7 +80,7 @@ class ClickHouseUtils(object):
         return jdbc_strings
 
     def execute(self, sql):
-        logger.debug(sql)
+        logger.debug(self.host + ",sql=" + sql)
         return self.client.execute(sql)
 
     def execute_with_progress(self, sql):
@@ -126,12 +132,9 @@ class ClickHouseUtils(object):
     def table_rows(self, clickhouse_table_name, database=None):
         if not database:
             database = ClickHouseUtils.DEFAULT_DATABASE
-        try:
-            sql = "select count(*) from " + database + "." + clickhouse_table_name
-            num = self.execute(sql)[0][0]
-            logger.debug("num=" + str(num))
-        except Exception:
-            raise Exception("Table " + database + "." + clickhouse_table_name + " doesn't exist")
+        sql = "select count(*) from " + database + "." + clickhouse_table_name + " SETTINGS max_execution_time = " + str(ClickHouseUtils.MAX_EXECUTION_TIME)
+        num = self.execute(sql)[0][0]
+        logger.debug(self.host + ",num=" + str(num))
         return num
 
     """
@@ -171,7 +174,7 @@ class ClickHouseUtils(object):
         if is_auto_create:
             self.create_table(clickhouse_table_name, sql_statement, type="memory",
                               database_name=clickhouse_database_name)
-        self.client.execute('INSERT INTO ' + clickhouse_database_name + '.' + clickhouse_table_name + ' VALUES',
+        self.execute('INSERT INTO ' + clickhouse_database_name + '.' + clickhouse_table_name + ' VALUES',
                             iter_csv(csv_file_abs_path))
         self.close()
 
@@ -252,14 +255,14 @@ class ClickHouseUtils(object):
     def insert_table(self, clickhouse_table_name, external_table_name, col_name_statement, col_if_statement):
         start = time.perf_counter()
         sql = """
-                insert into %s.%s(%s) select %s from %s.%s SETTINGS max_execution_time = 3600
+                insert into %s.%s(%s) select %s from %s.%s SETTINGS max_execution_time = %s
                 """ % (
             ClickHouseUtils.DEFAULT_DATABASE, clickhouse_table_name, col_name_statement, col_if_statement,
-            ClickHouseUtils.DEFAULT_DATABASE, external_table_name)
-        logger.debug("insert into sql=" + str(sql))
+            ClickHouseUtils.DEFAULT_DATABASE, external_table_name, str(ClickHouseUtils.MAX_EXECUTION_TIME))
+        logger.debug(self.host + ", insert into sql=" + str(sql))
         self.execute(sql)
         end = time.perf_counter()
-        logger.debug("insert into sql done time cost: " + str(end - start) + " Seconds")
+        logger.debug(self.host + ", insert into sql done time cost: " + str(end - start) + " Seconds")
 
     def get_table_meta(self, clickhouse_table_name, database=None):
         if not database:
@@ -361,10 +364,7 @@ class ClickHouseUtils(object):
         tdw_utils.hdfs_mkdir_and_chmod(TDWUtils.NAME_SPACE + export_hdfs_path)
         if is_auto_create:
             from ..common.idex import IdexUtils
-            if os.getenv("JUPYTERHUB_USER"):
-                user = os.getenv("JUPYTERHUB_USER")
-            else:
-                user = os.getenv("USER")
+            user = get_user()
             if not cmk:
                 raise Exception("please input cmk arg")
             logger.debug("user=" + user + ",cmk=" + cmk)
@@ -524,10 +524,6 @@ class ClickHouseUtils(object):
         if is_sql_complete == True:
             select_sql = sql_statement
         logger.debug("raw sql = \n" + select_sql)
-        from ..lib.all_in_sql_conn import sql_forward
-        if use_sql_forward == True:
-            select_sql = sql_forward(select_sql)
-        logger.debug("SQLGateway sql = \n" + select_sql)
         if "LIMIT" not in sql_limit:
             select_sql_example = select_sql + " LIMIT 1"
         else:

@@ -7,10 +7,11 @@ with open("README.md", "r") as f:
 requirements = []
 with open("requirements.txt", "r") as f:
     for line in f:
-        requirements.append(line.strip('\n').strip())
+        if "#" not in line:
+            requirements.append(line.strip('\n').strip())
 
 setup(name='fast-causal-inference',
-      version='1.7.15',
+      version='1.7.69',
       description='fast causal inference package',
       long_description=long_description,
       long_description_content_type='text/markdown',

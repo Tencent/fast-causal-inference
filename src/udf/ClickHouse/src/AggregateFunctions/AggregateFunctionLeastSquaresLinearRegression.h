@@ -143,7 +143,7 @@ public:
 
         Matrix t_stat(1, size_xx);
         for (size_t i = 0; i < coef.size1(); ++i)
-            t_stat(0, i) = coef(0, i) / std(0, i);
+            t_stat(0, i) = coef(i, 0) / std(0, i);
 
         Matrix p_value(1, size_xx);
         auto student = boost::math::students_t_distribution<Float64>(df);

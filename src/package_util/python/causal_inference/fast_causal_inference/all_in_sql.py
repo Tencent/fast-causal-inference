@@ -2,7 +2,10 @@
 all in sql utils
 """
 from time import perf_counter as _perf_counter
-
+import time
+import requests
+from .util.utils import *
+from .lib.ols import Ols
 
 def tdw_2_clickhouse(tdw_database_name, tdw_table_name, clickhouse_table_name, spark_session, cmk=None,
                      tdw_partition_list=None, clickhouse_partition_column=None, clickhouse_primary_column=None,
@@ -218,8 +221,7 @@ def create_sql_instance():
     创建数据分析sql实例
     :return: AllInSqlConn Instance
     """
-    from .lib.all_in_sql_conn import AllInSqlConn
-    return AllInSqlConn(use_sql_forward=True)
+    return AllInSqlConn()
 
 
 def create():
@@ -228,3 +230,50 @@ def create():
     :return: AllInSqlConn Instance
     """
     return create_sql_instance()
+
+
+class AllInSqlConn:
+    def __init__(self, device_id=None, db_name=None):
+        datasource = dict()
+        from . import PROJECT_CONF
+        for cell in PROJECT_CONF['datasource']:
+            datasource[cell['device_id']] = cell
+        if not device_id:
+            device_id = list(datasource.keys())[0]
+        if not db_name:
+            db_name = datasource[device_id]['clickhouse_database']
+        self.device_id = device_id
+        self.db_name = db_name
+
+    def execute(self, sql, retry_times=1):
+        from . import PROJECT_CONF
+        from . import logger
+        url = PROJECT_CONF["sqlgateway"]["url"] + PROJECT_CONF["sqlgateway"]["path"]
+        sql = sql.replace("\n", " ")
+        json_body = '{"rawSql":"' + str(sql) + '", "creator":"' + get_user() + '", "deviceId":"' + str(
+            self.device_id) + '","database":"' + self.db_name + '"}'
+        while retry_times > 0:
+            try:
+                logger.debug("url= " + url + ",data= " + json_body)
+                resp = requests.post(url, data=json_body.encode("utf-8"), headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
+                logger.debug("response=" + resp.text)
+                # result = resp.text.replace("\\t", "\t").replace("\\n", "\n").replace("\\r", "\r").replace("\\'", "'")
+                if resp.json()["status"] == 0:
+                    return resp.json()["data"]["result"]
+                else:
+                    return resp.json()["message"]
+            except Exception as e:
+                time.sleep(1)
+                retry_times -= 1
+                if retry_times == 0:
+                    return str(e)
+
+    def sql(self, sql):
+        res = self.execute(sql)
+        if (res.find("Exception") != -1):
+            return res
+        elif res.__len__() > 0 and "Call:" in res and 'Coefficients' in res:
+            res = list(list(eval(res.replace('\n', '\001'))[0].values()))[0].replace('\001', '\n')
+            return Ols(res)
+        else:
+            return output_dataframe(res)

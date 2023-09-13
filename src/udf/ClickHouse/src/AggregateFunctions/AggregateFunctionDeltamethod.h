@@ -645,7 +645,10 @@ public:
         size_t index = 2;
 
         if (index < params.size() && Op::name == "Ttest_1samp") {
-            ttest_params.mu = params[index].get<UInt64>();
+            if (params[index].getType() == Field::Types::UInt64)
+                ttest_params.mu = params[index].get<UInt64>();
+            else
+                ttest_params.mu = params[index].get<Float64>();
             index++;
         }
 

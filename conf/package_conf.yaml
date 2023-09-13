@@ -1,0 +1,13 @@
+datasource:
+  - device_id: 1
+    clickhouse_cluster_name: allinsql
+    clickhouse_database: all_in_sql
+    clickhouse_launch_host: 172.22.0.3
+    clickhouse_port: 9000
+    clickhouse_http_port: 8123
+    clickhouse_user: default
+    clickhouse_password: allinsql666
+    ttl: 14
+sqlgateway:
+  url: http://172.22.0.4:9099
+  path: /api/v1/sqlgateway/sql-run

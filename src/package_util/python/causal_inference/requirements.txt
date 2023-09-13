@@ -8,4 +8,4 @@ requests
 graphviz
 statsmodels
 pyyaml
-rainbow-sdk
+py4j>=0.10.9

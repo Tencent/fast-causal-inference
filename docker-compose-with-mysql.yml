@@ -1,0 +1,78 @@
+version: "3.8"
+networks:
+  all_in_sql_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.22.0.0/24"
+          gateway: 172.22.0.1
+services:
+  notebook:
+    build:
+      dockerfile: docker/notebook/Dockerfile
+      context: .
+    image: jupyter/fastcausalinference-notebook
+    user: root
+    environment:
+      CHOWN_EXTRA: "/home/jovyan/"
+      CHOWN_EXTRA_OPTS: "-R"
+    ports:
+      - 8888:8888
+    volumes:
+      - "./jupyter:/home/jovyan/"
+#    container_name: fast-causal-inference-notebook
+    depends_on:
+      - sqlgateway
+    command: ["start-notebook.sh", "--IdentityProvider.token=''"]
+    networks:
+      all_in_sql_network:
+        ipv4_address: 172.22.0.5
+  sqlgateway:
+    build:
+      dockerfile: docker/sqlgateway/Dockerfile
+      context: .
+    image: sqlgateway:1.0
+    depends_on:
+      - clickhouse
+      - mysql
+    ports:
+      - 9099:9099
+    volumes:
+      - "./conf/sqlgateway_application.yml:/work/application.yml"
+#    container_name: fast-causal-inference-sqlgateway
+    networks:
+      all_in_sql_network:
+        ipv4_address: 172.22.0.4
+  clickhouse:
+    image: "fastcausalinference/clickhouse-server:23.3-alpine"
+    environment:
+      CLICKHOUSE_USER: "default"
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      CLICKHOUSE_PASSWORD: "allinsql666"
+      CLICKHOUSE_DB: "all_in_sql"
+    volumes:
+      - "./clickhouse/data/:/var/lib/clickhouse/"
+      - "./clickhouse/logs/:/var/log/clickhouse-server/"
+      - "./clickhouse/initdb:/docker-entrypoint-initdb.d"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+#    container_name: fast-causal-inference-clickhouse
+    networks:
+      all_in_sql_network:
+        ipv4_address: 172.22.0.3
+  mysql:
+    image: "mysql:5.7.43"
+    environment:
+      MYSQL_ROOT_PASSWORD: "allinsql666"
+      MYSQL_DATABASE: "mmexptdataplatform"
+    ports:
+      - 3306:3306
+    volumes:
+      - "./mysql/initdb:/docker-entrypoint-initdb.d"
+#    container_name: fast-causal-inference-mysql
+    networks:
+      all_in_sql_network:
+        ipv4_address: 172.22.0.2

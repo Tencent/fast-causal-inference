@@ -15,14 +15,14 @@ WeChat-Video-Account and other businesses, greatly improving the work efficiency
 #### Main advantages of the project:
 1. Provides the causal inference capability of second-level and sub-second level execution for massive data
 Based on the vectorized OLAP execution engine ClickHouse/StarRocks, the speed is more conducive to the ultimate user experience  
-![topology](images/fast-causal-inference2.png)
+![topology](docs/images/fast-causal-inference2.png)
 2. Provide basic operators, causal inference capabilities of high-order operators, and upper-level application packaging  
 Support ttest, OLS, Lasso, Tree-based model, matching, bootstrap, DML, etc.  
-![topology](images/fast-causal-inference3.png)
+![topology](docs/images/fast-causal-inference3.png)
 3. Minimalist SQL usage
 SQLGateway WebServer lowers the threshold for using statistical models through the SQL language, 
 and provides a minimalist SQL usage method on the upper layer, transparently doing engine-related SQL expansion and optimization  
-![topology](images/fast-causal-inference1.png)
+![topology](docs/images/fast-causal-inference1.png)
 
 #### The first version already supports the following features:
 Basic causal inference tools
@@ -41,51 +41,36 @@ Already supported multiple businesses within WeChat, such as WeChat-Video-Accoun
 github: https://github.com/Tencent/fast-causal-inference
 
 ###  Getting started
+##### Preconditions
+1. The machine needs to install and start the docker service  
+    - Linux:
+      - Centos:
+        > yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo  
+          yum install docker-ce  
+          systemctl start docker   
 
-#### Compile From Source Building From Linux Ubuntu
+      - Ubuntu:
+        > sudo apt-get install docker-ce
+
+      - verify docker service status:  
+        > systemctl status docker   
+
+    - MacOS:  
+    reference to https://docs.docker.com/desktop/install/mac-install/, Directly download the .dmg package and double-click to install it,
+      Please make sure the docker service is running  
+        Add PATH:
+        >  echo 'export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"' >> ~/.bash_profile && . ~/.bash_profile
+
+    - verify docker service status:  
+        > docker ps
+
+2. Install docker-compose container service orchestration tool  
+> pip3 install --upgrade pip && pip3 install docker-compose
+
 ##### One-Click Deployment: 
-> sh bin/build.sh 
+> git clone https://github.com/Tencent/fast-causal-inference
+> cd all-in-sql && sh bin/deploy.sh  
 
-If the following log is displayed, fast-causal-inference is successfully deployed.
-> build success  
-
-#### Examples
-use examples data:
-> clickhouse client --multiquery < examples/test_data_small.sql  
-
-please refer to the documentation for specific algorithms: [sql_inference](docs/sql_inference.md)
-
-##### Building on Any Linux:  
-For other evironment refer to: https://clickhouse.com/docs/en/install#from-sources
-
-##### Running
-This will create executable ${deploy_path}/clickhouse which can be used with client or server arguments.
-> clickhouse server  
-> clickhouse client 
-
-#### Install From Docker Image  
-##### Docker Image Pull Command:
-> docker pull fastcausalinference/clickhouse-server:23.3-alpine
-
-##### start server instance:
-> docker run -d --network=host --name fast-causal-inference-server --ulimit nofile=262144:262144 fastcausalinference/clickhouse-server:23.3-alpine
-
-For more information refer to: docker run --help
-
-##### connect to it from a native client:
-> docker exec -it fast-causal-inference-server clickhouse-client
-
-##### stopping / removing the container:
-> docker stop fast-causal-inference-server
-> docker rm fast-causal-inference-server
-
-#### Examples
-use examples data:
-> docker exec -i fast-causal-inference-server clickhouse-client --multiquery < examples/test_data_small.sql 
-
-please refer to the documentation for specific algorithms: [sql_inference](docs/sql_inference.md)
-
-#### A Note About Fast-Causal-Reference Project Version
-The current version 0.1.0-rc only releases the Fast Causal Inference Clickhouse module, 
-and SQLGateway WebServer and Pypi Sdk Package module will be released in version 0.1.0-stable,
-planned for august, please pay attention to the version progress.
+#### Enter notebook to use:  
+To start causal analysis, please refer to the built-in all_in_sql_demo.ipynb
+> http://127.0.0.1:8888/lab
