@@ -44,7 +44,7 @@ public class NonParamDMLParser extends SqlCallCausal {
   +
       "), \n"
   +
-      "     count\n"
+      "     count()\n"
   +
       "    )\n"
   +
@@ -78,9 +78,9 @@ public class NonParamDMLParser extends SqlCallCausal {
   +
       "  ) as final_model";
 
-  static String with_each_union_with_weight = "SELECT *, @PH_T - evalMLMethod(mm_models.2.@PH_INDEX+1 @PH_X @PH_W) as mm_t, @PH_Y - evalMLMethod(mm_models.1.@PH_INDEX+1 @PH_X @PH_W) as mm_y, sqrt(mm_t * mm_t * mm_models.3 / weight_sum) as sqrt_weight from @TBL where rowNumberInAllBlocks()%@PH_CV = @PH_INDEX\n";
+  static String with_each_union_with_weight = "SELECT *, @PH_T - evalMLMethod(mm_models.2.@PH_INDEX_1 @PH_X @PH_W) as mm_t, @PH_Y - evalMLMethod(mm_models.1.@PH_INDEX_1 @PH_X @PH_W) as mm_y, sqrt(mm_t * mm_t * mm_models.3 / weight_sum) as sqrt_weight from @TBL where rowNumberInAllBlocks()%@PH_CV = @PH_INDEX\n";
 
-  static String with_each_union = "SELECT *, @PH_T - evalMLMethod(mm_models.2.@PH_INDEX+1 @PH_X @PH_W) as mm_t, @PH_Y - evalMLMethod(mm_models.1.@PH_INDEX+1 @PH_X @PH_W) as mm_y from @TBL where rowNumberInAllBlocks()%@PH_CV = @PH_INDEX\n";
+  static String with_each_union = "SELECT *, @PH_T - evalMLMethod(mm_models.2.@PH_INDEX_1 @PH_X @PH_W) as mm_t, @PH_Y - evalMLMethod(mm_models.1.@PH_INDEX_1 @PH_X @PH_W) as mm_y from @TBL where rowNumberInAllBlocks()%@PH_CV = @PH_INDEX\n";
 
   static String func_template = "select final_model";
 
@@ -149,13 +149,13 @@ public class NonParamDMLParser extends SqlCallCausal {
     String ph_each_union2 = "";
     for (int i = 0; i < Integer.valueOf(cv); i++) {
       String tmp = with_each_union;
-      tmp = tmp.replaceAll("@PH_INDEX+1", String.valueOf(i));
+      tmp = tmp.replaceAll("@PH_INDEX_1", String.valueOf(i+1));
       tmp = tmp.replaceAll("@PH_INDEX", String.valueOf(i));
       if (i != 0) ph_each_union += " union all \n ";
       ph_each_union += tmp;
 
       String tmp2 = with_each_union_with_weight;
-      tmp2 = tmp2.replaceAll("@PH_INDEX+1", String.valueOf(i+1));
+      tmp2 = tmp2.replaceAll("@PH_INDEX_1", String.valueOf(i+1));
       tmp2 = tmp2.replaceAll("@PH_INDEX", String.valueOf(i));
       if (i != 0) ph_each_union2 += " union all \n ";
       ph_each_union2 += tmp2;
@@ -187,8 +187,8 @@ public class NonParamDMLParser extends SqlCallCausal {
     with = with.replaceAll("@PH_X", ph_x);
     with = with.replaceAll("@PH_W", ph_w);
     with = with.replaceAll("@PH_CV", cv);
-    with = with.replaceAll("@PH_T", model_t);
-    with = with.replaceAll("@PH_Y", model_y);
+    with = with.replaceAll("@PH_T", T);
+    with = with.replaceAll("@PH_Y", Y);
     withs.add(with);
     replace_sql = func_template;
   }

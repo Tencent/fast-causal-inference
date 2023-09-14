@@ -40,7 +40,10 @@ CREATE TABLE if not exists mmexptdataplatform.`sql_detail_udf_map`
 
 
 insert into mmexptdataplatform.sql_udf_dict(udf,udf_desc) values('deltamethod','deltamethod');
+insert into mmexptdataplatform.sql_udf_dict(udf,udf_desc) values('predict','predict');
+insert into mmexptdataplatform.sql_udf_dict(udf,udf_desc) values('olsState','olsState');
 insert into mmexptdataplatform.sql_udf_dict(udf,udf_desc) values('ols','ols');
+insert into mmexptdataplatform.sql_udf_dict(udf,udf_desc) values('ivregression','ivregression');
 insert into mmexptdataplatform.sql_udf_dict(udf,udf_desc) values('wls','wls');
 insert into mmexptdataplatform.sql_udf_dict(udf,udf_desc) values('xexpt_ttest_2samp','xexpt_ttest_2samp');
 insert into mmexptdataplatform.sql_udf_dict(udf,udf_desc) values('ttest_1samp','ttest_1samp');

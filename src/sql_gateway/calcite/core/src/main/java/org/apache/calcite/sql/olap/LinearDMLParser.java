@@ -72,7 +72,7 @@ public class LinearDMLParser extends SqlCallCausal {
       "    ) \n " +
       "  ) as final_model";
 
-  static String with_each_union = "SELECT *, @PH_T - evalMLMethod(mm_models.2.@PH_INDEX+1 @PH_X @PH_W) as mm_t, @PH_Y - evalMLMethod(mm_models.1.@PH_INDEX+1 @PH_X @PH_W) as mm_y from @TBL where rowNumberInAllBlocks()%@PH_CV = @PH_INDEX\n";
+  static String with_each_union = "SELECT *, @PH_T - evalMLMethod(mm_models.2.@PH_INDEX_1 @PH_X @PH_W) as mm_t, @PH_Y - evalMLMethod(mm_models.1.@PH_INDEX_1 @PH_X @PH_W) as mm_y from @TBL where rowNumberInAllBlocks()%@PH_CV = @PH_INDEX\n";
   static String func_template = "select final_model";
 
   public LinearDMLParser(SqlParserPos pos) {
@@ -139,7 +139,7 @@ public class LinearDMLParser extends SqlCallCausal {
     String ph_each_union = "";
     for (int i = 0; i < Integer.valueOf(cv); i++) {
       String tmp = with_each_union;
-      tmp = tmp.replaceAll("@PH_INDEX+1", String.valueOf(i));
+      tmp = tmp.replaceAll("@PH_INDEX_1", String.valueOf(Integer.valueOf(i+1)));
       tmp = tmp.replaceAll("@PH_INDEX", String.valueOf(i));
       if (i != 0) ph_each_union += " union all \n ";
       ph_each_union += tmp;
@@ -166,8 +166,8 @@ public class LinearDMLParser extends SqlCallCausal {
     with = with.replaceAll("@PH_X", ph_x);
     with = with.replaceAll("@PH_W", ph_w);
     with = with.replaceAll("@PH_CV", cv);
-    with = with.replaceAll("@PH_T", model_t);
-    with = with.replaceAll("@PH_Y", model_y);
+    with = with.replaceAll("@PH_T", T);
+    with = with.replaceAll("@PH_Y", Y);
     withs.add(with);
     replace_sql = func_template;
   }

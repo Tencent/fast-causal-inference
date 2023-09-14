@@ -48,8 +48,20 @@ public class SqlForwardTest {
         "SELECT Ols(FALSE )(y, x1, x2, X3)\n"
   +
             "FROM tbl");
+    System.out.println(sqlForward(sql));
   }
+  @Test void testPredict() throws SqlParseException {
+    String sql = "SELECT\n" +
+        "                                    predict(olsState(y+x1+x2),x1,x2) AS res \n" +
+        "FROM test_data_small LIMIT 10";
+    assertEquals(sqlForward(sql),
+        "with (select OlsState(y , x1 , x2) from test_data_small) as model \n" +
+            "SELECT evalMLMethod(model,x1,x2) AS res\n" +
+            "FROM test_data_small\n" +
+            "LIMIT 10");
 
+    System.out.println(sqlForward(sql));
+  }
   @Test void testWls() throws SqlParseException {
     String sql = "select wls(y ~ x1 + x2 + X3, weight) from tbl";
     assertEquals(sqlForward(sql),
@@ -110,292 +122,88 @@ public class SqlForwardTest {
   }
 
   @Test void testLift() throws SqlParseException {
-    String sql = "select lift(ite1, Y, T, 5, true) from test_hte_dw";
-    assertEquals(sqlForward(sql),
-        "with ( \n"
-  +
-            "    select toUInt64(5) \n"
-  +
-            "  ) as mm_k, \n"
-  +
-            "  ( \n"
-  +
-            "  select  \n"
-  +
-            "  tuple( \n"
-  +
-            "  floor(count() / mm_k), \n"
-  +
-            "  count(), \n"
-  +
-            "  avg(T), \n"
-  +
-            "  avg(Y), \n"
-  +
-            "  mm_k - count() % mm_k \n"
-  +
-            "  ) from test_hte_dw \n"
-  +
-            "  ) as mm_params\n"
-  +
-            " \n"
-  +
-            "select ratio, \n"
-  +
-            "    sum(sumt) OVER w1 / (ratio * (mm_params.2)) AS t_, \n"
-  +
-            "    sum(sumy) OVER w1 / (ratio * (mm_params.2)) AS y_, \n"
-  +
-            "    ((((sum(sumty) OVER w1 - (sum(sumt) OVER w1 * y_)) - (sum(sumy) OVER w1 * t_)) +" +
-            " (((y_ * t_) * ratio) * (mm_params.2))) / ((sum(sumtt) OVER w1 - ((2 * sum(sumt) " +
-            "OVER w1) * t_)) + (((t_ * t_) * ratio) * (mm_params.2))))  AS lift, \n"
-  +
-            "    lift * ratio as gain, \n"
-  +
-            "    ((((sum(sumty) OVER w2 - (sum(sumt) OVER w2 * (mm_params.4))) - (sum(sumy) OVER " +
-            "w2 * (mm_params.3))) + (((mm_params.4) * (mm_params.3)) * (mm_params.2))) / ((sum" +
-            "(sumtt) OVER w2 - ((2 * sum(sumt) OVER w2) * (mm_params.3))) + (((mm_params.3) * " +
-            "(mm_params.3)) * (mm_params.2))))  AS ate, \n"
-  +
-            "    ate * ratio as ramdom_gain \n"
-  +
-            "FROM \n"
-  +
-            "( \n"
-  +
-            "    SELECT \n"
-  +
-            "        if(rn <= ((mm_params.5) * (mm_params.1)), floor((rn - 1) / (mm_params.1)), " +
-            "floor(((rn - ((mm_params.1) * (mm_params.5))) - 1) / ((mm_params.1) + 1)) + " +
-            "(mm_params.5)) + 1 AS gid, \n"
-  +
-            "        max(rn) AS max_rn, \n"
-  +
-            "        max_rn / (mm_params.2) AS ratio, \n"
-  +
-            "        sum(mm_t) AS sumt, \n"
-  +
-            "        sum(mm_t * mm_t) AS sumtt, \n"
-  +
-            "        sum(mm_y) AS sumy, \n"
-  +
-            "        sum(mm_t * mm_y) AS sumty \n"
-  +
-            "    FROM \n"
-  +
-            "    ( \n"
-  +
-            "        SELECT \n"
-  +
-            "            row_number() OVER (ORDER BY mm_ite DESC) AS rn, \n"
-  +
-            "            ite1 AS mm_ite, \n"
-  +
-            "            Y AS mm_y, \n"
-  +
-            "            T AS mm_t \n"
-  +
-            "        FROM test_hte_dw \n"
-  +
-            "        ORDER BY mm_ite DESC \n"
-  +
-            "    ) \n"
-  +
-            "    GROUP BY gid \n"
-  +
-            ") \n"
-  +
-            "WINDOW \n"
-  +
-            "    w1 AS (ORDER BY ratio ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), \n"
-  +
-            "    w2 AS (PARTITION BY 0) \n"
-  +
-            "ORDER BY ratio ASC");
+    String sql = "select lift(1,rand()%2,rand()%2,100,false) from test_data_small_local";
+    System.out.println(sqlForward("select * from test_data_small limit 5"));
   }
 
   @Test void testLinearDML() throws SqlParseException {
-    String sql = "select linearDML(y, T, x1 + x2 + x3+x4, w1+w2 + w3, model_y= 'Ols', model_t=  'ols', cv= 3) from test_hte_dw";
+    String sql = "select linearDML(y,treatment,x1+x2,x7_needcut,model_y='Ols',model_t=stochasticLogisticRegression(1.0, 1.0, 10, 'SGD'),cv=2 ) from test_data_small";
+    /*
     assertEquals(sqlForward(sql),
-        "with   (\n"
-  +
-            "    SELECT\n"
-  +
-            "    (\n"
-  +
-            "     tuple(\n"
-  +
-            "        OlsStateIf(toFloat64(y) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != " +
-            "0),\n"
-  +
-            "OlsStateIf(toFloat64(y) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != 1),\n"
-  +
-            "OlsStateIf(toFloat64(y) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != 2) \n"
-  +
-            "\n"
-  +
-            "),\n"
-  +
-            "     tuple(\n"
-  +
-            "        olsStateIf(toFloat64(T) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != " +
-            "0),\n"
-  +
-            "olsStateIf(toFloat64(T) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != 1),\n"
-  +
-            "olsStateIf(toFloat64(T) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != 2) \n"
-  +
-            "\n"
-  +
-            "     ) \n"
-  +
-            "    )\n"
-  +
-            "    FROM test_hte_dw\n"
-  +
-            "  ) as mm_models\n"
-  +
-            ",\n"
-  +
-            " (\n"
-  +
-            "   SELECT Ols(false)(mm_y ,x1*mm_t,x2*mm_t,x3*mm_t,x4*mm_t, mm_t) FROM \n"
-  +
-            "   ( \n"
-  +
-            "          SELECT *, olsStateIf - evalMLMethod(mm_models.2.0+1 ,x1,x2,x3,x4 ,w1,w2," +
-            "w3) as mm_t, OlsStateIf - evalMLMethod(mm_models.1.0+1 ,x1,x2,x3,x4 ,w1,w2,w3) as " +
-            "mm_y from test_hte_dw where rowNumberInAllBlocks()%3 = 0\n"
-  +
-            " union all \n"
-  +
-            " SELECT *, olsStateIf - evalMLMethod(mm_models.2.1+1 ,x1,x2,x3,x4 ,w1,w2,w3) as " +
-            "mm_t, OlsStateIf - evalMLMethod(mm_models.1.1+1 ,x1,x2,x3,x4 ,w1,w2,w3) as mm_y from" +
-            " test_hte_dw where rowNumberInAllBlocks()%3 = 1\n"
-  +
-            " union all \n"
-  +
-            " SELECT *, olsStateIf - evalMLMethod(mm_models.2.2+1 ,x1,x2,x3,x4 ,w1,w2,w3) as " +
-            "mm_t, OlsStateIf - evalMLMethod(mm_models.1.2+1 ,x1,x2,x3,x4 ,w1,w2,w3) as mm_y from" +
-            " test_hte_dw where rowNumberInAllBlocks()%3 = 2\n"
-  +
-            "\n"
-  +
-            "    ) \n"
-  +
-            "  ) as final_model \n"
-  +
-            "select final_model");
+        "with   (\n" +
+            "    SELECT\n" +
+            "    (\n" +
+            "     tuple(\n" +
+            "        OlsStateIf(toFloat64(y) ,x1,x2 ,x7_needcut, rowNumberInAllBlocks()%2 != 0)," +
+            "\n" +
+            "OlsStateIf(toFloat64(y) ,x1,x2 ,x7_needcut, rowNumberInAllBlocks()%2 != 1) \n" +
+            "\n" +
+            "),\n" +
+            "     tuple(\n" +
+            "        stochasticLogisticRegressionStateIf(1.0, 1.0, 10, 'SGD')(toFloat64" +
+            "(treatment) ,x1,x2 ,x7_needcut, rowNumberInAllBlocks()%2 != 0),\n" +
+            "stochasticLogisticRegressionStateIf(1.0, 1.0, 10, 'SGD')(toFloat64(treatment) ,x1,x2" +
+            " ,x7_needcut, rowNumberInAllBlocks()%2 != 1) \n" +
+            "\n" +
+            "     ) \n" +
+            "    )\n" +
+            "    FROM test_data_small\n" +
+            "  ) as mm_models\n" +
+            ",\n" +
+            " (\n" +
+            "   SELECT Ols(false)(mm_y ,x1*mm_t,x2*mm_t, mm_t) FROM \n" +
+            "   ( \n" +
+            "          SELECT *, treatment - evalMLMethod(mm_models.2.1 ,x1,x2 ,x7_needcut) as " +
+            "mm_t, y - evalMLMethod(mm_models.1.1 ,x1,x2 ,x7_needcut) as mm_y from " +
+            "test_data_small where rowNumberInAllBlocks()%2 = 0\n" +
+            " union all \n" +
+            " SELECT *, treatment - evalMLMethod(mm_models.2.2 ,x1,x2 ,x7_needcut) as mm_t, y - " +
+            "evalMLMethod(mm_models.1.2 ,x1,x2 ,x7_needcut) as mm_y from test_data_small where " +
+            "rowNumberInAllBlocks()%2 = 1\n" +
+            "\n" +
+            "    ) \n" +
+            "  ) as final_model \n" +
+            "select final_model\n");
+
+     */
     System.out.println(sqlForward(sql));
   }
 
   @Test void testNonParamDML() throws SqlParseException {
-    String sql = "select nonParamDML(y, T, x1 + x2 + x3+x4, w1+w2 + w3, model_y= 'Ols', model_t=  'ols', cv= 3) from test_hte_dw";
-    assertEquals(sqlForward(sql),
-        "with   (\n"
-  +
-            "    SELECT\n"
-  +
-            "    (\n"
-  +
-            "     tuple(\n"
-  +
-            "        OlsStateIf(toFloat64(y) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != " +
-            "0),\n"
-  +
-            "OlsStateIf(toFloat64(y) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != 1),\n"
-  +
-            "OlsStateIf(toFloat64(y) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != 2) \n"
-  +
-            "\n"
-  +
-            "),\n"
-  +
-            "     tuple(\n"
-  +
-            "        olsStateIf(toFloat64(T) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != " +
-            "0),\n"
-  +
-            "olsStateIf(toFloat64(T) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != 1),\n"
-  +
-            "olsStateIf(toFloat64(T) ,x1,x2,x3,x4 ,w1,w2,w3, rowNumberInAllBlocks()%3 != 2) \n"
-  +
-            "\n"
-  +
-            "), \n"
-  +
-            "     count\n"
-  +
-            "    )\n"
-  +
-            "    FROM test_hte_dw\n"
-  +
-            "  ) as mm_models\n"
-  +
-            ",\n"
-  +
-            "  (\n"
-  +
-            "   SELECT sum(mm_t * mm_t) from\n"
-  +
-            "   (\n"
-  +
-            "          SELECT *, olsStateIf - evalMLMethod(mm_models.2.0+1 ,x1,x2,x3,x4 ,w1,w2," +
-            "w3) as mm_t, OlsStateIf - evalMLMethod(mm_models.1.0+1 ,x1,x2,x3,x4 ,w1,w2,w3) as " +
-            "mm_y from test_hte_dw where rowNumberInAllBlocks()%3 = 0\n"
-  +
-            " union all \n"
-  +
-            " SELECT *, olsStateIf - evalMLMethod(mm_models.2.1+1 ,x1,x2,x3,x4 ,w1,w2,w3) as " +
-            "mm_t, OlsStateIf - evalMLMethod(mm_models.1.1+1 ,x1,x2,x3,x4 ,w1,w2,w3) as mm_y from" +
-            " test_hte_dw where rowNumberInAllBlocks()%3 = 1\n"
-  +
-            " union all \n"
-  +
-            " SELECT *, olsStateIf - evalMLMethod(mm_models.2.2+1 ,x1,x2,x3,x4 ,w1,w2,w3) as " +
-            "mm_t, OlsStateIf - evalMLMethod(mm_models.1.2+1 ,x1,x2,x3,x4 ,w1,w2,w3) as mm_y from" +
-            " test_hte_dw where rowNumberInAllBlocks()%3 = 2\n"
-  +
-            "\n"
-  +
-            "    )\n"
-  +
-            "  ) as weight_sum,\n"
-  +
-            " (\n"
-  +
-            "   SELECT Ols(false)(mm_y / mm_t * sqrt_weight ,x1*sqrt_weight,x2*sqrt_weight," +
-            "x3*sqrt_weight,x4*sqrt_weight, sqrt_weight) FROM \n"
-  +
-            "   ( \n"
-  +
-            "          SELECT *, olsStateIf - evalMLMethod(mm_models.2.0+1 ,x1,x2,x3,x4 ,w1,w2," +
-            "w3) as mm_t, OlsStateIf - evalMLMethod(mm_models.1.0+1 ,x1,x2,x3,x4 ,w1,w2,w3) as " +
-            "mm_y, sqrt(mm_t * mm_t * mm_models.3 / weight_sum) as sqrt_weight from test_hte_dw where " +
-            "rowNumberInAllBlocks()%3 = 0\n"
-  +
-            " union all \n"
-  +
-            " SELECT *, olsStateIf - evalMLMethod(mm_models.2.1+1 ,x1,x2,x3,x4 ,w1,w2,w3) as " +
-            "mm_t, OlsStateIf - evalMLMethod(mm_models.1.1+1 ,x1,x2,x3,x4 ,w1,w2,w3) as mm_y, " +
-            "sqrt(mm_t * mm_t * mm_models.3 / weight_sum) as sqrt_weight from test_hte_dw where " +
-            "rowNumberInAllBlocks()%3 = 1\n"
-  +
-            " union all \n"
-  +
-            " SELECT *, olsStateIf - evalMLMethod(mm_models.2.2+1 ,x1,x2,x3,x4 ,w1,w2,w3) as " +
-            "mm_t, OlsStateIf - evalMLMethod(mm_models.1.2+1 ,x1,x2,x3,x4 ,w1,w2,w3) as mm_y, " +
-            "sqrt(mm_t * mm_t * mm_models.3 / weight_sum) as sqrt_weight from test_hte_dw where " +
-            "rowNumberInAllBlocks()%3 = 2\n"
-  +
-            "\n"
-  +
-            "    ) \n"
-  +
-            "  ) as final_model \n"
-  +
-            "select final_model");
+    String sql = "select nonParamDML(y,treatment,x1+x2,x7_needcut,model_y='Ols',model_t='Ols',cv=2) from test_data_small";
     System.out.println(sqlForward(sql));
+  }
+
+  @Test void testIvRegression() throws SqlParseException {
+    String sql = "SELECT\n" +
+        "                              ivregression(y~(x3~treatment)+x1+x2)\n" +
+        "                        FROM\n" +
+        "                              test_data_small";
+    assertEquals(sqlForward(sql),
+        "with \n" +
+            "    ( \n" +
+            "        SELECT OlsState(true)(toFloat64(x3), toFloat64(treatment),x1,x2) \n" +
+            "        FROM test_data_small \n" +
+            "    ) AS model1, \n" +
+            "    ( \n" +
+            "        SELECT OlsState(true)(toFloat64(y), evalMLMethod(model1, toFloat64" +
+            "(treatment),x1,x2),x1,x2) \n" +
+            "        FROM test_data_small \n" +
+            "    ) AS model_final, \n" +
+            "    ( \n" +
+            "      select  \n" +
+            "      MatrixMultiplication(true, false)(1, evalMLMethod(model1, toFloat64(treatment)" +
+            ",x1,x2),x1,x2) from test_data_small \n" +
+            "    ) as xx_inverse, \n" +
+            "    ( \n" +
+            "      select  \n" +
+            "      MatrixMultiplication(false, true)(1, evalMLMethod(model1, toFloat64(treatment)" +
+            ",x1,x2),x1,x2, ABS(toFloat64(y) - evalMLMethod(model_final, toFloat64(x3),x1,x2))) " +
+            "from test_data_small \n" +
+            "    )  as xx_weighted  \n" +
+            "SELECT Ols(true, false, toString(xx_inverse), toString(xx_weighted))(toFloat64(y)," +
+            "evalMLMethod(model1, toFloat64(treatment),x1,x2),x1,x2)\n" +
+            "FROM test_data_small");
   }
 
   @Test void testCutBins() throws SqlParseException {
@@ -521,112 +329,80 @@ public class SqlForwardTest {
   +
             "SELECT uin, if(groupname = 'B10', 1, -1), m_caliper_index AS index, RAND() AS rand\n"
   +
-            "FROM tbl");
-    //System.out.println(sqlForward(sql));
+            "FROM final_table");
+    //sql = "SELECT uin, if(groupname='B10', 1, -1), caliperMatching(if(groupname = 'A1', -1, 1), numerator, 0.2) as index, rand() as rand FROM tbl";
+    sql = "SELECT\n" +
+        "                                 treatment,weight,caliperMatching(if(treatment=1,-1,1),weight,0.2) AS matchingIndex\n" +
+        "                           FROM\n" +
+        "                                 test_data_small\n where matchingIndex != 0 order by abs(matchingIndex) limit 50";
+    System.out.println(sqlForward(sql));
   }
 
   @Test void testExactMatching() throws SqlParseException  {
-    String sql = "select exactMatching(if(treata=1,1,-1), psex, numer) from tbl";
+    String sql = "SELECT\n" +
+        "                                 treatment,x2,exactMatching(if(treatment=1,-1,1),x2) as " +
+        "matchingIndex\n" +
+        "                           FROM\n" +
+        "                                 test_data_small where matchingIndex != 0 order by abs(matchingIndex)\n" +
+        "                           limit 20";
     assertEquals(sqlForward(sql),
-        "with table_1 AS\n"
-  +
-            "    (\n"
-  +
-            "        SELECT\n"
-  +
-            "            *,\n"
-  +
-            "            if(treata = 1, 1, -1) AS mm_t,\n"
-  +
-            "            numer as l1 \n"
-  +
-            "        FROM tbl\n"
-  +
-            "),\n"
-  +
-            "    table_2 AS\n"
-  +
-            "    (\n"
-  +
-            "        SELECT\n"
-  +
-            "            count() as mm_cnt, \n"
-  +
-            "            min(mm_num) AS mm_index_min,\n"
-  +
-            "            max(mm_num) AS mm_index_max,\n"
-  +
+        "with table_1 AS\n" +
+            "    (\n" +
+            "        SELECT\n" +
+            "            *,\n" +
+            "            if(treatment = 1, -1, 1) AS mm_t,\n" +
+            "            x2 as l1 \n" +
+            "        FROM test_data_small\n" +
+            "),\n" +
+            "    table_2 AS\n" +
+            "    (\n" +
+            "        SELECT\n" +
+            "            count() as mm_cnt, \n" +
+            "            min(mm_num) AS mm_index_min,\n" +
+            "            max(mm_num) AS mm_index_max,\n" +
             "            sum(multiIf(mm_cnt < 2, 0, mm_index_min > mm_index_max, mm_index_max, " +
             "mm_index_min)) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS " +
-            "mm_matching_index,\n"
-  +
-            "            l1  \n"
-  +
-            "        FROM\n"
-  +
-            "        (\n"
-  +
-            "            SELECT\n"
-  +
-            "                count(1) AS mm_num,\n"
-  +
-            "                mm_t,\n"
-  +
-            "                l1  \n"
-  +
-            "            FROM table_1\n"
-  +
-            "            GROUP BY\n"
-  +
-            "                mm_t,\n"
-  +
-            "                l1  \n"
-  +
-            "        )\n"
-  +
-            "        GROUP BY l1  \n"
-  +
-            "),\n"
-  +
-            "    final_table AS\n"
-  +
-            "    (\n"
-  +
-            "        SELECT\n"
-  +
-            "            *,\n"
-  +
-            "            row_number() OVER (PARTITION BY mm_t, l1  ) AS mm_rn,\n"
-  +
+            "mm_matching_index,\n" +
+            "            l1  \n" +
+            "        FROM\n" +
+            "        (\n" +
+            "            SELECT\n" +
+            "                count(1) AS mm_num,\n" +
+            "                mm_t,\n" +
+            "                l1  \n" +
+            "            FROM table_1\n" +
+            "            GROUP BY\n" +
+            "                mm_t,\n" +
+            "                l1  \n" +
+            "        )\n" +
+            "        GROUP BY l1  \n" +
+            "),\n" +
+            "    final_table AS\n" +
+            "    (\n" +
+            "        SELECT\n" +
+            "            *,\n" +
+            "            row_number() OVER (PARTITION BY mm_t, l1  ) AS mm_rn,\n" +
             "            if(mm_rn <= if(mm_cnt < 2, 0, mm_index_min), (mm_rn + mm_matching_index)" +
-            " * mm_t, 0) as mm_index \n"
-  +
-            "        FROM table_1 AS m_a\n"
-  +
-            "        LEFT JOIN\n"
-  +
-            "        (\n"
-  +
-            "            SELECT\n"
-  +
-            "                mm_cnt, \n"
-  +
-            "                mm_index_min,\n"
-  +
-            "                mm_matching_index,\n"
-  +
-            "                l1  \n"
-  +
-            "            FROM table_2\n"
-  +
-            "        ) AS m_b ON m_a.l1 = m_b.l1\n"
-  +
-            "    ) \n"
-  +
-            "SELECT mm_index\n"
-  +
-            "FROM tbl");
+            " * mm_t, 0) as mm_index \n" +
+            "        FROM table_1 AS m_a\n" +
+            "        LEFT JOIN\n" +
+            "        (\n" +
+            "            SELECT\n" +
+            "                mm_cnt, \n" +
+            "                mm_index_min,\n" +
+            "                mm_matching_index,\n" +
+            "                l1  \n" +
+            "            FROM table_2\n" +
+            "        ) AS m_b ON m_a.l1 = m_b.l1\n" +
+            "    ) \n" +
+            "SELECT treatment, x2, mm_index AS matchingIndex\n" +
+            "FROM final_table\n" +
+            "WHERE matchingIndex <> 0\n" +
+            "ORDER BY ABS(matchingIndex)\n" +
+            "LIMIT 20");
     System.out.println(sqlForward(sql));
   }
+
+
 
 }

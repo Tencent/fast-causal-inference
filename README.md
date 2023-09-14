@@ -54,7 +54,9 @@ github: https://github.com/Tencent/fast-causal-inference
 
       - verify docker service status:  
         > systemctl status docker   
-
+    
+      - Install docker-compose container service orchestration tool  
+        > pip3 install --upgrade pip && pip3 install docker-compose
     - MacOS:  
     reference to https://docs.docker.com/desktop/install/mac-install/, Directly download the .dmg package and double-click to install it,
       Please make sure the docker service is running  
@@ -64,13 +66,11 @@ github: https://github.com/Tencent/fast-causal-inference
     - verify docker service status:  
         > docker ps
 
-2. Install docker-compose container service orchestration tool  
-> pip3 install --upgrade pip && pip3 install docker-compose
-
 ##### One-Click Deployment: 
-> git clone https://github.com/Tencent/fast-causal-inference
-> cd all-in-sql && sh bin/deploy.sh  
-
-#### Enter notebook to use:  
-To start causal analysis, please refer to the built-in all_in_sql_demo.ipynb
+> git clone https://github.com/Tencent/fast-causal-inference  
+> cd fast-causal-inference && sh bin/deploy.sh   
 > http://127.0.0.1:8888/lab
+>>  To start causal analysis, please refer to the built-in demo.ipynb
+
+
+

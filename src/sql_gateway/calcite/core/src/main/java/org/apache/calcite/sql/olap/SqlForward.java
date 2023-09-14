@@ -18,6 +18,8 @@ package org.apache.calcite.sql.olap;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.sql.*;
+import org.apache.calcite.sql.dialect.MysqlSqlDialect;
+import org.apache.calcite.sql.dialect.PrestoSqlDialect;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 
@@ -34,6 +36,8 @@ public class SqlForward {
 
   String replace_sql = "";
 
+  String replace_table = "";
+
   public void parseNode(SqlNode node) {
     if (!(node instanceof SqlCallCausal)) {
       return ;
@@ -46,6 +50,9 @@ public class SqlForward {
     if (replace_sql.equals("") && !causalNode.replace_sql.equals("")) {
       replace_sql = causalNode.replace_sql;
     }
+    if (replace_table.equals("") && !causalNode.replace_table.equals("")) {
+      replace_table = causalNode.replace_table;
+    }
   }
   // Config
   /* TODO : Distinguish between different engines: clickhouse, starrocks...*/
@@ -57,9 +64,16 @@ public class SqlForward {
         .withCaseSensitive(false)
         .withQuotedCasing(Casing.UNCHANGED));
     SqlNode sqlNode = parser.parseStmt();
-    String unparserSql = sqlNode.toSqlString(new SqlDialect(SqlDialect.EMPTY_CONTEXT)).getSql();
+    //String unparserSql = sqlNode.toSqlString(new SqlDialect(SqlDialect.EMPTY_CONTEXT)).getSql();
+    String unparserSql = sqlNode.toSqlString(MysqlSqlDialect.DEFAULT).getSql();
 
-    SqlSelect sqlSelect = (SqlSelect)sqlNode;
+    SqlSelect sqlSelect;
+    if (sqlNode instanceof SqlOrderBy) {
+      SqlOrderBy sqlOrderBy = (SqlOrderBy) sqlNode;
+      sqlSelect = (SqlSelect) sqlOrderBy.query;
+    }
+    else
+      sqlSelect = (SqlSelect)sqlNode;
     SqlIdentifier sqlIdentifier = (SqlIdentifier)sqlSelect.getFrom();
     SqlNodeList selectList = (SqlNodeList)sqlSelect.getSelectList();
     for (SqlNode node : selectList) {
@@ -69,7 +83,9 @@ public class SqlForward {
         parseNode(((SqlBasicCall) node).getOperandList().get(0));
       }
     }
-    String table_name = sqlIdentifier.toString();
+    String table_name = "";
+    if (sqlIdentifier != null)
+      table_name = sqlIdentifier.toString();
     String with_sql = "with ";
     for (int i = 0; i < withs.size(); ++i) {
       if (i != 0) {
@@ -85,9 +101,18 @@ public class SqlForward {
       forwardSql += unparserSql;
     else
       forwardSql += replace_sql;
+    System.out.println("tablename:" + table_name);
     if (!table_name.equals(""))
       forwardSql = forwardSql.replace("@TBL", table_name);
-    this.forwardSql = forwardSql;
+
+    if (!replace_table.equals("")) {
+      int lastIndex = forwardSql.lastIndexOf(table_name);
+      if (lastIndex != -1) {
+        forwardSql = forwardSql.substring(0, lastIndex) + replace_table + forwardSql.substring(lastIndex + table_name.length());
+      }
+    }
+
+    this.forwardSql = forwardSql.replaceAll("`", "");
   }
 
   public String getForwardSql() {

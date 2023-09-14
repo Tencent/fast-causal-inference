@@ -11,6 +11,7 @@ from clickhouse_driver import Client
 from .. import logger
 from .. import PROJECT_CONF
 import datetime
+from ..all_in_sql import AllInSqlConn
 
 """
 dataframe和tdw默认操作的是Clickhouse分布式表
@@ -18,70 +19,102 @@ reference: https://clickhouse.com/docs/en/integrations/python
 """
 
 class ClickHouseUtils(object):
-    DEFAULT_DATABASE = PROJECT_CONF["all"]["ch_database"]
-    DEFAULT_HOST = PROJECT_CONF["clickhouse"]["launch_host"]
-    DEFAULT_PORT = PROJECT_CONF["clickhouse"]["port"]
-    DEFAULT_HTTP_PORT = PROJECT_CONF["clickhouse"]["http_port"]
-    DEFAULT_USER = PROJECT_CONF["clickhouse"]["user"]
-    DEFAULT_PASSWORD = PROJECT_CONF["clickhouse"]["password"]
-    CLUSTER = PROJECT_CONF["all"]["ch_cluster_name"]
     # 5min
     JDBC_ARGS = "?socket_timeout=7203000&max_execution_time=7202&compress=0"
-    JDBC_PROPERTIES = {
-        "driver": "com.clickhouse.jdbc.ClickHouseDriver",
-        "user": DEFAULT_USER,
-        "password": DEFAULT_PASSWORD,
-        "socket_timeout": "7203000",
-        "max_execution_time": "7202",
-        "compress": "0"}
     MAX_ROWS = 150 * 10000 * 10000
     MAX_CSV_ROWS = 100 * 10000
     MAX_VIEW_MATERIALIZE_ROWS = MAX_CSV_ROWS
-    DEFAULT_TTL_DAY = 14
     MAX_EXECUTION_TIME = 15 * 60
 
-    def __init__(self, host=None, database=None, rand=False):
+    def __init__(self, host=None, database=None, rand=False, device_id=None):
+        if not device_id:
+            device_id = PROJECT_CONF['datasource'][0]['device_id']
+
+        device_info_dict = ClickHouseUtils.get_device_info_dict()
+
+        self.DEFAULT_DATABASE = device_info_dict[device_id]["clickhouse_database"]
+        self.DEFAULT_HOST = device_info_dict[device_id]["clickhouse_launch_host"]
+        self.DEFAULT_PORT = device_info_dict[device_id]["clickhouse_port"]
+        self.DEFAULT_HTTP_PORT = device_info_dict[device_id]["clickhouse_http_port"]
+        self.DEFAULT_USER = device_info_dict[device_id]["clickhouse_user"]
+        self.DEFAULT_PASSWORD = device_info_dict[device_id]["clickhouse_password"]
+        self.CLUSTER = device_info_dict[device_id]["clickhouse_cluster_name"]
+        self.DEFAULT_TTL_DAY = device_info_dict[device_id]["ttl"]
+        self.JDBC_PROPERTIES = ClickHouseUtils.get_jdbc_properties(device_id)
         if not database:
-            database = ClickHouseUtils.DEFAULT_DATABASE
+            database = self.DEFAULT_DATABASE
         if not host:
-            self.host = ClickHouseUtils.DEFAULT_HOST
+            self.host = self.DEFAULT_HOST
         else:
             self.host = host
         # connect_timeout. Default is 10 seconds.
         # send_receive_timeout. Default is 300 seconds.
         # sync_request_timeout. Default is 5 seconds.
         settings = {'connect_timeout': 120}
-        self.client = Client(host=self.host, port=ClickHouseUtils.DEFAULT_PORT,
-                             database=database, user=ClickHouseUtils.DEFAULT_USER,
-                             password=ClickHouseUtils.DEFAULT_PASSWORD, settings=settings)
-        self.cluster_hosts = self.system_clusters(ClickHouseUtils.CLUSTER)
-        self.cluster_hosts_len = self.cluster_hosts.__len__()
-        if rand:
-            self.close()
-            self.host = self.cluster_hosts[random.randint(0, self.cluster_hosts_len - 1)]
-            self.client = Client(host=self.host, port=ClickHouseUtils.DEFAULT_PORT,
-                             database=database, user=ClickHouseUtils.DEFAULT_USER,
-                             password=ClickHouseUtils.DEFAULT_PASSWORD, settings=settings)
+        self.client = Client(host=self.host, port=self.DEFAULT_PORT,
+                             database=database, user=self.DEFAULT_USER,
+                             password=self.DEFAULT_PASSWORD, settings=settings)
+        if self.CLUSTER:
+            self.cluster_hosts = self.system_clusters(self.CLUSTER)
+            self.cluster_hosts_len = self.cluster_hosts.__len__()
+            if rand:
+                self.close()
+                self.host = self.cluster_hosts[random.randint(0, self.cluster_hosts_len - 1)]
+                self.client = Client(host=self.host, port=self.DEFAULT_PORT,
+                                     database=database, user=self.DEFAULT_USER,
+                                     password=self.DEFAULT_PASSWORD, settings=settings)
+
+
+        self.sql_instance = AllInSqlConn(device_id=device_id, db_name=database)
 
     @classmethod
-    def get_jdbc_connect_string(self, database=None):
+    def get_device_info_dict(self):
+        device_info_dict = dict()
+        for datasource in PROJECT_CONF['datasource']:
+            device_info_dict[datasource['device_id']] = datasource
+        return device_info_dict
+
+    @classmethod
+    def get_jdbc_connect_string(self, database=None, device_id=None):
+        if not device_id:
+            device_id = PROJECT_CONF['datasource'][0]['device_id']
+
+        device_info_dict = ClickHouseUtils.get_device_info_dict()
         if not database:
-            database = ClickHouseUtils.DEFAULT_DATABASE
-        return "jdbc:clickhouse://" + ClickHouseUtils.DEFAULT_HOST + ":" + str(
-            ClickHouseUtils.DEFAULT_HTTP_PORT) + "/" + database + ClickHouseUtils.JDBC_ARGS
+            database = device_info_dict[device_id]["clickhouse_database"]
+        return "jdbc:clickhouse://" + device_info_dict[device_id]["clickhouse_launch_host"] + ":" + str(
+            device_info_dict[device_id]["clickhouse_http_port"]) + "/" + database + ClickHouseUtils.JDBC_ARGS
+
+    @classmethod
+    def get_jdbc_properties(self, device_id=None):
+        if not device_id:
+            device_id = PROJECT_CONF['datasource'][0]['device_id']
+
+        device_info_dict = ClickHouseUtils.get_device_info_dict()
+        return {
+            "driver": "com.clickhouse.jdbc.ClickHouseDriver",
+            "user": device_info_dict[device_id]["clickhouse_user"],
+            "password": device_info_dict[device_id]["clickhouse_password"],
+            "socket_timeout": "7203000",
+            "max_execution_time": "7202",
+            "compress": "0"}
 
     def get_jdbc_connect_strings(self, database=None):
         if not database:
-            database = ClickHouseUtils.DEFAULT_DATABASE
+            database = self.DEFAULT_DATABASE
         jdbc_strings = list()
         for host in self.cluster_hosts:
             jdbc_strings.append(("jdbc:clickhouse://" + host + ":" + str(
-                ClickHouseUtils.DEFAULT_HTTP_PORT) + "/" + database + ClickHouseUtils.JDBC_ARGS, host))
+                self.DEFAULT_HTTP_PORT) + "/" + database + ClickHouseUtils.JDBC_ARGS, host))
         return jdbc_strings
 
     def execute(self, sql):
         logger.debug(self.host + ",sql=" + sql)
         return self.client.execute(sql)
+
+    def sqlgateway_execute(self, sql, data_key="result"):
+        logger.debug("sqlgateway, sql=" + sql)
+        return self.sql_instance.execute(sql, data_key)
 
     def execute_with_progress(self, sql):
         progress = self.client.execute_with_progress(sql)
@@ -131,7 +164,7 @@ class ClickHouseUtils(object):
 
     def table_rows(self, clickhouse_table_name, database=None):
         if not database:
-            database = ClickHouseUtils.DEFAULT_DATABASE
+            database = self.DEFAULT_DATABASE
         sql = "select count(*) from " + database + "." + clickhouse_table_name + " SETTINGS max_execution_time = " + str(ClickHouseUtils.MAX_EXECUTION_TIME)
         num = self.execute(sql)[0][0]
         logger.debug(self.host + ",num=" + str(num))
@@ -148,7 +181,9 @@ class ClickHouseUtils(object):
     """
 
     def csv_2_clickhouse(self, csv_file_abs_path, clickhouse_table_name, columns,
-                         clickhouse_database_name=DEFAULT_DATABASE, is_auto_create=True):
+                         clickhouse_database_name=None, is_auto_create=True):
+        if not clickhouse_database_name:
+            clickhouse_database_name = self.DEFAULT_DATABASE
         def iter_csv(filename):
             with open(filename, 'r') as f:
                 reader = csv.DictReader(f)
@@ -178,7 +213,9 @@ class ClickHouseUtils(object):
                             iter_csv(csv_file_abs_path))
         self.close()
 
-    def clickhouse_2_csv(self, clickhouse_table_name, csv_file_abs_path, clickhouse_database_name=DEFAULT_DATABASE):
+    def clickhouse_2_csv(self, clickhouse_table_name, csv_file_abs_path, clickhouse_database_name=None):
+        if not clickhouse_database_name:
+            clickhouse_database_name = self.DEFAULT_DATABASE
         if self.table_rows(clickhouse_table_name) > ClickHouseUtils.MAX_CSV_ROWS:
             raise Exception("table rows too large")
         with open(csv_file_abs_path, 'w', newline='') as f:
@@ -190,8 +227,9 @@ class ClickHouseUtils(object):
         self.close()
 
     def create_table(self, table_name, col_statement, type="local", format="ORC", location=None, cluster=None,
-                     partition_column=None, primary_column=None,
-                     database_name=DEFAULT_DATABASE):
+                     partition_column=None, primary_column=None, database_name=None):
+        if not database_name:
+            database_name = self.DEFAULT_DATABASE
         if partition_column:
             partition_column = " PARTITION BY " + partition_column
         else:
@@ -217,7 +255,7 @@ class ClickHouseUtils(object):
                          ENGINE = MergeTree() %s %s TTL (day_ + toIntervalDay(%s)) + toIntervalHour(7)
                       """ % (
                 database_name, table_name + "_local", cluster, default_primary, col_statement, partition_column,
-                primary_column, ClickHouseUtils.DEFAULT_TTL_DAY)
+                primary_column, self.DEFAULT_TTL_DAY)
                 logger.debug("sql=" + str(sql))
                 self.execute(sql)
                 sql = """
@@ -233,7 +271,7 @@ class ClickHouseUtils(object):
                          CREATE TABLE IF NOT EXISTS %s.%s (%s %s, `day_` Date DEFAULT toDate(now())) 
                          ENGINE = MergeTree() %s ORDER BY id TTL (day_ + toIntervalDay(%s)) + toIntervalHour(7)
                       """ % (database_name, table_name, default_primary, col_statement, partition_column,
-                             ClickHouseUtils.DEFAULT_TTL_DAY)
+                             self.DEFAULT_TTL_DAY)
                 logger.debug("sql=" + str(sql))
                 self.execute(sql)
         elif type == "hdfs":
@@ -257,8 +295,8 @@ class ClickHouseUtils(object):
         sql = """
                 insert into %s.%s(%s) select %s from %s.%s SETTINGS max_execution_time = %s
                 """ % (
-            ClickHouseUtils.DEFAULT_DATABASE, clickhouse_table_name, col_name_statement, col_if_statement,
-            ClickHouseUtils.DEFAULT_DATABASE, external_table_name, str(ClickHouseUtils.MAX_EXECUTION_TIME))
+            self.DEFAULT_DATABASE, clickhouse_table_name, col_name_statement, col_if_statement,
+            self.DEFAULT_DATABASE, external_table_name, str(ClickHouseUtils.MAX_EXECUTION_TIME))
         logger.debug(self.host + ", insert into sql=" + str(sql))
         self.execute(sql)
         end = time.perf_counter()
@@ -266,7 +304,7 @@ class ClickHouseUtils(object):
 
     def get_table_meta(self, clickhouse_table_name, database=None):
         if not database:
-            database = ClickHouseUtils.DEFAULT_DATABASE
+            database = self.DEFAULT_DATABASE
         desc_table = self.execute("desc " + database + "." + clickhouse_table_name)
         field_names = list()
         field_types = list()
@@ -286,7 +324,7 @@ class ClickHouseUtils(object):
 
     def is_distribute_table(self, clickhouse_table_name, database=None):
         if not database:
-            database = ClickHouseUtils.DEFAULT_DATABASE
+            database = self.DEFAULT_DATABASE
         show_create_table = self.execute("show create table " + database + "." + clickhouse_table_name)
         if "ENGINE = Distributed" in show_create_table[0][0]:
             return True
@@ -428,8 +466,10 @@ class ClickHouseUtils(object):
 
     # select from distribute table
     @classmethod
-    def clickhouse_2_dataframe(self, spark, clickhouse_table_name, partition_num, clickhouse_database_name):
+    def clickhouse_2_dataframe(self, spark, clickhouse_table_name, partition_num, clickhouse_database_name=None):
         predicates = list()
+        if not clickhouse_database_name:
+            clickhouse_database_name = self.DEFAULT_DATABASE
         clickhouse_utils = ClickHouseUtils(rand=True)
         num = clickhouse_utils.table_rows(clickhouse_table_name, clickhouse_database_name)
         logger.debug("clickhouse table count=" + str(num))
@@ -445,7 +485,7 @@ class ClickHouseUtils(object):
         clickhouse_utils.close()
         return spark.read.jdbc(url=ClickHouseUtils.get_jdbc_connect_string(clickhouse_database_name),
                                table=clickhouse_table_name, predicates=predicates,
-                               properties=ClickHouseUtils.JDBC_PROPERTIES)
+                               properties=ClickHouseUtils.get_jdbc_properties())
 
     # select from everyone node
     @classmethod
@@ -471,42 +511,51 @@ class ClickHouseUtils(object):
             if dataframe:
                 dataframe = dataframe.union(spark.read.jdbc(url=jdbc_string, table=clickhouse_table_name,
                                                             predicates=predicates,
-                                                            properties=ClickHouseUtils.JDBC_PROPERTIES))
+                                                            properties=ClickHouseUtils.get_jdbc_properties()))
             else:
                 dataframe = spark.read.jdbc(url=jdbc_string, table=clickhouse_table_name,
                                             predicates=predicates,
-                                            properties=ClickHouseUtils.JDBC_PROPERTIES)
+                                            properties=ClickHouseUtils.get_jdbc_properties())
         global_clickhouse_utils.close()
         return dataframe
 
-    def __materialize_table(self, clickhouse_utils, select_sql, sql_table_name, database, clickhouse_view_name,
+    def __materialize_table(self, clickhouse_utils, select_sql, select_sql_example, sql_table_name, database, clickhouse_view_name,
                             bucket_column):
         logger.debug("materialize view doing")
         select_sql = select_sql.replace(sql_table_name, database + "." + sql_table_name + "_local")
-        sql = "CREATE TABLE " + database + "." + clickhouse_view_name + "_local on cluster " + ClickHouseUtils.CLUSTER \
-              + " ENGINE = MergeTree ORDER BY " + bucket_column + " AS " + select_sql
-        logger.debug("insert table running")
+        if self.CLUSTER:
+            sql = "CREATE TABLE " + database + "." + clickhouse_view_name + "_local on cluster " + self.CLUSTER \
+                  + " ENGINE = MergeTree ORDER BY " + bucket_column + " AS " + select_sql
+            logger.debug("insert table running")
+            logger.debug(sql)
+            start = time.perf_counter()
+            clickhouse_utils.execute(sql)
+            end = time.perf_counter()
+            logger.debug("insert table done" + 'time cost: ' + str(end - start) + ' Seconds')
+        if self.CLUSTER:
+            sql = "DROP VIEW if exists " + database + "." + clickhouse_view_name + " on cluster " + self.CLUSTER
+        else:
+            sql = "DROP VIEW if exists " + database + "." + clickhouse_view_name
         logger.debug(sql)
-        start = time.perf_counter()
         clickhouse_utils.execute(sql)
-        end = time.perf_counter()
-        sql = "DROP VIEW if exists " + database + "." + clickhouse_view_name + " on cluster " + ClickHouseUtils.CLUSTER
-        logger.debug("insert table done" + 'time cost: ' + str(end - start) + ' Seconds')
-        logger.debug(sql)
-        clickhouse_utils.execute(sql)
-        sql = "CREATE TABLE " + database + "." + clickhouse_view_name + " on cluster " + ClickHouseUtils.CLUSTER \
-              + " as " + database + "." + clickhouse_view_name + "_local" \
-              + " ENGINE = Distributed(" + ClickHouseUtils.CLUSTER + ", " + database + ", " + clickhouse_view_name \
-              + "_local" + ", rand())"
+        if self.CLUSTER:
+            sql = "CREATE TABLE " + database + "." + clickhouse_view_name + " on cluster " + self.CLUSTER \
+                  + " as " + database + "." + clickhouse_view_name + "_local" \
+                  + " ENGINE = Distributed(" + self.CLUSTER + ", " + database + ", " + clickhouse_view_name \
+                  + "_local" + ", rand())"
+        else:
+            select_sql = clickhouse_utils.sqlgateway_execute(select_sql_example, data_key="executeSql")
+            select_sql = select_sql[:select_sql.__len__() - " LIMIT 100".__len__()]
+            sql = "CREATE TABLE " + database + "." + clickhouse_view_name \
+                  + " ENGINE = MergeTree ORDER BY " + bucket_column + " AS " + select_sql
         clickhouse_utils.execute(sql)
         logger.debug(sql)
         logger.debug("materialize view done")
 
     @classmethod
-    def create_view(self, clickhouse_view_name, sql_statement, sql_table_name, sql_where=None, sql_group_by=None,
+    def create_view(self, clickhouse_view_name, sql_statement, sql_table_name=None, sql_where=None, sql_group_by=None,
                     sql_limit=None,
-                    bucket_column="uin", is_force_materialize=False, database=None, is_sql_complete=False,
-                    use_sql_forward=True):
+                    bucket_column="uin", is_force_materialize=False, database=None, is_sql_complete=False):
         if sql_limit:
             sql_limit = " LIMIT " + str(sql_limit)
         else:
@@ -525,26 +574,29 @@ class ClickHouseUtils(object):
             select_sql = sql_statement
         logger.debug("raw sql = \n" + select_sql)
         if "LIMIT" not in sql_limit:
-            select_sql_example = select_sql + " LIMIT 1"
+            select_sql_example = select_sql + " LIMIT 100"
         else:
             select_sql_example = select_sql
 
         clickhouse_utils = ClickHouseUtils()
         try:
             logger.debug("check sql whether valid, now...")
-            clickhouse_utils.execute(select_sql_example)
+            clickhouse_utils.sqlgateway_execute(select_sql_example)
         except Exception:
             clickhouse_utils.close()
             raise Exception("sql is error, please check")
 
         if not database:
-            database = ClickHouseUtils.DEFAULT_DATABASE
+            database = clickhouse_utils.DEFAULT_DATABASE
         if is_force_materialize:
-            clickhouse_utils.__materialize_table(clickhouse_utils, select_sql, sql_table_name, database,
+            clickhouse_utils.__materialize_table(clickhouse_utils, select_sql, select_sql_example, sql_table_name, database,
                                                  clickhouse_view_name, bucket_column)
         else:
-            sql = "CREATE VIEW " + database + "." + clickhouse_view_name + " on cluster " + ClickHouseUtils.CLUSTER \
-                  + " AS " + select_sql
+            if clickhouse_utils.CLUSTER:
+                sql = "CREATE VIEW " + database + "." + clickhouse_view_name + " on cluster " + clickhouse_utils.CLUSTER \
+                      + " AS " + select_sql
+            else:
+                sql = "CREATE VIEW " + database + "." + clickhouse_view_name + " AS " + select_sql
             clickhouse_utils.execute(sql)
             fields = list()
             for i in clickhouse_utils.execute('DESC ' + database + '.' + clickhouse_view_name):
@@ -554,7 +606,7 @@ class ClickHouseUtils(object):
                 rows_number = clickhouse_utils.table_rows(clickhouse_view_name, database=database)
                 logger.debug("view rows number is " + str(rows_number))
                 if rows_number < ClickHouseUtils.MAX_VIEW_MATERIALIZE_ROWS:
-                    clickhouse_utils.__materialize_table(clickhouse_utils, select_sql, sql_table_name, database,
+                    clickhouse_utils.__materialize_table(clickhouse_utils, select_sql, select_sql_example, sql_table_name, database,
                                                          clickhouse_view_name, bucket_column)
             logger.debug("create view success")
         clickhouse_utils.close()
@@ -563,28 +615,43 @@ class ClickHouseUtils(object):
     def drop_view(self, clickhouse_view_name, database=None):
         clickhouse_utils = ClickHouseUtils()
         if not database:
-            database = ClickHouseUtils.DEFAULT_DATABASE
-        table_desc = clickhouse_utils.show_create_tables(clickhouse_view_name)
+            database = clickhouse_utils.DEFAULT_DATABASE
+        try:
+            table_desc = clickhouse_utils.show_create_tables(clickhouse_view_name)
+        except Exception:
+            return
         if "CREATE VIEW " in table_desc:
-            sql = "DROP VIEW if exists " + database + "." + clickhouse_view_name + " on cluster " \
-                  + ClickHouseUtils.CLUSTER
+            if clickhouse_utils.CLUSTER:
+                sql = "DROP VIEW if exists " + database + "." + clickhouse_view_name + " on cluster " \
+                      + clickhouse_utils.CLUSTER
+            else:
+                sql = "DROP VIEW if exists " + database + "." + clickhouse_view_name
             clickhouse_utils.execute(sql)
         else:
-            sql = "DROP TABLE if exists " + database + "." + clickhouse_view_name + " on cluster " \
-                  + ClickHouseUtils.CLUSTER
-            clickhouse_utils.execute(sql)
-            sql = "DROP TABLE if exists " + database + "." + clickhouse_view_name + "_local on cluster " \
-                  + ClickHouseUtils.CLUSTER
-            clickhouse_utils.execute(sql)
+            if clickhouse_utils.CLUSTER:
+                sql = "DROP TABLE if exists " + database + "." + clickhouse_view_name + " on cluster " \
+                    + clickhouse_utils.CLUSTER
+                clickhouse_utils.execute(sql)
+                sql = "DROP TABLE if exists " + database + "." + clickhouse_view_name + "_local on cluster " \
+                    + clickhouse_utils.CLUSTER
+                clickhouse_utils.execute(sql)
+            else:
+                sql = "DROP TABLE if exists " + database + "." + clickhouse_view_name
+                clickhouse_utils.execute(sql)
+                sql = "DROP TABLE if exists " + database + "." + clickhouse_view_name + "_local"
+                clickhouse_utils.execute(sql)
         clickhouse_utils.close()
 
     @classmethod
     def drop_partition(self, clickhouse_view_name, clickhouse_partition_name, database=None):
         clickhouse_utils = ClickHouseUtils()
         if not database:
-            database = ClickHouseUtils.DEFAULT_DATABASE
-        sql = "alter table " + database + "." + clickhouse_view_name + "_local on cluster " + ClickHouseUtils.CLUSTER \
-              + " drop partition " + clickhouse_partition_name
+            database = clickhouse_utils.DEFAULT_DATABASE
+        if clickhouse_utils.CLUSTER:
+            sql = "alter table " + database + "." + clickhouse_view_name + "_local on cluster " + clickhouse_utils.CLUSTER \
+                  + " drop partition " + clickhouse_partition_name
+        else:
+            sql = "alter table " + database + "." + clickhouse_view_name + "_local drop partition " + clickhouse_partition_name
         clickhouse_utils.execute(sql)
         clickhouse_utils.close()
 

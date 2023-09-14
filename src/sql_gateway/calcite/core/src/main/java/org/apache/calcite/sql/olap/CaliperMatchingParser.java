@@ -132,6 +132,7 @@ public class CaliperMatchingParser extends SqlCallCausal {
     this.target = SqlForwardUtil.exchangIdentity(target);
     this.split_value = SqlForwardUtil.exchangIdentity(split_value);
     this.causal_function_name = "caliperMatching";
+    this.replace_table = "final_table";
   }
 
   @Override public SqlOperator getOperator() {

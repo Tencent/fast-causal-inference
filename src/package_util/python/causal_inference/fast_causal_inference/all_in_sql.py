@@ -111,8 +111,7 @@ def clickhouse_2_dataframe(spark_session, clickhouse_table_name, num_partitions=
     :return:
     """
     from .databus.clickhouse import ClickHouseUtils
-    return ClickHouseUtils.clickhouse_2_dataframe(spark_session, clickhouse_table_name, partition_num=num_partitions,
-                                                  clickhouse_database_name=ClickHouseUtils.DEFAULT_DATABASE)
+    return ClickHouseUtils.clickhouse_2_dataframe(spark_session, clickhouse_table_name, partition_num=num_partitions)
 
 
 # select from everyone node
@@ -159,8 +158,7 @@ def clickhouse_2_csv(clickhouse_table_name, csv_file_abs_path):
 
 
 def clickhouse_create_view(clickhouse_view_name, sql_statement, sql_table_name, sql_where=None, sql_group_by=None,
-                           sql_limit=None, bucket_column="uin", is_force_materialize=False, is_sql_complete=False,
-                           use_sql_forward=True):
+                           sql_limit=None, bucket_column="uin", is_force_materialize=False, is_sql_complete=False):
     """
     创建实验指标明细视图
     sql_statement, sql_table_name, sql_where, sql_group_by, sql_limit 会组成完整sql
@@ -181,8 +179,7 @@ def clickhouse_create_view(clickhouse_view_name, sql_statement, sql_table_name, 
     from .databus.clickhouse import ClickHouseUtils
     ClickHouseUtils.create_view(clickhouse_view_name, sql_statement, sql_table_name, sql_where, sql_group_by,
                                 sql_limit=sql_limit, bucket_column=bucket_column,
-                                is_force_materialize=is_force_materialize, is_sql_complete=is_sql_complete,
-                                use_sql_forward=use_sql_forward)
+                                is_force_materialize=is_force_materialize, is_sql_complete=is_sql_complete)
     end = _perf_counter()
     print("done" + 'time cost: %s Seconds' % (end - start))
 
@@ -245,7 +242,7 @@ class AllInSqlConn:
         self.device_id = device_id
         self.db_name = db_name
 
-    def execute(self, sql, retry_times=1):
+    def execute(self, sql, data_key="result", retry_times=1):
         from . import PROJECT_CONF
         from . import logger
         url = PROJECT_CONF["sqlgateway"]["url"] + PROJECT_CONF["sqlgateway"]["path"]
@@ -259,7 +256,7 @@ class AllInSqlConn:
                 logger.debug("response=" + resp.text)
                 # result = resp.text.replace("\\t", "\t").replace("\\n", "\n").replace("\\r", "\r").replace("\\'", "'")
                 if resp.json()["status"] == 0:
-                    return resp.json()["data"]["result"]
+                    return resp.json()["data"][data_key]
                 else:
                     return resp.json()["message"]
             except Exception as e:

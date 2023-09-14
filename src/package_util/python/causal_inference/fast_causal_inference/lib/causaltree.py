@@ -14,6 +14,8 @@ import textwrap
 import matplotlib.pyplot as plt
 from statsmodels.stats.multitest import fdrcorrection
 import pickle
+import warnings
+warnings.filterwarnings("ignore")
 
 from .. import create_sql_instance, clickhouse_create_view,clickhouse_drop_view
 
@@ -110,19 +112,12 @@ class CausalTreeclass():
         dfName = self.dfName
 
         sql_instance = self.sql_instance
-        row1 = sql_instance.sql(f'''SELECT count(Y) as cnt,avg(Y) as mean,varSamp(Y) as var FROM {dfName} 
-                                WHERE treatment = 1 and if_test = 0 {whereCond_}'''.format(whereCond_=whereCond_,
-                                                                                           dfName=dfName))
-        row1 = pd.DataFrame(list(row1), columns=['cnt', 'mean', 'var'])
-
-        row0 = sql_instance.sql(f'''SELECT count(Y) as cnt,avg(Y) as mean,varSamp(Y) as var FROM {dfName} 
-                                WHERE treatment = 0 and if_test = 0 {whereCond_}'''.format(whereCond_=whereCond_,
-                                                                                    dfName=dfName))
-        row0 = pd.DataFrame(list(row0), columns=['cnt', 'mean', 'var'])
+        row = sql_instance.sql(f'''SELECT treatment as T,count(Y) as cnt,avg(Y) as mean,varSamp(Y) as var FROM {dfName} 
+                                WHERE if_test = 0 {whereCond_}
+                                group by treatment order by treatment  ''')
         
-        
-        self.treatcount = row1['cnt'][0]
-        self.controlcount = row0['cnt'][0]
+        self.controlcount = int(row['cnt'][0])
+        self.treatcount = int(row['cnt'][1])
         self.nodeSize = self.controlcount + self.treatcount
 
         if (self.nodeSize / self.dat_cnt < threshold):
@@ -133,7 +128,7 @@ class CausalTreeclass():
             self.isLeaforNot = True
             print(" sample size = 0,  stop as a leaf node")
             return
-        if row1['var'][0] == 0 and row0['var'][0] == 0:
+        if float(row['var'][0])== 0 and float(row['var'][1]) == 0:
             self.isLeaforNot = True
             print(" var = 0, stop as a leaf node ")
             return
@@ -147,18 +142,14 @@ class CausalTreeclass():
         for i in range(len(featNames)//100+1):
             x_list = featNames[i*100:min((i+1)*100,len(featNames))]
             x_list_string1 = ','.join(x_list)
-            x_list_string2 = "'" + "', '".join(x_list)+ "'"
-            
+            x_list_string2 = "'" + "', '".join(x_list)+ "'"            
             try:
-                tmp = sql_instance. sql(f"""SELECT arrayJoin(GroupSet({x_list_string2}) (Y, treatment, {x_list_string1})) AS a 
-                                        FROM {dfName} where if_test=0 {whereCond_} order by a.1,a.3,a.2 asc""")
-                
-                df = pd.DataFrame(tmp, columns=["values"])
+                res = sql_instance.sql(f"""SELECT arrayJoin(GroupSet('x1')(Y, treatment, x1)) as a 
+                                        FROM {dfName} order by a.1,a.3,a.2 asc""")['a'].tolist()
+                data_list = [i.replace('[','').replace(']','').replace(' ','').split(',') for i in res]
+                df = pd.DataFrame(data_list, columns=['featName','treatment', 'featValue','cnt','y','y_square'])
             except:
                 print(tmp)
-
-            df[['featName','treatment', 'featValue','cnt','y','y_square']] = df["values"].str.strip("()").str.split(",", expand=True)
-            df = df.drop("values", axis=1)
             df[['treatment', 'cnt','y','y_square']] = df[['treatment', 'cnt','y','y_square']].astype(float)
             df[["featName",'featValue']] = df[["featName",'featValue']].astype(str)
             df['featName'] = [i.replace("'",'') for i in list(df['featName'])]
@@ -220,16 +211,12 @@ class CausalTreeclass():
         
         featName = list(splitpoint.keys())[0]
         featValue = list(splitpoint.values())[0]
-        tmp = self.sql_instance.sql(f"desc {self.dfName}")
-
-        for i in tmp:
-            if featName == i[0]:
-                featType = i[1]
-                if featType == 'String':
-                    featValue = ','.join(["'"+str(i)+"'" for i in featValue])
-                else:
-                    featValue = ','.join([str(i) for i in featValue])
-
+        x = self.sql_instance.sql(f"desc {self.dfName};")
+        cols_type = dict(zip(x['name'],x['type']))
+        if cols_type[featName] == 'String':
+            featValue = ','.join(["'"+str(i)+"'" for i in featValue])
+        else:
+            featValue = ','.join([str(i) for i in featValue])
         left_condition_tree = f'''({featName} in ({featValue}))'''
         right_condition_tree = f'''not ({featName} in ({featValue}))'''
         return left_condition_tree, right_condition_tree
@@ -270,19 +257,17 @@ class CausalTreeclass():
         return left_effect, right_effect
 
     def calculate_impurity_original(self):
-        sql = f''' select\
-                        sum(if(treatment=1,1,0)) as cnt1,  \
-                        sum(if(treatment=1,Y,0))/sum(if(treatment=1,1,0)) as y1, \
-                        sum(if(treatment=1,Y*Y,0))/sum(if(treatment=1,1,0)) as y1_square, \
-                        sum(if(treatment=0,1,0)) as cnt0,  \
-                        sum(if(treatment=0,Y,0))/sum(if(treatment=0,1,0)) as y0, \
-                        sum(if(treatment=0,Y*Y,0))/sum(if(treatment=0,1,0)) as y0_square \
-                 from {self.dfName} 
-                 where if_test = 0 '''
         sql_instance = self.sql_instance
-        ImpurityData_df = sql_instance.sql(sql)
-        row = pd.DataFrame(ImpurityData_df, columns=['cnt1', 'y1', 'y1_square', 'cnt0', 'y0', 'y0_square']).iloc[0, :]
-        cnt1, y1, y1_square, cnt0, y0, y0_square = row.cnt1, row.y1, row.y1_square, row.cnt0, row.y0, row.y0_square
+        sql = f''' select\
+                sum(if(treatment=1,1,0)) as cnt1,  \
+                sum(if(treatment=1,Y,0))/sum(if(treatment=1,1,0)) as y1, \
+                sum(if(treatment=1,Y*Y,0))/sum(if(treatment=1,1,0)) as y1_square, \
+                sum(if(treatment=0,1,0)) as cnt0,  \
+                sum(if(treatment=0,Y,0))/sum(if(treatment=0,1,0)) as y0, \
+                sum(if(treatment=0,Y*Y,0))/sum(if(treatment=0,1,0)) as y0_square \
+         from {self.dfName} where if_test = 0 '''
+        row = sql_instance.sql(sql).iloc[0, :]
+        cnt1, y1, y1_square, cnt0, y0, y0_square = int(row.cnt1), float(row.y1), float(row.y1_square), int(row.cnt0), float(row.y0), float(row.y0_square)
         tau = y1 - y0
         tr_var = y1_square - y1 ** 2
         con_var = y0_square - y0 ** 2
@@ -313,7 +298,7 @@ class CausalTreeclass():
 
         #         print("-----getBestSplit-----")
         splitpoint_pdf = self.splitpoint_pdf
-        if (splitpoint_pdf.count()[0] == 0):
+        if (splitpoint_pdf.shape[0] == 0):
             self.isLeaforNot = True
             print("no split points that satisfy the condition,stop splitting as a leaf node")
             return
@@ -326,7 +311,7 @@ class CausalTreeclass():
         splitpoint_pdf = splitpoint_pdf[(splitpoint_pdf['ImpurityGain'] > 0)]
         self.splitpoint_pdf = splitpoint_pdf[['featName','featValue','splitpoint','ImpurityGain']]
         
-        if (splitpoint_pdf.count()[0] == 0):
+        if (splitpoint_pdf.shape[0] == 0):
             self.isLeaforNot = True
             print("no split points that satisfy the condition,stop splitting as a leaf node")
             return
@@ -441,10 +426,10 @@ class CausalTreeclass():
         GROUP BY treatment \
         '''
         sql_instance = self.sql_instance
-        statData = sql_instance.sql(sql)            
+        statData_pdf = sql_instance.sql(sql)            
             
         try:
-            statData_pdf = pd.DataFrame(statData, columns=['treatment', 'cnt', 'mean', 'var'])
+            statData_pdf = statData_pdf.astype(float)
             y1_column = statData_pdf[statData_pdf['treatment'] == 1]
             y0_column = statData_pdf[statData_pdf['treatment'] == 0]
             treatedCount = int(list(y1_column['cnt'])[0])
@@ -712,25 +697,22 @@ def auto_wrap_text(text, max_line_length):
     wrapped_text = textwrap.fill(text, max_line_length)
     return wrapped_text
 
-def check_table(table_):
+def check_table(table):
     sql_instance = create_sql_instance()
-    x = sql_instance.sql(f"select count(*) from {table_} ")
+    x = sql_instance.sql(f"select count(*) as cnt from {table} ")
     if "Code: 60" in x:
         print(x)
         raise ValueError
-    elif x[0][0]==0:
+    elif int(x['cnt'][0])==0:
         print("There's no data in the table")
         raise ValueError
     else:
         return 1
 
-def check_numeric_type(table_, col):
+def check_numeric_type(table, col):
     sql_instance = create_sql_instance()
-    x = sql_instance.sql(f"desc {table_} ")
-    cols_type = {}
-    for i in range(len(x)):
-        col_type = x[i]
-        cols_type[col_type[0]] = col_type[1]
+    x = sql_instance.sql(f"desc {table} ")
+    cols_type = dict(zip(x['name'],x['type']))
 
     if cols_type[col] not in ['UInt8', 'UInt16', 'UInt32', 'UInt64', 'UInt128', 'UInt256',
                               'Int8', 'Int16', 'Int32', 'Int64', 'Int128', 'Int256', 'Float32', 'Float64']:
@@ -738,12 +720,11 @@ def check_numeric_type(table_, col):
         return 1
 
 
-def check_columns(table_, cols, cols_nume):
+def check_columns(table, cols, cols_nume):
     sql_instance = create_sql_instance()
-    tmp = sql_instance.sql(f"desc {table_} ")
-    col_list = [x[0] for x in tmp]
-    colType_list = [x[1] for x in tmp]
-    cols_type = dict(zip(col_list,colType_list))
+    x = sql_instance.sql(f"desc {table} ")
+    cols_type = dict(zip(x['name'],x['type']))
+    col_list = list(cols_type.keys())
     
     # check exist
     other_variables = set(cols) - set(col_list)
@@ -808,10 +789,11 @@ class CausalTree():
         cut_x_names = self.variables['cut_x_names']
         variables = Y + T + x_names + cut_x_names
 
-        check_table(table_=table)       
-        check_columns(table_=table, cols=variables, cols_nume=Y+T+cut_x_names)     
-        T_value = set(sql_instance.sql(f'select {T[0]} from  {table} group by {T[0]} limit 10'))
-        if T_value != {(0,), (1,)}:
+        check_table(table=table)       
+        check_columns(table=table, cols=variables, cols_nume=Y+T+cut_x_names)  
+        res = sql_instance.sql(f'select {T[0]} as T from  {table} group by {T[0]} limit 10')['T'].tolist()
+        T_value = set([float(i) for i in res])
+        if T_value != {0,1}:
             print("The value of T must be either 0 or 1 ")
             raise ValueError
 
@@ -844,22 +826,23 @@ class CausalTree():
                       'x_names':x_names,
                       'cut_x_names':cut_x_names,
                       'table':table}
+        print("****STEP1.  Table check.")
+        ### todo 
+        print("debug")
+        self.__table_variables_check()  
         
-        self.__table_variables_check() 
-        print("Table check success.\n Bucket the continuous variables (from cut_x_names)")
-
+        
         # get bins for cut_x_names
-
+        print("****STEP2.  Bucket the continuous variables(cut_x_names).")
         bins_dict = {}
         if len(cut_x_names_new) != 0:
-            string = ','.join([f'quantiles(0.25,0.5,0.75,0.9,0.95,0.99)({i})' for i in cut_x_names])
-            result = sql_instance.sql(f'''select {string} from  
-                        {table}''')[0]
-
+            string = ','.join([f'quantiles(0.25,0.5,0.75,0.9,0.95,0.99)({i}) as {i}' for i in cut_x_names])
+            result = sql_instance.sql(f'''select {string} from  {table}''')
             bins_dict = {}
             for i in range(len(cut_x_names)):
-                x = result[i]
+                
                 col = cut_x_names[i]
+                x = result[col][0]
                 bins = x.replace('[', '').replace(']', '').split(',')
                 if len(bins) == 0:
                     bins = [0]
@@ -872,7 +855,6 @@ class CausalTree():
             cutbinstring = ','.join(strings) + ','
         else:
             cutbinstring = ''
-
         self.bins_dict = bins_dict
         
         for i in bins_dict:
@@ -883,59 +865,55 @@ class CausalTree():
         else:
             no_cut_x_names_string = ''
         self.__cutbinstring = cutbinstring
-        self.__no_cut_x_names_string = no_cut_x_names_string
+        self.__no_cut_x_names_string = no_cut_x_names_string        
+        print("****STEP3.  Create new table for training causaltree: ",table_new,'.')
         clickhouse_create_view(clickhouse_view_name=table_new,
                                sql_statement=f"""
-                 {Y} as Y, {T} as treatment,{cutbinstring}{no_cut_x_names_string} rand()%2 as if_test
+                 {Y} as Y, {T} as treatment,{cutbinstring}{no_cut_x_names_string} if(rand()/pow(2,32)<0.5,0,1) as if_test
           """,
                                sql_table_name=table,
                                bucket_column = 'if_test',
                                is_force_materialize=True)
-        print("create new table for causaltree training",table_new)
-        
-
         # check if empty data for new table
-        allcnt = sql_instance.sql(f'select count(*) from {table_new} where {FilterSchema(x_names_new)}')[0][0]
+        allcnt = int(sql_instance.sql(f'select count(*) as cnt from {table_new} where {FilterSchema(x_names_new)}')['cnt'][0])
         if allcnt == 0:
             print("Sample size is 0, check for null values")
             raise ValueError
-        treatments = sql_instance.sql(f'select treatment from {table_new} group by treatment')
-        treatments = set(np.array(treatments)[:, 0])
+            
+        res = sql_instance.sql(f'select treatment from  {table_new} group by treatment limit 10')['treatment'].tolist()
+        treatments = set([float(i) for i in res])
         if treatments != {0, 1}:
             print("The value of T can only be 0 or 1")
             raise ValueError
-
-
-        # compute ate before build tree
+         # compute ate before build tree
         train = sql_instance.sql(
             f'SELECT if(treatment=1,1,-1) as z, sum(Y) as sum,count(*) as cnt FROM {table_new} where if_test=0 group by if(treatment=1,1,-1)')
+        train = pd.DataFrame(train, columns=['z', 'sum', 'cnt'])
+        train = train[['z','sum','cnt']].astype(float)
+        
         test = sql_instance.sql(
             f'SELECT if(treatment=1,1,-1) as z, sum(Y) as sum,count(*) as cnt FROM {table_new} where if_test=1 group by if(treatment=1,1,-1)')
-        train = pd.DataFrame(train, columns=['z', 'sum', 'cnt'])
         test = pd.DataFrame(test, columns=['z', 'sum', 'cnt'])
-        train['z'] = train['z'].astype(int)
-        test['z'] = test['z'].astype(int)
+        test = test[['z','sum','cnt']].astype(float)
+        
         dat_cnt = train['cnt'].sum()
         estData_cnt = test['cnt'].sum()
         data_all = pd.merge(train, test, on='z')
         ate = (data_all['z'] * (data_all['sum_x'] + data_all['sum_y']) / (data_all['cnt_x'] + data_all['cnt_y'])).sum()
-        estData_ate = ((test['z'] * (test['sum'])) / (test['cnt'])).sum()
-        
-        
-        print(f"train data samples: {int(dat_cnt)},predict data samples: {int(estData_cnt)}")
-
+        estData_ate = ((test['z'] * (test['sum'])) / (test['cnt'])).sum()     
+        print(f"\t train data samples: {int(dat_cnt)},predict data samples: {int(estData_cnt)}")
         # build tree
+        print("****STEP4.  Build tree.")
         t1 = time.time()
 
-        modelTree = CausalTreeclass(dfName=table_new,threshold=self.threshold, maxDepth=depth, whereCond='', nodePosition="L", impurity=0,
-                                    father_split_feature="",
-                                    father_split_feature_Categories=[], whereCond_new=[], nodesSet=[])
+        modelTree = CausalTreeclass(dfName=table_new,threshold=self.threshold, maxDepth=depth, whereCond='', nodePosition="L", impurity=0,father_split_feature="",father_split_feature_Categories=[], whereCond_new=[], nodesSet=[])
         modelTree.get_global_values(dat_cnt, depth, featNames)
         print("================================== start buildTree -- maxDepth: {maxDepth}, nodePosition: {nodePosition}==================================".format(maxDepth=depth,nodePosition="root"))
         modelTree.buildTree()
         print("============================================== build Tree Sucessfully=====================================================")
         result_list = []
-
+        
+        print("****STEP5.  Estimate CATE.")
         nodesSet = modelTree.nodesSet
         splitpoint_pdf_all = pd.DataFrame([],columns=['featName','featValue','splitpoint','ImpurityGain'])
         
@@ -1023,6 +1001,8 @@ class CausalTree():
 
         clickhouse_drop_view(clickhouse_view_name=table_new) 
         self.modelTree = modelTree
+
+
         
     def __add_nodes_edges(self, tree, dot=None):
         if dot is None:
@@ -1187,7 +1167,7 @@ class CausalTree():
 
 def save_model(model,file):
     # 将类实例序列化并保存到本地文件
-    print("file must be of type 'pkl'. \nExample: save_model(model,'file_name.pkl')")
+    # print("file must be of type 'pkl'. \nExample: save_model(model,'file_name.pkl')")
     with open(file, 'wb') as f:
         pickle.dump(model, f)
         print(f"model{model} is stored at '{file}'")

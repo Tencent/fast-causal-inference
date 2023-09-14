@@ -1,6 +1,6 @@
 datasource:
   - device_id: 1
-    clickhouse_cluster_name: allinsql
+    clickhouse_cluster_name:
     clickhouse_database: all_in_sql
     clickhouse_launch_host: 172.22.0.3
     clickhouse_port: 9000

@@ -26,6 +26,7 @@ public class SqlCallCausal extends SqlCall {
 
   public String replace_sql = "";
 
+  public String replace_table = "";
   public ArrayList<String> withs = new ArrayList<String>();
 
   protected SqlCallCausal(SqlParserPos pos) {

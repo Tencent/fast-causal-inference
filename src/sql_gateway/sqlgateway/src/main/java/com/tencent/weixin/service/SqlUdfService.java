@@ -27,18 +27,21 @@ public class SqlUdfService {
 
     private static final List<SqlUdfModel> sqlUdfDict = Arrays.asList(
             new SqlUdfModel(1, "deltamethod", "deltamethod", false),
-            new SqlUdfModel(1, "ols", "ols", false),
-            new SqlUdfModel(1, "wls", "wls", false),
-            new SqlUdfModel(1, "xexpt_ttest_2samp", "xexpt_ttest_2samp", false),
-            new SqlUdfModel(1, "ttest_1samp", "ttest_1samp", false),
-            new SqlUdfModel(1, "ttest_2samp", "ttest_2samp", false),
-            new SqlUdfModel(1, "did", "did", false),
-            new SqlUdfModel(1, "lift", "lift", false),
-            new SqlUdfModel(1, "linearDML", "linearDML", false),
-            new SqlUdfModel(1, "nonParamDML", "nonParamDML", false),
-            new SqlUdfModel(1, "cutbins", "cutbins", false),
-            new SqlUdfModel(1, "caliperMatching", "caliperMatching", false),
-            new SqlUdfModel(1, "exactMatching", "exactMatching", false));
+            new SqlUdfModel(16, "predict", "predict", false),
+            new SqlUdfModel(2, "olsState", "olsState", false),
+            new SqlUdfModel(3, "ols", "ols", false),
+            new SqlUdfModel(4, "ivregression", "ivregression", false),
+            new SqlUdfModel(5, "wls", "wls", false),
+            new SqlUdfModel(6, "xexpt_ttest_2samp", "xexpt_ttest_2samp", false),
+            new SqlUdfModel(7, "ttest_1samp", "ttest_1samp", false),
+            new SqlUdfModel(8, "ttest_2samp", "ttest_2samp", false),
+            new SqlUdfModel(9, "did", "did", false),
+            new SqlUdfModel(10, "lift", "lift", false),
+            new SqlUdfModel(11, "linearDML", "linearDML", false),
+            new SqlUdfModel(12, "nonParamDML", "nonParamDML", false),
+            new SqlUdfModel(13, "cutbins", "cutbins", false),
+            new SqlUdfModel(14, "caliperMatching", "caliperMatching", false),
+            new SqlUdfModel(15, "exactMatching", "exactMatching", false));
 
     public List<SqlUdfModel> select() {
         if (!isDatasourceOpen) {

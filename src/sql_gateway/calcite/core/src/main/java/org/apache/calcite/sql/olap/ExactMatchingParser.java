@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ExactMatchingParser extends SqlCallCausal {
-  private String treatment, target;
+  private String treatment;
   private ArrayList<String> labels;
   static private String with_template = "table_1 AS\n"
   +
@@ -124,12 +124,12 @@ public class ExactMatchingParser extends SqlCallCausal {
     super(pos);
   }
 
-  public ExactMatchingParser(SqlParserPos pos, String treatment, String target, ArrayList<String> labels) {
+  public ExactMatchingParser(SqlParserPos pos, String treatment, ArrayList<String> labels) {
     super(pos);
     this.treatment = SqlForwardUtil.exchangIdentity(treatment);
-    this.target = SqlForwardUtil.exchangIdentity(target);
     this.labels = labels;
     this.causal_function_name = "exactMatching";
+    this.replace_table = "final_table";
   }
 
   @Override public SqlOperator getOperator() {

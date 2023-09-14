@@ -202,20 +202,20 @@ public class LiftParser extends SqlCallCausal {
     this.t = SqlForwardUtil.exchangIdentity(T);
     this.k = SqlForwardUtil.exchangIdentity(k);
     this.flag = SqlForwardUtil.exchangIdentity(flag);
-    with_template = with_template.replace("@PH_ITE", ite);
-    with_template = with_template.replace("@PH_Y", y);
-    with_template = with_template.replace("@PH_T", t);
-    with_template = with_template.replace("@PH_K", k);
+    with_template = with_template.replaceAll("@PH_ITE", ite);
+    with_template = with_template.replaceAll("@PH_Y", this.y);
+    with_template = with_template.replaceAll("@PH_T", this.t);
+    with_template = with_template.replaceAll("@PH_K", k);
 
-    func_template_true = func_template_true.replace("@PH_ITE", ite);
-    func_template_true = func_template_true.replace("@PH_Y", y);
-    func_template_true = func_template_true.replace("@PH_T", t);
-    func_template_true = func_template_true.replace("@PH_K", k);
+    func_template_true = func_template_true.replaceAll("@PH_ITE", ite);
+    func_template_true = func_template_true.replaceAll("@PH_Y", this.y);
+    func_template_true = func_template_true.replaceAll("@PH_T", this.t);
+    func_template_true = func_template_true.replaceAll("@PH_K", k);
 
-    func_template_false = func_template_false.replace("@PH_ITE", ite);
-    func_template_false = func_template_false.replace("@PH_Y", y);
-    func_template_false = func_template_false.replace("@PH_T", t);
-    func_template_false = func_template_false.replace("@PH_K", k);
+    func_template_false = func_template_false.replaceAll("@PH_ITE", ite);
+    func_template_false = func_template_false.replaceAll("@PH_Y", this.y);
+    func_template_false = func_template_false.replaceAll("@PH_T", this.t);
+    func_template_false = func_template_false.replaceAll("@PH_K", k);
     this.causal_function_name = "lift";
   }
 

@@ -16,7 +16,7 @@ def PolynomialFeatures(x, k, type='k'):
 
 
 class LinearDML:
-    def __init__(self, Y, T, X, W='', model_y='Ols', model_t='Ols', fit_cate_intercept=True, discrete_treatment=True,
+    def __init__(self, Y, T, X, W='', model_y='ols', model_t='ols', fit_cate_intercept=True, discrete_treatment=True,
                  categories=[0, 1], cv=3, table='', treatment_featurizer='', debug=False):
         if model_y != '' and model_y[0] == 'o':
             model_y = model_y[0].upper() + model_y[1:]
@@ -75,7 +75,7 @@ class LinearDML:
         if pos == -1:
             raise Exception("Logical Error: final_model not found in sql")
         sql = sql[0:pos + len("final_model")]
-        pos = sql.rfind("Ols")
+        pos = sql.rfind("ols")
         if pos == -1:
             raise Exception("Logical Error: Ols not found in sql")
         if use_interval == True:
@@ -297,7 +297,7 @@ class LinearDML:
 
 
 class NonParamDML:
-    def __init__(self, Y, T, X, W='', model_y='Ols', model_t='Ols', fit_cate_intercept=True, discrete_treatment=True,
+    def __init__(self, Y, T, X, W='', model_y='ols', model_t='ols', fit_cate_intercept=True, discrete_treatment=True,
                  categories=[0, 1], cv=3, table='', debug=False):
         self.debug = debug
         self.X = X
@@ -339,7 +339,7 @@ class NonParamDML:
         if pos == -1:
             raise Exception("Logical Error: final_model not found in sql")
         sql = sql[0:pos + len("final_model")]
-        pos = sql.rfind("Ols")
+        pos = sql.rfind("ols")
         if pos == -1:
             raise Exception("Logical Error: Ols not found in sql")
         if use_interval == True:

@@ -26,15 +26,18 @@ public class OlsParser extends SqlCallCausal {
   private ArrayList<SqlNode> args;
   private ArrayList<SqlNode> params;
 
+  private boolean use_state;
+
   public OlsParser(SqlParserPos pos) {
     super(pos);
   }
 
-  public OlsParser(SqlParserPos pos, ArrayList<SqlNode> args, ArrayList<SqlNode> params) {
+  public OlsParser(SqlParserPos pos, ArrayList<SqlNode> args, ArrayList<SqlNode> params, boolean use_state) {
     super(pos);
     this.args = args;
     this.params = params;
     this.causal_function_name = "ols";
+    this.use_state = use_state;
   }
 
   @Override public SqlOperator getOperator() {
@@ -42,7 +45,10 @@ public class OlsParser extends SqlCallCausal {
   }
 
   @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
-    writer.print("Ols(");
+    if (this.use_state)
+      writer.print("OlsState(");
+    else
+      writer.print("Ols(");
     for (SqlNode param : params) {
       param.unparse(writer, leftPrec, rightPrec);
     }

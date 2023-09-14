@@ -26,11 +26,11 @@ init_dir() {
 
   if [ ! -d "jupyter" ]; then
     mkdir -p jupyter
-    if [ -f "examples/all_in_sql_demo.ipynb" ]; then
-      mv examples/all_in_sql_demo.ipynb jupyter/
+    if [ -f "examples/demo.ipynb" ]; then
+      mv examples/demo.ipynb jupyter/
     fi
     if [ -f "conf/package_conf.yaml" ]; then
-      mv conf/package_conf.yaml jupyter/
+      mv conf/package_conf.yaml jupyter/conf.yaml
     fi
   fi
 

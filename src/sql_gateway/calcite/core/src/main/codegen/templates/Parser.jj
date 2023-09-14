@@ -117,7 +117,9 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.sql.olap.DeltaMethodParser;
+import org.apache.calcite.sql.olap.IvRegressionParser;
 import org.apache.calcite.sql.olap.OlsParser;
+import org.apache.calcite.sql.olap.PredictParser;
 import org.apache.calcite.sql.olap.WlsParser;
 import org.apache.calcite.sql.olap.Ttest1SampParser;
 import org.apache.calcite.sql.olap.Ttest2SampParser;
@@ -2013,7 +2015,28 @@ SqlNode Ols() :
     )*
     <RPAREN>
     {
-        return new OlsParser(pos, args, params);
+        return new OlsParser(pos, args, params, false);
+    }
+}
+
+SqlNode Predict() :
+{
+    SqlParserPos pos;
+    String model = "";
+    ArrayList<String> params = new ArrayList<String>();
+}
+{
+    <LPAREN> {
+        pos = getPos();
+        model = Expression3(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    (
+        <COMMA>
+            {params.add(Expression3(ExprContext.ACCEPT_SUB_QUERY).toString());}
+    )*
+    <RPAREN>
+    {
+        return new PredictParser(pos, model, params);
     }
 }
 
@@ -2375,7 +2398,6 @@ SqlNode CaliperMatching() :
 SqlNode ExactMatching() :
 {
     String treatment = "";
-    String target = "";
     ArrayList<String> labels = new ArrayList<String>();
 }
 {
@@ -2383,7 +2405,7 @@ SqlNode ExactMatching() :
         treatment = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
     }
     <COMMA> {
-        target = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        labels.add(Expression(ExprContext.ACCEPT_SUB_QUERY).toString());
     }
     (
         <COMMA> {
@@ -2391,7 +2413,45 @@ SqlNode ExactMatching() :
         }
     )*
     <RPAREN> {
-        return new ExactMatchingParser(getPos(), treatment, target, labels);
+        return new ExactMatchingParser(getPos(), treatment, labels);
+    }
+}
+
+SqlNode IvRegression() :
+{
+    String y = "";
+    String iv = "";
+    ArrayList<String> xs = new ArrayList<String>();
+    String ds = "";
+}
+{
+    <LPAREN> {
+        y = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+
+    <WAVY> {
+
+    }
+
+    <LPAREN> {
+        ds = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+
+    <WAVY> {
+        iv = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+
+    <RPAREN> {
+    }
+
+    (
+        <PLUS> {
+            xs.add(Expression3(ExprContext.ACCEPT_SUB_QUERY).toString());
+        }
+    )*
+
+    <RPAREN> {
+        return new IvRegressionParser(getPos(), y, iv, ds, xs);
     }
 }
 
@@ -2406,6 +2466,14 @@ SqlNode SelectCausalFunction() :
     e = DeltaMethod()
 |   <OLS>
     e = Ols()
+|   <IVREGRESSION>
+    e = IvRegression()
+/*
+|   <OLSSTATE>
+    e = OlsState()
+ */
+|   <PREDICT>
+    e = Predict()
 |   <WLS>
     e = Wls()
 |   <TTEST_1SAMP>
@@ -4354,9 +4422,11 @@ SqlKind comp() :
     <NE> { return SqlKind.NOT_EQUALS; }
 |
     <NE2> {
+        /*
         if (!this.conformance.isBangEqualAllowed()) {
             throw SqlUtil.newContextException(getPos(), RESOURCE.bangEqualNotAllowed());
         }
+         */
         return SqlKind.NOT_EQUALS;
     }
 }
@@ -8270,9 +8340,11 @@ SqlBinaryOperator BinaryRowOperator() :
 |   <GE> { return SqlStdOperatorTable.GREATER_THAN_OR_EQUAL; }
 |   <NE> { return SqlStdOperatorTable.NOT_EQUALS; }
 |   <NE2> {
+        /*
         if (!this.conformance.isBangEqualAllowed()) {
             throw SqlUtil.newContextException(getPos(), RESOURCE.bangEqualNotAllowed());
         }
+         */
         return SqlStdOperatorTable.NOT_EQUALS;
     }
 |   <PLUS> { return SqlStdOperatorTable.PLUS; }
@@ -9080,7 +9152,10 @@ SqlPostfixOperator PostfixRowOperator() :
 |   < YEAR: "YEAR" >
 |   < YEARS: "YEARS" >
 |   < ZONE: "ZONE" >
-|    < OLS: "ols" >
+|   < OLS: "ols" >
+|   < IVREGRESSION: "ivRegression" >
+//|   < OLSSTATE: "olsState" >
+|   < PREDICT: "predict" >
 |   < WLS: "wls" >
 |   < DELTAMETHOD: "deltamethod" >
 |   < TTEST_1SAMP: "ttest_1samp" >
@@ -9097,7 +9172,6 @@ SqlPostfixOperator PostfixRowOperator() :
 |   < CV: "cv" >
 |   < CALIPERMATCHING: "caliperMatching" >
 |   < EXACTMATCHING: "exactMatching" >
-|   < IVREGRESSION: "ivRegression" >
 <#-- additional parser keywords are included here -->
 <#list (parser.keywords!default.parser.keywords) as keyword>
 |   < ${keyword}: "${keyword}" >

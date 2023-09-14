@@ -260,7 +260,7 @@ class TDWUtils(object):
         if clickhouse_table_name not in clickhouse_utils.show_tables():
             if is_auto_create:
                 logger.debug("auto create table")
-                clickhouse_utils.create_table(clickhouse_table_name, col_statement, cluster=ClickHouseUtils.CLUSTER,
+                clickhouse_utils.create_table(clickhouse_table_name, col_statement, cluster=clickhouse_utils.CLUSTER,
                                               partition_column=clickhouse_partition_column,
                                               primary_column=clickhouse_primary_column)
             else:
@@ -319,7 +319,7 @@ class TDWUtils(object):
 
     @classmethod
     def create_table_by_dataframe(self, dataframe, clickhouse_table_name, clickhouse_partition_column,
-                                  clickhouse_primary_column, is_auto_create, mode, cluster):
+                                  clickhouse_primary_column, is_auto_create, mode, is_cluster):
         logger.debug(dataframe.dtypes)
         col_names = list()
         col_types = list()
@@ -335,8 +335,8 @@ class TDWUtils(object):
         if clickhouse_table_name not in clickhouse_utils.show_tables():
             if is_auto_create:
                 logger.info("clickhouse table auto create table")
-                if cluster:
-                    clickhouse_utils.create_table(clickhouse_table_name, col_statement, cluster=cluster,
+                if is_cluster:
+                    clickhouse_utils.create_table(clickhouse_table_name, col_statement, cluster=clickhouse_utils.CLUSTER,
                                                   partition_column=clickhouse_partition_column,
                                                   primary_column=clickhouse_primary_column)
                 else:
@@ -357,13 +357,13 @@ class TDWUtils(object):
         if num > ClickHouseUtils.MAX_ROWS:
             raise Exception("dataframe table rows num too big, >" + str(ClickHouseUtils.MAX_ROWS) + " not support")
         self.create_table_by_dataframe(dataframe, clickhouse_table_name, clickhouse_partition_column, is_auto_create,
-                                       mode, cluster=None)
+                                       mode, is_cluster=False)
         dataframe.write \
             .mode(mode) \
             .option("batchsize", str(batch_size)) \
             .option("numPartitions", str(num_partitions)) \
             .jdbc(url=ClickHouseUtils.get_jdbc_connect_string(), table=clickhouse_table_name,
-                  properties=ClickHouseUtils.JDBC_PROPERTIES)
+                  properties=ClickHouseUtils.get_jdbc_properties())
 
     # multi partition write everyone node, as distribute clickhouse table
     @classmethod
@@ -380,7 +380,7 @@ class TDWUtils(object):
         if num > ClickHouseUtils.MAX_ROWS:
             raise Exception("dataframe table rows num too big, >" + str(ClickHouseUtils.MAX_ROWS) + " not support")
         self.create_table_by_dataframe(dataframe, clickhouse_table_name, clickhouse_partition_column,
-                                       clickhouse_primary_column, is_auto_create, mode, cluster=ClickHouseUtils.CLUSTER)
+                                       clickhouse_primary_column, is_auto_create, mode, is_cluster=True)
         clickhouse_utils = ClickHouseUtils()
         cluster_hosts_len = clickhouse_utils.cluster_hosts_len
         cluster_hosts = clickhouse_utils.cluster_hosts
@@ -419,7 +419,7 @@ class TDWUtils(object):
                 .mode(mode) \
                 .option("batchsize", str(batch_size)) \
                 .option("numPartitions", str(num_partitions)) \
-                .jdbc(url=url, table=clickhouse_table_name + "_local", properties=ClickHouseUtils.JDBC_PROPERTIES)
+                .jdbc(url=url, table=clickhouse_table_name + "_local", properties=ClickHouseUtils.get_jdbc_properties())
             raw_dataset.unpersist()
 
         all_task = list()
@@ -439,7 +439,7 @@ class TDWUtils(object):
             num = 0
             for dataset in split_datasets:
                 url = "jdbc:clickhouse://" + cluster_hosts[num] + ":" + str(
-                    ClickHouseUtils.DEFAULT_HTTP_PORT) + "/" + ClickHouseUtils.DEFAULT_DATABASE \
+                    clickhouse_utils.DEFAULT_HTTP_PORT) + "/" + clickhouse_utils.DEFAULT_DATABASE \
                       + ClickHouseUtils.JDBC_ARGS
                 future = pool.submit(dataframe_write_node, dataset, url)
                 future.add_done_callback(handle_exception)

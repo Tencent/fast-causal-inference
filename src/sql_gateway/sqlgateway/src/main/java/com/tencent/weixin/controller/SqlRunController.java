@@ -120,7 +120,7 @@ public class SqlRunController {
                 //sql rebuild后, 改为执行状态
                 long calciteSqlCostTime = 0;
                 for (SqlUdfModel udfName : sqlUdfService.select()) {
-                    if (executeSql.contains(udfName.getUdf() + "(")) {
+                    if (executeSql.toUpperCase().contains(udfName.getUdf().toUpperCase() + "(")) {
                         if (udfName.getIsDisable()) {
                             sqlDetailModel.setRetcode(SqlRetCode.FAIL.getCode());
                             sqlDetailService.update(sqlDetailModel);
@@ -129,15 +129,17 @@ public class SqlRunController {
                         logger.info("hit all in sql udf :" + udfName.getUdf());
                         long startTime = System.currentTimeMillis();
                         sqlUdfService.insert(udfName.getId(), sqlDetailModel.getId());
-                        try {
-                            SqlForward sqlForward = new SqlForward(executeSql);
-                            executeSql = sqlForward.getForwardSql();
-                        } catch (SqlParseException e) {
-                            logger.info("change status fail");
-                            e.printStackTrace();
-                            sqlDetailModel.setRetcode(SqlRetCode.FAIL.getCode());
-                            sqlDetailService.update(sqlDetailModel);
-                            return ResponseData.error(500, "sql解析异常, 请检查sql, " + e.getMessage());
+                        if (!executeSql.toUpperCase().contains("WITH ")) {
+                            try {
+                                SqlForward sqlForward = new SqlForward(executeSql);
+                                executeSql = sqlForward.getForwardSql();
+                            } catch (SqlParseException e) {
+                                logger.info("change status fail");
+                                e.printStackTrace();
+                                sqlDetailModel.setRetcode(SqlRetCode.FAIL.getCode());
+                                sqlDetailService.update(sqlDetailModel);
+                                return ResponseData.error(500, "sql解析异常, 请检查sql, " + e.getMessage());
+                            }
                         }
                         calciteSqlCostTime = System.currentTimeMillis() - startTime;
                         logger.info("rawSql :" + rawSql + ", executeSql :" + executeSql + ", calcite sql cost time :" + calciteSqlCostTime + " ms");
