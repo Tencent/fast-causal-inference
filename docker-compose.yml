@@ -18,7 +18,7 @@ services:
       CHOWN_EXTRA: "/home/jovyan/"
       CHOWN_EXTRA_OPTS: "-R"
     ports:
-      - 8888:8888
+      - 80:8888
     volumes:
       - "./jupyter:/home/jovyan/"
 #    container_name: fast-causal-inference-notebook

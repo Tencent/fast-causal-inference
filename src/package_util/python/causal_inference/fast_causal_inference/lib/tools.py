@@ -1,11 +1,20 @@
-from fast_causal_inference import create_sql_instance, clickhouse_create_view,clickhouse_drop_view
+from .. import create_sql_instance, clickhouse_create_view,clickhouse_drop_view
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import time
 import seaborn as sns
+from matplotlib import rcParams
 import warnings
-warnings.filterwarnings("ignore")
+
+from sklearn.metrics import mean_squared_error as mse, mean_absolute_error as mae
+from sklearn.metrics import roc_auc_score, auc, roc_curve, precision_recall_curve
+from sklearn.model_selection import cross_val_predict, KFold
+from sklearn.model_selection import train_test_split
+from matplotlib import rcParams
+
+
+
 
 def check_table(table):
     sql_instance = create_sql_instance()
@@ -13,31 +22,92 @@ def check_table(table):
     if "Code: 60" in x:
         print(x)
         raise ValueError
-        return -1
     elif int(x['cnt'][0])==0:
         print("There's no data in the table")
         raise ValueError
-        return  0
     else:
         return 1
 
+def get_columns(table):
+    # get all columns from table
+    sql_instance = create_sql_instance()
+    tmp = sql_instance.sql(f"desc {table} ")
+    col_list = list(tmp['name'])
+    colType_list = list(tmp['type'])
+    cols_type = dict(zip(col_list,colType_list))
+    return cols_type
+
+def check_columns(table, cols):
+    # check if cols exsits in table and return numerical_cols and string_cols
+    sql_instance = create_sql_instance()
+    cols_type = get_columns(table)
+    cols_o = list(cols_type.keys())
+
+    # check exist
+    other_variables = set(cols) - set(cols_o)
+    if len(other_variables) != 0:
+        print(f"variable {other_variables} can't be find in the table {table}")
+        raise ValueError
+
+    string_cols = []
+    numerical_cols = []
+    for col in cols:
+        if cols_type[col] not in ['UInt8', 'UInt16', 'UInt32', 'UInt64', 'UInt128', 'UInt256',
+                              'Int8', 'Int16', 'Int32', 'Int64', 'Int128', 'Int256', 'Float32', 'Float64']:
+            print(f"The type of {col} is not numeric")
+            string_cols.append(col)
+        else:
+            numerical_cols.append(col)
+    return numerical_cols,string_cols
+
 def check_column(table, col):
     sql_instance = create_sql_instance()
-    x = sql_instance.sql(f"desc {table} ")
-    cols_type = dict(zip(x['name'],x['type']))
-    col_list = list(cols_type.keys())
-        
+    cols_type = get_columns(table)
+
     if col not in cols_type.keys():
         print(f"There is no column named {col} in the table")
         raise("ValueError")
         return -1
-
     if cols_type[col] not in ['UInt8', 'UInt16', 'UInt32', 'UInt64', 'UInt128', 'UInt256',
                               'Int8', 'Int16', 'Int32', 'Int64', 'Int128', 'Int256', 'Float32', 'Float64']:
         print(f"The type of {col} is not numeric")
         return 0
     else:
         return 1
+    
+        
+    
+def matching_plot(table,T,col):
+    sql_instance = create_sql_instance()
+    check_table(table)
+    x1 = sql_instance.sql(f"select {col} from {table} where {T}=1 limit 1000000")
+    x0 = sql_instance.sql(f"select {col} from {table} where {T}=0 limit 1000000")
+    rcParams['figure.figsize'] = 8,8
+    ax = sns.distplot(x0)
+    sns.distplot(x1)
+    ax.set_xlim(0, 1)
+    ax.set_xlabel(col)
+    ax.set_ylabel('density')
+    ax.legend(['Control', 'Treatment'])
+    del x1,x0
+    
+    
+
+def SMD(table,T,cols):
+    sql_instance = create_sql_instance()
+    check_table(table)
+    numerical_cols,string_cols = check_columns(table, cols)
+    string = ','.join([f'avg({i}) as {i}_avg,varSamp({i}) as {i}_std' for i in numerical_cols])
+    res = sql_instance.sql(f"select {T} as T, {string} from {table} group by {T} order by {T} ")
+    res = np.array(res)[:,1:].T.reshape(-1,4)
+    res = pd.DataFrame(res,columns=['Control','Treatment','Control_var','Treatment_var'])
+    res = res.astype(float)
+    res['SMD'] = (res['Treatment'] - res['Control'])/np.sqrt(0.5*(res['Control_var']+res['Treatment_var']))
+    res = res[['Control','Treatment','SMD']]
+    res.index = numerical_cols
+    res = res.sort_values("SMD")
+    return res
+
     
     
 def data_split(table,test_size=0.5):
@@ -53,7 +123,7 @@ def data_split(table,test_size=0.5):
     clickhouse_view_name=table_tmp,
     sql_statement=f"""*,if(rand()/pow(2,32)<{test_size},1,0) as if_test""", 
     sql_table_name = table, 
-    bucket_column="if_test",
+    primary_column="if_test",
     is_force_materialize=True)
     
     clickhouse_create_view(
@@ -61,7 +131,7 @@ def data_split(table,test_size=0.5):
     sql_statement="""*""", 
     sql_table_name = table_tmp, 
     sql_where = """ if_test=0""", 
-    bucket_column="if_test",
+    primary_column="if_test",
     is_force_materialize=True)
     
     clickhouse_create_view(
@@ -69,7 +139,7 @@ def data_split(table,test_size=0.5):
     sql_statement="""*""", 
     sql_table_name = table_tmp, 
     sql_where = """ if_test=1 """,
-    bucket_column="if_test",
+    primary_column="if_test",
     is_force_materialize=True)
     
     clickhouse_drop_view(clickhouse_view_name=table_tmp) 
@@ -78,34 +148,36 @@ def data_split(table,test_size=0.5):
     
     return table_train,table_test
     
-def describe(table,X):
+def describe(table,cols='*'):
     sql_instance = create_sql_instance()
     check_table(table)
-    results = []
-    cols = X.split('+')
-    for col in cols:
-        if check_column(table, col)<=0:
-            result = [0,0,0,0,0,0,0,0,0]
-        else:
-            result = list(sql_instance.sql(f"""
-                select
-                    count({col}) as cnt,
-                    stddevSamp({col}) as numerator_std,
-                    min({col}) as numerator_min,         
-                    quantileExact(0.25)({col}) as numerator_25_quantile,
-                    quantileExact(0.50)({col}) as numerator_50_quantile,
-                    quantileExact(0.75)({col}) as numerator_75_quantile,
-                    quantileExact(0.90)({col}) as numerator_90_quantile,
-                    quantileExact(0.99)({col}) as numerator_99_quantile,
-                    max({col}) as numerator_max
-                from
-                    {table}
-            """).values[0])
-            result = [float(i) for i in result]
-            results.append(result)
-    results = pd.DataFrame(np.array(results),columns=['count','std','min','quantile_0.25','quantile_0.5',
-                                           'quantile_0.75','quantile_0.90','quantile_0.99','max'],index=cols)
-    return results
+    if cols == '*':
+        cols = list(get_columns(table).keys())
+    numerical_cols_all,string_cols = check_columns(table, cols)
+    k = len(numerical_cols_all)
+    res_all = pd.DataFrame([],columns = ['count','std','min','quantile_0.25','quantile_0.5',
+                                               'quantile_0.75','quantile_0.90','quantile_0.99','max'])
+    for i in range(k):
+        numerical_cols = numerical_cols_all[i*10:min((i+1)*10,k)]
+        if len(numerical_cols)==0:
+            break
+        sql_list = [f"""count({numerical_cols[i]}) as cnt_{i},
+                    stddevSamp({numerical_cols[i]}) as x{i}_std,
+                    min({numerical_cols[i]}) as x{i}_min,         
+                    quantile(0.25)({numerical_cols[i]}) as x{i}_25_quantile,
+                    quantile(0.50)({numerical_cols[i]}) as x{i}_50_quantile,
+                    quantile(0.75)({numerical_cols[i]}) as x{i}_75_quantile,
+                    quantile(0.90)({numerical_cols[i]}) as x{i}_90_quantile,
+                    quantile(0.99)({numerical_cols[i]}) as x{i}_99_quantile,
+                    max({numerical_cols[i]}) as x{i}_max""" for i in range(len(numerical_cols))]
+        result = sql_instance.sql(f'''select {','.join(sql_list)}  from {table}''').astype(float).values[0]
+        res2 = pd.DataFrame(result.reshape(-1,9),columns=['count','std','min','quantile_0.25','quantile_0.5',
+                                               'quantile_0.75','quantile_0.90','quantile_0.99','max'])
+        # res = pd.concat([res1,res2],axis=1)
+        res = res2
+        res.index = numerical_cols
+        res_all = pd.concat([res_all,res])
+    return res_all
 
     
     
@@ -169,9 +241,9 @@ def boxplot(table,col):
             select
                 min({col}) as numerator_min,         
                 max({col}) as numerator_max,
-                quantileExact(0.25)({col}) as numerator_25_quantile,
-                quantileExact(0.50)({col}) as numerator_50_quantile,
-                quantileExact(0.75)({col}) as numerator_75_quantile   
+                quantile(0.25)({col}) as numerator_25_quantile,
+                quantile(0.50)({col}) as numerator_50_quantile,
+                quantile(0.75)({col}) as numerator_75_quantile   
             from
                 {table}
         """).values[0])
@@ -198,7 +270,7 @@ def boxplot(table,col):
         bins = np.linspace(0,1,101)
         outliers = list(sql_instance.sql(f"""
         select
-            {','.join([f'quantileExact({i})({col})' for i in bins])}
+            {','.join([f'quantile({i})({col})' for i in bins])}
         from
             (select {col}
             from {table}
@@ -248,3 +320,6 @@ def boxplot(table,col):
 
         # 显示图形
         plt.show()
+
+
+

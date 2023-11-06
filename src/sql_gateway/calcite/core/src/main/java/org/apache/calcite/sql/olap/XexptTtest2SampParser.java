@@ -27,7 +27,7 @@ import java.util.List;
 import static java.util.Collections.sort;
 
 public class XexptTtest2SampParser extends SqlCallCausal {
-  private HashMap<String, String> map_cuped;
+  private ArrayList<String> map_cuped;
   private String func_cuped, index, numerator, denominator, uin ;
   private ArrayList<String> args;
 
@@ -36,7 +36,7 @@ public class XexptTtest2SampParser extends SqlCallCausal {
     super(pos);
   }
 
-  public XexptTtest2SampParser(SqlParserPos pos, String numerator, String denominator, String uin, String index, String func_cuped, HashMap<String, String> map_cuped, ArrayList<String> args) {
+  public XexptTtest2SampParser(SqlParserPos pos, String numerator, String denominator, String uin, String index, String func_cuped, ArrayList<String> map_cuped, ArrayList<String> args) {
     super(pos);
     this.numerator = SqlForwardUtil.exchangIdentity(numerator);
     this.denominator = SqlForwardUtil.exchangIdentity(denominator);
@@ -74,14 +74,9 @@ public class XexptTtest2SampParser extends SqlCallCausal {
       writer.print(",'X=" + SqlForwardUtil.exchangeFunc(func_cuped, 2) + "'");
     writer.print(")(" + numerator + "," + denominator);
 
-    ArrayList<Pair<Integer, String>> args_cuped = new ArrayList<>();
-    map_cuped.forEach((key,value) -> {
-      args_cuped.add(new Pair<>(Integer.valueOf(value), key));
-    });
-    sort(args_cuped);
-    for (int i = 0; i < args_cuped.size(); i++) {
+    for (int i = 0; i < map_cuped.size(); i++) {
       writer.print(",");
-      writer.print(args_cuped.get(i).getValue().replaceAll("`", "").replaceAll(" ", ""));
+      writer.print(map_cuped.get(i).replaceAll("`", "").replaceAll(" ", ""));
     }
 
     writer.print("," + uin);

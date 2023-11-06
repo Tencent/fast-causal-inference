@@ -34,15 +34,22 @@ def output_auto_boxing(res):
 
 
 def output_dataframe(res):
-    return pandas.DataFrame(list(eval(res)))
+    if "error message" in res:
+        return res
+    else:
+        return pandas.DataFrame(list(eval(res)))
 
 def to_pandas(res):
-    i = 1
     data = list()
-    for line in res.splitlines():
-        if i == 1:
-            columns = list(filter(lambda x: x != '', line.split(' ')))
+    columns = None
+    for line in res:
+        i = 1
+        for inner_line in line.splitlines():
+            if not inner_line:
+                continue
+            if not columns:
+                columns = list(filter(lambda x: x != '', inner_line.split(' ')))
+            if i >= 2:
+                data.append(list(filter(lambda x: x != '', inner_line.split(' '))))
             i += 1
-        else:
-            data.append(list(filter(lambda x: x != '', line.split(' '))))
     return pandas.DataFrame(data, columns=columns)

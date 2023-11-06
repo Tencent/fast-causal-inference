@@ -27,14 +27,14 @@ import java.util.List;
 import static java.util.Collections.sort;
 
 public class DeltaMethodParser extends SqlCallCausal {
-  private HashMap<String, String> map;
+  private ArrayList<String> map;
   private String func;
 
   public DeltaMethodParser(SqlParserPos pos) {
     super(pos);
   }
 
-  public DeltaMethodParser(SqlParserPos pos, HashMap<String, String> map, String func) {
+  public DeltaMethodParser(SqlParserPos pos, ArrayList<String> map, String func) {
     super(pos);
     this.map = map;
     this.func = func;
@@ -49,14 +49,9 @@ public class DeltaMethodParser extends SqlCallCausal {
     writer.print("(\'");
     writer.print(func);
     writer.print("\')(");
-    ArrayList<Pair<Integer, String>> args = new ArrayList<>();
-    map.forEach((key,value) -> {
-      args.add(new Pair<>(Integer.valueOf(value), key));
-    });
-    sort(args);
-    for (int i = 0; i < args.size(); i++) {
+    for (int i = 0; i < map.size(); i++) {
       if (i != 0) writer.print(",");
-      writer.print(args.get(i).getValue().replaceAll("`", ""));
+      writer.print(map.get(i).replaceAll("`", ""));
     }
     writer.print(")");
     this.causal_function_name = "deltamethod";

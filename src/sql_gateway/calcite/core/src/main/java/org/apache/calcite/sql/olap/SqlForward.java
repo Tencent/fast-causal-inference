@@ -19,7 +19,6 @@ package org.apache.calcite.sql.olap;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.dialect.MysqlSqlDialect;
-import org.apache.calcite.sql.dialect.PrestoSqlDialect;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 
@@ -57,13 +56,40 @@ public class SqlForward {
   // Config
   /* TODO : Distinguish between different engines: clickhouse, starrocks...*/
   public SqlForward(String sql) throws SqlParseException {
+
+    String parse_sql = sql.replaceAll("==", "=");
+    parse_sql = sql.replaceAll("treat", "treat_to_solve_treat_occupied_by_the_system");
+
     this.sql = sql;
     forwardUdfs = new ArrayList<String>();
-    SqlParser parser = SqlParser.create(sql, SqlParser.Config.DEFAULT
+    SqlParser parser = SqlParser.create(parse_sql, SqlParser.Config.DEFAULT
         .withUnquotedCasing(Casing.UNCHANGED)
         .withCaseSensitive(false)
         .withQuotedCasing(Casing.UNCHANGED));
-    SqlNode sqlNode = parser.parseStmt();
+
+    String with_sql = "with ";
+    SqlNode sqlNode = null;
+
+    try {
+      sqlNode = parser.parseStmt();
+    } catch(Exception e) {
+      if (e.toString().contains("BRACKET_QUOTED_IDENTIFIER") && e.toString().contains("QUOTED_IDENTIFIER")) {
+        this.forwardSql = sql;
+        return;
+      }
+      throw e;
+    }
+
+    if (sqlNode instanceof SqlWith) {
+       SqlNodeList sqlWithItem = ((SqlWith) sqlNode).withList;
+       for (int i = 0; i < sqlWithItem.size(); i++) {
+         if (!with_sql.equals("with "))
+           with_sql += ",\n";
+         SqlWithItem item = (SqlWithItem) sqlWithItem.get(i);
+         with_sql += item.name + " as (" + item.query + " ) ";
+       }
+       sqlNode = ((SqlWith) sqlNode).body;
+    }
     //String unparserSql = sqlNode.toSqlString(new SqlDialect(SqlDialect.EMPTY_CONTEXT)).getSql();
     String unparserSql = sqlNode.toSqlString(MysqlSqlDialect.DEFAULT).getSql();
 
@@ -74,7 +100,12 @@ public class SqlForward {
     }
     else
       sqlSelect = (SqlSelect)sqlNode;
-    SqlIdentifier sqlIdentifier = (SqlIdentifier)sqlSelect.getFrom();
+
+    SqlNode sqlFrom = sqlSelect.getFrom();
+    String table_name = "";
+    if (sqlFrom != null)
+      table_name = sqlFrom.toString();
+
     SqlNodeList selectList = (SqlNodeList)sqlSelect.getSelectList();
     for (SqlNode node : selectList) {
       parseNode(node);
@@ -83,12 +114,8 @@ public class SqlForward {
         parseNode(((SqlBasicCall) node).getOperandList().get(0));
       }
     }
-    String table_name = "";
-    if (sqlIdentifier != null)
-      table_name = sqlIdentifier.toString();
-    String with_sql = "with ";
     for (int i = 0; i < withs.size(); ++i) {
-      if (i != 0) {
+      if (!with_sql.equals("with ")) {
         with_sql += ",\n";
       }
       with_sql += withs.get(i) + " \n";
@@ -112,6 +139,7 @@ public class SqlForward {
       }
     }
 
+    forwardSql = forwardSql.replaceAll("treat_to_solve_treat_occupied_by_the_system", "treat");
     this.forwardSql = forwardSql.replaceAll("`", "");
   }
 

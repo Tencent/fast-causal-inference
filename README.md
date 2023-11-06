@@ -73,4 +73,3 @@ github: https://github.com/Tencent/fast-causal-inference
 >>  To start causal analysis, please refer to the built-in demo.ipynb
 
 
-

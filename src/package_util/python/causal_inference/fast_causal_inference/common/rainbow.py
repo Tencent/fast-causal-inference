@@ -12,7 +12,7 @@ QPS较小，无需使用文件缓存 + watch机制
 class RainbowConfCenter(object):
 
     def __init__(self, tenant_id, secret_key):
-        if not os.environ.get("RAINBOW_URL") and not os.environ.get("RAINBOW_GROUP") and not os.environ.get("RAINBOW_ENV"):
+        if os.environ.get("RAINBOW_URL") and os.environ.get("RAINBOW_GROUP") and os.environ.get("RAINBOW_ENV"):
             self.url = str(os.environ.get("RAINBOW_URL"))
             self.group = str(os.environ.get("RAINBOW_GROUP"))
             self.env = str(os.environ.get("RAINBOW_ENV"))
@@ -36,7 +36,7 @@ class RainbowConfCenter(object):
 
     def get_conf(self):
         rainbow_client = RainbowClient(self.init_param)
-        conf = rainbow_client.get_configs_v3(group=self.group, env_name=self.env)["data"]["conf.yaml"]
+        conf = rainbow_client.get_configs_v3(group=self.group, env_name=self.env)["data"]["conf_v2.yaml"]
         conf = conf.decode("utf-8").replace("\\n", "\n").strip()
         conf_dict = yaml.load(io.StringIO(conf).read(), Loader=SafeLoader)
         return conf_dict

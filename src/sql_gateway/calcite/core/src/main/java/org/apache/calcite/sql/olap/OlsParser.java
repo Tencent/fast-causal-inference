@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class OlsParser extends SqlCallCausal {
-  private ArrayList<SqlNode> args;
+  private ArrayList<String> args;
   private ArrayList<SqlNode> params;
 
   private boolean use_state;
@@ -32,7 +32,7 @@ public class OlsParser extends SqlCallCausal {
     super(pos);
   }
 
-  public OlsParser(SqlParserPos pos, ArrayList<SqlNode> args, ArrayList<SqlNode> params, boolean use_state) {
+  public OlsParser(SqlParserPos pos, ArrayList<String> args, ArrayList<SqlNode> params, boolean use_state) {
     super(pos);
     this.args = args;
     this.params = params;
@@ -59,7 +59,8 @@ public class OlsParser extends SqlCallCausal {
     for (int i = 0; i < args.size(); i++) {
       if (i != 0)
         writer.print(",");
-      args.get(i).unparse(writer, leftPrec, rightPrec);
+      writer.print(args.get(i));
+      //args.get(i).unparse(writer, leftPrec, rightPrec);
     }
     writer.print(")");
   }

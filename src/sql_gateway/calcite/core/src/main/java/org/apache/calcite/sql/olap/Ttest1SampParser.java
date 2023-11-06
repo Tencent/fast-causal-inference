@@ -27,14 +27,14 @@ import java.util.List;
 import static java.util.Collections.sort;
 
 public class Ttest1SampParser extends SqlCallCausal {
-  private HashMap<String, String> map, map_cuped;
+  private ArrayList<String> map, map_cuped;
   private String func, func_cuped, mu, altertive;
 
   public Ttest1SampParser(SqlParserPos pos) {
     super(pos);
   }
 
-  public Ttest1SampParser(SqlParserPos pos, HashMap<String, String> map, String func, String altertive, String mu, HashMap<String, String> map_cuped, String func_cuped) {
+  public Ttest1SampParser(SqlParserPos pos, ArrayList<String> map, String func, String altertive, String mu, ArrayList<String> map_cuped, String func_cuped) {
     super(pos);
     this.map = map;
     this.func = func;
@@ -73,24 +73,14 @@ public class Ttest1SampParser extends SqlCallCausal {
     }
     writer.print(")(");
 
-    ArrayList<Pair<Integer, String>> args = new ArrayList<>();
-    map.forEach((key,value) -> {
-      args.add(new Pair<>(Integer.valueOf(value), key));
-    });
-    sort(args);
-    for (int i = 0; i < args.size(); i++) {
+    for (int i = 0; i < map.size(); i++) {
       if (i != 0) writer.print(",");
-      writer.print(args.get(i).getValue().replaceAll("`", "").replaceAll(" ", ""));
+      writer.print(map.get(i).replaceAll("`", "").replaceAll(" ", ""));
     }
 
-    ArrayList<Pair<Integer, String>> args_cuped = new ArrayList<>();
-    map_cuped.forEach((key,value) -> {
-      args_cuped.add(new Pair<>(Integer.valueOf(value), key));
-    });
-    sort(args_cuped);
-    for (int i = 0; i < args_cuped.size(); i++) {
+    for (int i = 0; i < map_cuped.size(); i++) {
       writer.print(",");
-      writer.print(args_cuped.get(i).getValue().replaceAll("`", "").replaceAll(" ", ""));
+      writer.print(map_cuped.get(i).replaceAll("`", "").replaceAll(" ", ""));
     }
     writer.print(")");
   }

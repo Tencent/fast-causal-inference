@@ -1,5 +1,6 @@
 package com.tencent.weixin.controller;
 
+import com.alibaba.fastjson.JSON;
 import com.google.common.base.Strings;
 import com.tencent.weixin.example.DocExample;
 import com.tencent.weixin.model.SqlDetailModel;
@@ -20,7 +21,6 @@ import org.apache.calcite.sql.parser.SqlParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
@@ -116,7 +116,12 @@ public class SqlRunController {
                 long totalStartTime = System.currentTimeMillis();
                 String executeSql = rawSql.replaceAll(";", "");
                 sqlDetailModel.setExecuteSql(executeSql);
+                sqlDetailModel.setRetcode(SqlRetCode.INIT.getCode());
                 sqlDetailService.insert(sqlDetailModel);
+
+                if (sqlDetailModel.getIsCalciteParse() == null || ! sqlDetailModel.getIsCalciteParse()) {
+                    executeSql = clickhouseExecuteService.sqlPretreatment(executeSql);
+                }
                 //sql rebuild后, 改为执行状态
                 long calciteSqlCostTime = 0;
                 for (SqlUdfModel udfName : sqlUdfService.select()) {
@@ -129,59 +134,76 @@ public class SqlRunController {
                         logger.info("hit all in sql udf :" + udfName.getUdf());
                         long startTime = System.currentTimeMillis();
                         sqlUdfService.insert(udfName.getId(), sqlDetailModel.getId());
-                        if (!executeSql.toUpperCase().contains("WITH ")) {
-                            try {
-                                SqlForward sqlForward = new SqlForward(executeSql);
-                                executeSql = sqlForward.getForwardSql();
-                            } catch (SqlParseException e) {
-                                logger.info("change status fail");
-                                e.printStackTrace();
-                                sqlDetailModel.setRetcode(SqlRetCode.FAIL.getCode());
-                                sqlDetailService.update(sqlDetailModel);
-                                return ResponseData.error(500, "sql解析异常, 请检查sql, " + e.getMessage());
-                            }
+                        try {
+                            logger.info("sql parse rawSql :" + executeSql);
+                            SqlForward sqlForward = new SqlForward(executeSql);
+                            executeSql = sqlForward.getForwardSql();
+                            calciteSqlCostTime = System.currentTimeMillis() - startTime;
+                            logger.info("sql parse executeSql :" + executeSql + ", calcite sql cost time :" + calciteSqlCostTime + " ms");
+                        } catch (SqlParseException e) {
+                            logger.info("change status fail");
+                            e.printStackTrace();
+                            sqlDetailModel.setRetcode(SqlRetCode.FAIL.getCode());
+                            sqlDetailService.update(sqlDetailModel);
+                            return ResponseData.error(500, "sql解析异常, 请检查sql, " + e.getMessage());
                         }
-                        calciteSqlCostTime = System.currentTimeMillis() - startTime;
-                        logger.info("rawSql :" + rawSql + ", executeSql :" + executeSql + ", calcite sql cost time :" + calciteSqlCostTime + " ms");
+//                        if (!executeSql.toUpperCase().contains("WITH ")) {
+//                            
+//                        } else {
+//                            logger.info("break sql parse");
+//                        }
                         break;
                     }
                 }
-                logger.info("change status running");
-                executeSql = clickhouseExecuteService.sqlPretreatment(executeSql);
-                sqlDetailModel.setExecuteSql(executeSql);
-                sqlDetailModel.setRetcode(SqlRetCode.RUNNING.getCode());
                 sqlDetailModel.setCalciteSqlCostTime((int) calciteSqlCostTime);
                 sqlDetailModel.setCalciteSqlCostTimeReadable((calciteSqlCostTime / 1000 % 60) + " sec");
-                sqlDetailService.update(sqlDetailModel);
-                //execute后, 改为最终状态
-                String retJsonString = "";
-                try {
-                    long startTime = System.currentTimeMillis();
-                    retJsonString = clickhouseExecuteService.execute(sqlDetailModel.getDeviceId(), sqlDetailModel.getDatabase(), executeSql).toJSONString();
-                    long executeSqlCostTime = System.currentTimeMillis() - startTime;
-                    logger.info("rawSql :" + rawSql + ", executeSql :" + executeSql);
-                    String finalRetJsonString = retJsonString;
+                if (sqlDetailModel.getIsCalciteParse() != null && sqlDetailModel.getIsCalciteParse()) {
                     sqlDetailModel.setRetcode(SqlRetCode.SUCCESS.getCode());
-                    sqlDetailModel.setExecuteSqlCostTime((int) executeSqlCostTime);
-                    sqlDetailModel.setExecuteSqlCostTimeReadable((executeSqlCostTime / 1000 / 60) + " min," + (executeSqlCostTime / 1000 % 60) + " sec");
                     long totalCostTime = System.currentTimeMillis() - totalStartTime;
                     sqlDetailModel.setTotalTime((int) totalCostTime);
                     sqlDetailModel.setTotalTimeReadable((totalCostTime / 1000 / 60) + " min," + (totalCostTime / 1000 % 60) + " sec");
                     sqlDetailService.update(sqlDetailModel);
-                    logger.info("change status success");
                     String finalRawSql = rawSql;
                     String finalExecuteSql = executeSql;
-                    return ResponseData.success(RetCode.API_YES, new HashMap<String, String>() {{
+                    return ResponseData.success(RetCode.API_YES, new HashMap<String, Object>() {{
                         put("rawSql", finalRawSql);
                         put("executeSql", finalExecuteSql);
-                        put("result", finalRetJsonString);
+                        put("result", null);
                     }});
-                } catch (Exception e) {
-                    logger.info("change status fail");
-                    e.printStackTrace();
-                    sqlDetailModel.setRetcode(SqlRetCode.FAIL.getCode());
+                } else {
+                    logger.info("change status running");
+                    sqlDetailModel.setExecuteSql(executeSql);
+                    sqlDetailModel.setRetcode(SqlRetCode.RUNNING.getCode());
                     sqlDetailService.update(sqlDetailModel);
-                    return ResponseData.error(500, "sql执行异常, 请检查sql, " + e.getMessage());
+                    //execute后, 改为最终状态
+                    try {
+                        long startTime = System.currentTimeMillis();
+                        JSON retJson = clickhouseExecuteService.execute(sqlDetailModel.getDeviceId(), sqlDetailModel.getDatabase(), executeSql, sqlDetailModel.getLauncherIp(), sqlDetailModel.getIsDataframeOutput());
+                        long executeSqlCostTime = System.currentTimeMillis() - startTime;
+                        logger.info("rawSql :" + rawSql + ", executeSql :" + executeSql);
+                        JSON finalRetJson = retJson;
+                        sqlDetailModel.setRetcode(SqlRetCode.SUCCESS.getCode());
+                        sqlDetailModel.setExecuteSqlCostTime((int) executeSqlCostTime);
+                        sqlDetailModel.setExecuteSqlCostTimeReadable((executeSqlCostTime / 1000 / 60) + " min," + (executeSqlCostTime / 1000 % 60) + " sec");
+                        long totalCostTime = System.currentTimeMillis() - totalStartTime;
+                        sqlDetailModel.setTotalTime((int) totalCostTime);
+                        sqlDetailModel.setTotalTimeReadable((totalCostTime / 1000 / 60) + " min," + (totalCostTime / 1000 % 60) + " sec");
+                        sqlDetailService.update(sqlDetailModel);
+                        logger.info("change status success");
+                        String finalRawSql = rawSql;
+                        String finalExecuteSql = executeSql;
+                        return ResponseData.success(RetCode.API_YES, new HashMap<String, Object>() {{
+                            put("rawSql", finalRawSql);
+                            put("executeSql", finalExecuteSql);
+                            put("result", finalRetJson);
+                        }});
+                    } catch (Exception e) {
+                        logger.info("change status fail");
+                        e.printStackTrace();
+                        sqlDetailModel.setRetcode(SqlRetCode.FAIL.getCode());
+                        sqlDetailService.update(sqlDetailModel);
+                        return ResponseData.error(500, "sql执行异常, 请检查sql, " + e.getMessage());
+                    }
                 }
             }
         } catch (Exception e) {

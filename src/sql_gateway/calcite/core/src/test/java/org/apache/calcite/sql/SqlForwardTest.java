@@ -40,14 +40,51 @@ public class SqlForwardTest {
   @Test void testOls() throws SqlParseException {
     String sql = "select ols(y ~ x1 + x2 + X3) from tbl";
     assertEquals(sqlForward(sql),
-        "SELECT Ols(true)(y, x1, x2, X3)\n"
+        "SELECT Ols(true)(y,x1,x2,X3)\n"
   +
             "FROM tbl");
     sql = "select ols(y ~ x1 + x2 + X3, false) from tbl";
     assertEquals(sqlForward(sql),
-        "SELECT Ols(FALSE )(y, x1, x2, X3)\n"
+        "SELECT Ols(FALSE )(y,x1,x2,X3)\n"
   +
             "FROM tbl");
+    sql = "SELECT ols(y~ x1 +x2+ c*X3) \n" +
+        "FROM tbl";
+    assertEquals(sqlForward(sql),
+        "SELECT Ols(true)(y,x1,x2,c*X3)\n" +
+            "FROM tbl");
+    System.out.println(sqlForward(sql));
+  }
+  @Test void testWith() throws SqlParseException {
+    String sql = "with t1 as (\n" +
+        "SELECT \n" +
+        "    uin,treatment_dummy,week_1_vv,\n" +
+        "    new_sex\n" +
+        "FROM creator_production_data_final_small_creator\n" +
+        "where new_sex!=0),\n" +
+        "t2 as (\n" +
+        "select *,\n" +
+        " if(new_sex=1,1,0) AS male\n" +
+        " from t1\n" +
+        ")\n" +
+        "\n" +
+        "SELECT ols(week_1_vv~ treatment_dummy + male + treatment_dummy*male) AS res\n" +
+        "FROM t2";
+    assertEquals(sqlForward(sql),
+        "with t1 as (SELECT uin, treatment_dummy, week_1_vv, new_sex\n" +
+            "FROM creator_production_data_final_small_creator\n" +
+            "WHERE new_sex <> 0 ) ,\n" +
+            "t2 as (SELECT *, if(new_sex = 1, 1, 0) AS male\n" +
+            "FROM t1 ) SELECT Ols(true)(week_1_vv,treatment_dummy,male,treatment_dummy*male) AS " +
+            "res\n" +
+            "FROM t2");
+    //System.out.println(sqlForward(sql));
+  }
+
+  @Test void testBasicOp() throws SqlParseException {
+    String sql = "select *,caliperMatching(if(search_num_tc=1,1,-1),score,0.1) AS matchingIndex " +
+        "\n" +
+        "from dapan_user_fea_all_v1_1695820401_matched where matchingIndex!=0";
     System.out.println(sqlForward(sql));
   }
   @Test void testPredict() throws SqlParseException {
@@ -59,9 +96,84 @@ public class SqlForwardTest {
             "SELECT evalMLMethod(model,x1,x2) AS res\n" +
             "FROM test_data_small\n" +
             "LIMIT 10");
-
     System.out.println(sqlForward(sql));
   }
+
+  @Test void tmpTest() throws SqlParseException {
+     String sql = "select *,caliperMatching(if(treat=1,1,-1),propensity_score,0.01) AS matchingIndex from test_tmp_shichao_1102_1026_ios_observational_data where matchingIndex!=0";
+     //String sql = "select caliperMatching(if(groupname = 'A1', -1, 1), propensity_score, 0.01) as matchingIndex FROM test_tmp_shichao_1102_1026_ios_observational_data where matchingIndex!=0";
+
+     System.out.println(sqlForward(sql));
+  }
+
+  @Test void testLongTerm() throws SqlParseException {
+    String sql = "select recursiveForcasting([(pull_qv1, click_times_clickidqv1, click_jump_times1, change_query_qv1), (pull_qv2, click_times_clickidqv2, click_jump_times2, change_query_qv2), (pull_qv3, click_times_clickidqv3, click_jump_times3, change_query_qv3), (pull_qv4, click_times_clickidqv4, click_jump_times4, change_query_qv4), (pull_qv5, click_times_clickidqv5, click_jump_times5, change_query_qv5), (pull_qv6, click_times_clickidqv6, click_jump_times6, change_query_qv6)],3 ~ 2,4-5, S1, groupid, 'Ols(True)','{PH}',500,1) from tbl";
+    System.out.println(sqlForward(sql));
+    /*
+    assertEquals(sqlForward(sql),
+        "with ( \n" +
+            "  SELECT tuple(BootStrapOlsState('Ols(True)', 500,1,'{PH}')(pull_qv3,pull_qv2," +
+            "click_times_clickidqv2,click_jump_times2,change_query_qv2),BootStrapOlsState('Ols" +
+            "(True)', 500,1,'{PH}')(click_times_clickidqv3,pull_qv2,click_times_clickidqv2," +
+            "click_jump_times2,change_query_qv2),BootStrapOlsState('Ols(True)', 500,1,'{PH}')" +
+            "(click_jump_times3,pull_qv2,click_times_clickidqv2,click_jump_times2," +
+            "change_query_qv2),BootStrapOlsState('Ols(True)', 500,1,'{PH}')(change_query_qv3," +
+            "pull_qv2,click_times_clickidqv2,click_jump_times2,change_query_qv2)) FROM tbl where " +
+            "groupid = 0 \n" +
+            "  ) as model0, \n" +
+            "  ( \n" +
+            "  SELECT tuple(BootStrapOlsState('Ols(True)', 500,1,'{PH}')(pull_qv3,pull_qv2," +
+            "click_times_clickidqv2,click_jump_times2,change_query_qv2),BootStrapOlsState('Ols" +
+            "(True)', 500,1,'{PH}')(click_times_clickidqv3,pull_qv2,click_times_clickidqv2," +
+            "click_jump_times2,change_query_qv2),BootStrapOlsState('Ols(True)', 500,1,'{PH}')" +
+            "(click_jump_times3,pull_qv2,click_times_clickidqv2,click_jump_times2," +
+            "change_query_qv2),BootStrapOlsState('Ols(True)', 500,1,'{PH}')(change_query_qv3," +
+            "pull_qv2,click_times_clickidqv2,click_jump_times2,change_query_qv2)) FROM tbl where " +
+            "groupid = 1 \n" +
+            "  ) as model1  \n" +
+            " select  BootStrapMerge('Ttest_2samp(\"x1\", \"two-sided\")',500, 1,  '{PH}')(s4)," +
+            "BootStrapMerge('Ttest_2samp(\"x1\", \"two-sided\")',500, 1,  '{PH}')(s5)  FROM " +
+            "(SELECT \n" +
+            "BootStrapState('Ttest_2samp(\"x1\", \"two-sided\")',500, 1,  '{PH}')(x41, group) as " +
+            "s4,BootStrapState('Ttest_2samp(\"x1\", \"two-sided\")',500, 1,  '{PH}')(x51, group) " +
+            "as s5 FROM (SELECT *, groupid as group, evalMLMethod(model0.1,pull_qv3," +
+            "click_times_clickidqv3,click_jump_times3,change_query_qv3) as x41,\n" +
+            "evalMLMethod(model0.2,pull_qv3,click_times_clickidqv3,click_jump_times3," +
+            "change_query_qv3) as x42,\n" +
+            "evalMLMethod(model0.3,pull_qv3,click_times_clickidqv3,click_jump_times3," +
+            "change_query_qv3) as x43,\n" +
+            "evalMLMethod(model0.4,pull_qv3,click_times_clickidqv3,click_jump_times3," +
+            "change_query_qv3) as x44,\n" +
+            "evalMLMethod(model0.1,pull_qv4,click_times_clickidqv4,click_jump_times4," +
+            "change_query_qv4) as x51,\n" +
+            "evalMLMethod(model0.2,pull_qv4,click_times_clickidqv4,click_jump_times4," +
+            "change_query_qv4) as x52,\n" +
+            "evalMLMethod(model0.3,pull_qv4,click_times_clickidqv4,click_jump_times4," +
+            "change_query_qv4) as x53,\n" +
+            "evalMLMethod(model0.4,pull_qv4,click_times_clickidqv4,click_jump_times4," +
+            "change_query_qv4) as x54 FROM tbl where group = 0) union all SELECT \n" +
+            "BootStrapState('Ttest_2samp(\"x1\", \"two-sided\")',500, 1,  '{PH}')(x41, group) as " +
+            "s4,BootStrapState('Ttest_2samp(\"x1\", \"two-sided\")',500, 1,  '{PH}')(x51, group) " +
+            "as s5 FROM (SELECT *, groupid as group, evalMLMethod(model1.1,pull_qv3," +
+            "click_times_clickidqv3,click_jump_times3,change_query_qv3) as x41,\n" +
+            "evalMLMethod(model1.2,pull_qv3,click_times_clickidqv3,click_jump_times3," +
+            "change_query_qv3) as x42,\n" +
+            "evalMLMethod(model1.3,pull_qv3,click_times_clickidqv3,click_jump_times3," +
+            "change_query_qv3) as x43,\n" +
+            "evalMLMethod(model1.4,pull_qv3,click_times_clickidqv3,click_jump_times3," +
+            "change_query_qv3) as x44,\n" +
+            "evalMLMethod(model1.1,pull_qv4,click_times_clickidqv4,click_jump_times4," +
+            "change_query_qv4) as x51,\n" +
+            "evalMLMethod(model1.2,pull_qv4,click_times_clickidqv4,click_jump_times4," +
+            "change_query_qv4) as x52,\n" +
+            "evalMLMethod(model1.3,pull_qv4,click_times_clickidqv4,click_jump_times4," +
+            "change_query_qv4) as x53,\n" +
+            "evalMLMethod(model1.4,pull_qv4,click_times_clickidqv4,click_jump_times4," +
+            "change_query_qv4) as x54 FROM tbl where group = 1))");
+
+     */
+  }
+
   @Test void testWls() throws SqlParseException {
     String sql = "select wls(y ~ x1 + x2 + X3, weight) from tbl";
     assertEquals(sqlForward(sql),
@@ -94,6 +206,41 @@ public class SqlForwardTest {
         "SELECT Ttest_2samp('x1+x2','two-sided','X=x3/x4')(num,deno,a,b,index)\n"
   +
             "FROM tbl");
+    sql = "select ttest_2samp(avg(rand(1))+avg(rand(2)), mod(rand(3),2), 'two-sided', pse = mod(rand(6), 2) + 123) from tbl";
+    assertEquals(sqlForward(sql),
+        "SELECT Ttest_2samp('x1+x2','two-sided',2)(RAND(1),RAND(2),MOD(RAND(6), 2),123,MOD(RAND" +
+            "(3), 2))\n" +
+            "FROM tbl");
+    sql = "select ttest_2samp(avg(rand(1))+avg(rand(2)), mod(rand(3),2), 'two-sided', avg(rand()), pse = mod(rand(6), 2) + 123) from tbl";
+    assertEquals(sqlForward(sql),
+        "SELECT Ttest_2samp('x1+x2','two-sided',2,'X=x3')(RAND(1),RAND(2),RAND(),MOD(RAND(6), 2)," +
+            "123,MOD(RAND(3), 2))\n" +
+            "FROM tbl");
+    sql = "select\n" +
+        "    ttest_2samp(avg(numerator)/avg(denominator),T ,'two-sided',\n" +
+        "                      avg(numerator_pre)/avg(denominator)+avg(page)/avg(denominator)) as" +
+        " res\n" +
+        "    from (\n" +
+        "        select bucketsrc_hit,\n" +
+        "               if(groupname = 'B19', 1, 0) as T,\n" +
+        "               sum(numerator) as numerator,\n" +
+        "               sum(denominator) as denominator,\n" +
+        "               sum(page) as page,\n" +
+        "               sum(numerator_pre) as numerator_pre,\n" +
+        "               sum(denominator_pre) as denominator_pre\n" +
+        "        from expt_detail_57360319_adamdeng_1697704507283\n" +
+        "        where metric_id = 10223 and groupname in ('A1','A2','B19')\n" +
+        "        group by bucketsrc_hit, if(groupname = 'B19', 1, 0)\n" +
+        "    )";
+    assertEquals(sqlForward(sql),
+        "SELECT Ttest_2samp('x1/x2','two-sided','X=x3/x4+x5/x6')(numerator,denominator," +
+            "numerator_pre,denominator,page,denominator,T) AS res\n" +
+            "FROM (SELECT bucketsrc_hit, if(groupname = 'B19', 1, 0) AS T, SUM(numerator) AS " +
+            "numerator, SUM(denominator) AS denominator, SUM(page) AS page, SUM(numerator_pre) AS" +
+            " numerator_pre, SUM(denominator_pre) AS denominator_pre\n" +
+            "FROM expt_detail_57360319_adamdeng_1697704507283\n" +
+            "WHERE metric_id = 10223 AND groupname IN ('A1', 'A2', 'B19')\n" +
+            "GROUP BY bucketsrc_hit, if(groupname = 'B19', 1, 0))");
   }
 
   @Test void testDid() throws SqlParseException {
@@ -103,6 +250,7 @@ public class SqlForwardTest {
   +
             "FROM tbl");
   }
+
 
   @Test void testXexpt_ttest_2samp() throws SqlParseException {
     String sql = "select xexpt_ttest_2samp(num, deno, if(A,B,C), uin, 0.1, 0.2, avg(n/d) + avg(xx), 0.3) from tbl where aa = bb";
@@ -121,6 +269,36 @@ public class SqlForwardTest {
             "WHERE aa = bb");
   }
 
+  @Test void testNestedQuery() throws SqlParseException {
+    String sql = "select page,\n" +
+        "xexpt_ttest_2samp(numerator, denominator, if(groupname = 'B1', 'B', 'A'), bucketsrc_hit," +
+        " avg(numerator_pre)/avg(denominator_pre), 0.05, 0.005, 0.8)\n" +
+        "from (\n" +
+        "    select bucketsrc_hit,\n" +
+        "           groupname,\n" +
+        "           page,\n" +
+        "           sum(numerator) as numerator,\n" +
+        "           sum(denominator) as denominator,\n" +
+        "           sum(numerator_pre) as numerator_pre,\n" +
+        "           sum(denominator_pre) as denominator_pre\n" +
+        "    from expt_detail_16338862_adamdeng_1695710466997\n" +
+        "    where metric_id = 8377 and groupname in ('A1','A2','B1')\n" +
+        "    group by bucketsrc_hit, groupname,page\n" +
+        ")group by\n" +
+        "    page";
+    System.out.println(sqlForward(sql));
+    assertEquals(sqlForward(sql),
+        "SELECT page, Xexpt_Ttest_2samp(0.05,0.005,0.8,'X=x3/x4')(numerator,denominator," +
+            "numerator_pre,denominator_pre,bucketsrc_hit,if(groupname = 'B1', 'B', 'A'))\n" +
+            "FROM (SELECT bucketsrc_hit, groupname, page, SUM(numerator) AS numerator, SUM" +
+            "(denominator) AS denominator, SUM(numerator_pre) AS numerator_pre, SUM" +
+            "(denominator_pre) AS denominator_pre\n" +
+            "FROM expt_detail_16338862_adamdeng_1695710466997\n" +
+            "WHERE metric_id = 8377 AND groupname IN ('A1', 'A2', 'B1')\n" +
+            "GROUP BY bucketsrc_hit, groupname, page)\n" +
+            "GROUP BY page");
+  }
+
   @Test void testLift() throws SqlParseException {
     String sql = "select lift(1,rand()%2,rand()%2,100,false) from test_data_small_local";
     System.out.println(sqlForward("select * from test_data_small limit 5"));
@@ -128,7 +306,6 @@ public class SqlForwardTest {
 
   @Test void testLinearDML() throws SqlParseException {
     String sql = "select linearDML(y,treatment,x1+x2,x7_needcut,model_y='Ols',model_t=stochasticLogisticRegression(1.0, 1.0, 10, 'SGD'),cv=2 ) from test_data_small";
-    /*
     assertEquals(sqlForward(sql),
         "with   (\n" +
             "    SELECT\n" +
@@ -163,10 +340,7 @@ public class SqlForwardTest {
             "\n" +
             "    ) \n" +
             "  ) as final_model \n" +
-            "select final_model\n");
-
-     */
-    System.out.println(sqlForward(sql));
+            "select final_model");
   }
 
   @Test void testNonParamDML() throws SqlParseException {

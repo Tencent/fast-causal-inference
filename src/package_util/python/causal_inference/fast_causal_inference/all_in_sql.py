@@ -5,7 +5,7 @@ from time import perf_counter as _perf_counter
 import time
 import requests
 from .util.utils import *
-from .lib.ols import Ols
+from .util.spark import get_spark_session
 
 def tdw_2_clickhouse(tdw_database_name, tdw_table_name, clickhouse_table_name, spark_session, cmk=None,
                      tdw_partition_list=None, clickhouse_partition_column=None, clickhouse_primary_column=None,
@@ -74,7 +74,7 @@ def __dataframe_2_clickhouse_one(dataframe, clickhouse_table_name, clickhouse_pa
 
 
 def dataframe_2_clickhouse(dataframe, clickhouse_table_name, clickhouse_partition_column=None,
-                           clickhouse_primary_column=None, bucket_column=None, is_auto_create=True, num_partitions=10):
+                           clickhouse_primary_column=None, is_auto_create=True, num_partitions=10):
     """
     dataframe write multi partition write everyone node, as distribute clickhouse table dataframe对象的数据会分片并行导入
     各个CK local节点，
@@ -83,8 +83,7 @@ def dataframe_2_clickhouse(dataframe, clickhouse_table_name, clickhouse_partitio
     :param dataframe:  sparkSession dataframe
     :param clickhouse_table_name:  clickhouse表名
     :param clickhouse_partition_column: 自动创建表时clickhouse_partition_column指定CK表的分区，可不填该参数则不分区
-    :param clickhouse_primary_column:  自动创建表时clickhouse_primary_column指定CK表的主键列，可不填该参数则无主键
-    :param bucket_column:   bucket_column指定导入时候按照dataframe中某一列分bucket，该列相同值一定会落入同一个节点的本地表上，可不填该参数则row随机写入CK节点
+    :param clickhouse_primary_column:  自动创建表时clickhouse_primary_column指定CK表的主键列，可不填该参数则无主键，同时指定导入时候按照dataframe中某一列分bucket，该列相同值一定会落入同一个节点的本地表上，可不填该参数则row随机写入CK节点
     :param is_auto_create:   True 表示识别schema自动创建表
     :param num_partitions:  并行分片数, 默认10, 用户无需修改
     :return:
@@ -93,8 +92,7 @@ def dataframe_2_clickhouse(dataframe, clickhouse_table_name, clickhouse_partitio
     start = _perf_counter()
     from .databus.tdw import TDWUtils
     TDWUtils.datafame_2_clickhouse_distribute(dataframe, clickhouse_table_name, clickhouse_partition_column,
-                                              clickhouse_primary_column, bucket_column=bucket_column,
-                                              is_auto_create=is_auto_create,
+                                              clickhouse_primary_column, is_auto_create=is_auto_create,
                                               num_partitions=num_partitions, batch_size=400000)
     end = _perf_counter()
     print("done" + 'time cost: %s Seconds' % (end - start))
@@ -121,7 +119,7 @@ def __clickhouse_2_dataframe_distribute(spark, clickhouse_table_name, clickhouse
                                                              clickhouse_database_name)
 
 
-def csv_2_clickhouse(csv_file_abs_path, clickhouse_table_name, columns_dict, is_auto_create=True):
+def csv_2_clickhouse(csv_file_abs_path, clickhouse_table_name, columns_dict=None, is_auto_create=True):
     """
     csv入仓到clickhouse
     :param csv_file_abs_path: csv文件绝对路径
@@ -157,8 +155,8 @@ def clickhouse_2_csv(clickhouse_table_name, csv_file_abs_path):
     print("done" + 'time cost: %s Seconds' % (end - start))
 
 
-def clickhouse_create_view(clickhouse_view_name, sql_statement, sql_table_name, sql_where=None, sql_group_by=None,
-                           sql_limit=None, bucket_column="uin", is_force_materialize=False, is_sql_complete=False):
+def clickhouse_create_view(clickhouse_view_name, sql_statement, sql_table_name=None, sql_where=None, sql_group_by=None,
+                           sql_limit=None, primary_column="tuple()", is_force_materialize=False, is_sql_complete=False, is_use_local=True):
     """
     创建实验指标明细视图
     sql_statement, sql_table_name, sql_where, sql_group_by, sql_limit 会组成完整sql
@@ -170,7 +168,7 @@ def clickhouse_create_view(clickhouse_view_name, sql_statement, sql_table_name, 
     :param sql_where:      where子句
     :param sql_group_by:   group by 子句
     :param sql_limit:      limit子句
-    :param bucket_column:  bucket_column指定导入时候的分bucket的列名, clickhouse colocate join维度列需要预先分bucket
+    :param primary_column:  指定导入时候的分bucket的列名, clickhouse colocate join维度列需要预先分bucket
     :param is_force_materialize:   为True则强制物化为物理表，请注意磁盘存储空间占用
     :return:
     """
@@ -178,8 +176,8 @@ def clickhouse_create_view(clickhouse_view_name, sql_statement, sql_table_name, 
     start = _perf_counter()
     from .databus.clickhouse import ClickHouseUtils
     ClickHouseUtils.create_view(clickhouse_view_name, sql_statement, sql_table_name, sql_where, sql_group_by,
-                                sql_limit=sql_limit, bucket_column=bucket_column,
-                                is_force_materialize=is_force_materialize, is_sql_complete=is_sql_complete)
+                                sql_limit=sql_limit, primary_column=primary_column,
+                                is_force_materialize=is_force_materialize, is_sql_complete=is_sql_complete, is_use_local=is_use_local)
     end = _perf_counter()
     print("done" + 'time cost: %s Seconds' % (end - start))
 
@@ -242,13 +240,18 @@ class AllInSqlConn:
         self.device_id = device_id
         self.db_name = db_name
 
-    def execute(self, sql, data_key="result", retry_times=1):
+    def execute(self, sql, retry_times=1, is_calcite_parse=False):
         from . import PROJECT_CONF
         from . import logger
         url = PROJECT_CONF["sqlgateway"]["url"] + PROJECT_CONF["sqlgateway"]["path"]
         sql = sql.replace("\n", " ")
+        sql = sql.replace("\"", "\\\"")
         json_body = '{"rawSql":"' + str(sql) + '", "creator":"' + get_user() + '", "deviceId":"' + str(
-            self.device_id) + '","database":"' + self.db_name + '"}'
+            self.device_id) + '","database":"' + self.db_name + '", "isDataframeOutput": true'
+        if is_calcite_parse:
+            json_body += ', "isCalciteParse": true}'
+        else:
+            json_body += '}'
         while retry_times > 0:
             try:
                 logger.debug("url= " + url + ",data= " + json_body)
@@ -256,21 +259,31 @@ class AllInSqlConn:
                 logger.debug("response=" + resp.text)
                 # result = resp.text.replace("\\t", "\t").replace("\\n", "\n").replace("\\r", "\r").replace("\\'", "'")
                 if resp.json()["status"] == 0:
-                    return resp.json()["data"][data_key]
+                    if is_calcite_parse:
+                        return str(resp.json()["data"]["executeSql"])
+                    else:
+                        return str(resp.json()["data"]["result"])
                 else:
-                    return resp.json()["message"]
+                    if "message" in resp.json().keys():
+                        return "error message:" + resp.json()["message"] + ", error code" + str(resp.json()["status"])
+                    elif "error" in resp.json().keys():
+                        return "error message:" + resp.json()["error"] + ", error code" + str(resp.json()["status"])
+                    else:
+                        return "error message none" + ", error code" + resp.json()["status"]
             except Exception as e:
                 time.sleep(1)
                 retry_times -= 1
                 if retry_times == 0:
                     return str(e)
 
-    def sql(self, sql):
-        res = self.execute(sql)
-        if (res.find("Exception") != -1):
+    def sql(self, sql, is_calcite_parse=False, is_dataframe=True):
+        res = self.execute(sql, is_calcite_parse=is_calcite_parse)
+        from . import logger
+        if (res.find("Exception") != -1) or "error message" in res:
+            logger.info("execute content result:" + str(res))
+        else:
+            logger.debug("execute content result:" + str(res))
+        if (res.find("Exception") != -1) or "error message" in res or is_calcite_parse or not is_dataframe:
             return res
-        elif res.__len__() > 0 and "Call:" in res and 'Coefficients' in res:
-            res = list(list(eval(res.replace('\n', '\001'))[0].values()))[0].replace('\001', '\n')
-            return Ols(res)
         else:
             return output_dataframe(res)

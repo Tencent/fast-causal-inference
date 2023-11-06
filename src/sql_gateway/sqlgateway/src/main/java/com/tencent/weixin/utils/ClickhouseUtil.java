@@ -17,7 +17,9 @@ import org.yaml.snakeyaml.Yaml;
 import java.io.InputStream;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 
 @Component
 @ConfigurationProperties(prefix = "clickhouse")
@@ -28,8 +30,8 @@ public class ClickhouseUtil {
     private Logger logger = LoggerFactory.getLogger(this.getClass());
     private String driver;
     private ArrayList<Map<String, Object>> devices;
-    
-    public Connection getClickHouseConnection(String database, Integer deviceId) {
+
+    public Connection getClickHouseConnection(String database, Integer deviceId, String launcherIp) {
         if (deviceId == null) {
             throw new RuntimeException("deviceId is arg error");
         }
@@ -39,9 +41,15 @@ public class ClickhouseUtil {
             for (Map<String, Object> deviceInfo : devices) {
                 if ((int) deviceInfo.get("id") == deviceId.intValue()) {
                     String clickHouseUrl = (String) deviceInfo.get("url");
-                    clickHouseUrl = clickHouseUrl.replace("all_in_sql", database);
+                    String urlDatabase = clickHouseUrl.substring(clickHouseUrl.lastIndexOf("/", clickHouseUrl.indexOf("?")) + "/".length(), clickHouseUrl.indexOf("?"));
+                    String urlIp = clickHouseUrl.substring(clickHouseUrl.indexOf("//") + "//".length(), clickHouseUrl.indexOf(":", clickHouseUrl.indexOf("//")));
+                    clickHouseUrl = clickHouseUrl.replace(urlDatabase, database);
+                    if (launcherIp != null) {
+                        clickHouseUrl = clickHouseUrl.replace(urlIp, launcherIp);
+                    }
                     String clickHouseUser = (String) deviceInfo.get("user");
                     String clickHousePassword = (String) deviceInfo.get("password");
+                    logger.info("clickHouseUrl=" + clickHouseUrl);
                     conn = DriverManager.getConnection(clickHouseUrl, clickHouseUser, clickHousePassword);
                     return conn;
                 }
@@ -51,6 +59,10 @@ public class ClickhouseUtil {
             e.printStackTrace();
         }
         return null;
+    }
+
+    public Connection getClickHouseConnection(String database, Integer deviceId) {
+        return getClickHouseConnection(database, deviceId, null);
     }
 
 //    private static String clickHouseUrl;
@@ -104,20 +116,45 @@ public class ClickhouseUtil {
         }
     }
 
-    public JSON resultSetToJSON(ResultSet resultSet) {
+    public JSONObject resultSetToJson(ResultSet resultSet) throws SQLException {
+        ResultSetMetaData metaData = resultSet.getMetaData();
+        int columnCount = metaData.getColumnCount();
+        JSONObject jsonObject = new JSONObject();
+        JSONArray schemaArray = new JSONArray();
+        for (int i = 1; i <= columnCount; i++) {
+            JSONObject columnInfo = new JSONObject();
+            columnInfo.put("name", metaData.getColumnName(i));
+            columnInfo.put("type", metaData.getColumnTypeName(i));
+            schemaArray.add(columnInfo);
+        }
+        jsonObject.put("schema", schemaArray);
+
+        JSONArray rowsArray = new JSONArray();
+        while (resultSet.next()) {
+            JSONArray rowArray = new JSONArray();
+            for (int i = 1; i <= columnCount; i++) {
+                rowArray.add(resultSet.getObject(i));
+            }
+            rowsArray.add(rowArray);
+        }
+        jsonObject.put("rows", rowsArray);
+
+        return jsonObject;
+    }
+
+    public JSON resultSetToJsonDataFrame(ResultSet resultSet) {
         JSONArray jsonArray = new JSONArray();
-        JSONObject rowObj = null;
         try {
             ResultSetMetaData rsmd = resultSet.getMetaData();
             while (resultSet.next()) {
-                rowObj = new JSONObject();
+                LinkedHashMap rowObj = new LinkedHashMap<>();
                 int columnCount = rsmd.getColumnCount();
                 for (int i = 1; i <= columnCount; i++) {
                     String columnName = rsmd.getColumnName(i);
                     String value = resultSet.getString(columnName);
                     rowObj.put(columnName, value);
                 }
-                jsonArray.add(rowObj);
+                jsonArray.add(new JSONObject(rowObj));
             }
         } catch (SQLException e) {
             e.printStackTrace();

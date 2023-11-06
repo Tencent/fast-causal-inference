@@ -23,7 +23,7 @@ import java.util.List;
 
 public class LiftParser extends SqlCallCausal {
 
-  static private String  with_template = "( \n"
+  private String  with_template = "( \n"
   +
       "    select toUInt64(@PH_K) \n"
   +
@@ -49,7 +49,7 @@ public class LiftParser extends SqlCallCausal {
   +
       "  ) as mm_params\n";
 
-  static private String func_template_true = "select ratio, \n"
+  private String func_template_true = "select ratio, \n"
   +
       "    (sum(sum1) OVER w1 / sum(cnt1) OVER w1) - (sum(sum0) OVER w1 / sum(cnt0) OVER w1) AS " +
       "lift, \n"
@@ -115,7 +115,7 @@ public class LiftParser extends SqlCallCausal {
   +
       "ORDER BY ratio ASC";
 
-  static private String func_template_false = "select ratio, \n"
+  private String func_template_false = "select ratio, \n"
   +
       "    sum(sumt) OVER w1 / (ratio * (mm_params.2)) AS t_, \n"
   +

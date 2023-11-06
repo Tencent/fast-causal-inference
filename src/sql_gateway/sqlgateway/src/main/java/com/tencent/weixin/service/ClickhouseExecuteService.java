@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.HashSet;
 import java.util.List;
 
 @Service
@@ -37,9 +38,9 @@ public class ClickhouseExecuteService {
     }
     
     public String sqlPretreatment(String executeSql) {
-        logger.info("raw executeSql:" + executeSql);
+        logger.info("sql pretreatment raw executeSql:" + executeSql);
 //        executeSql = StringEscapeUtils.escapeSql(executeSql);
-        if (executeSql.toUpperCase().contains("SELECT") && !executeSql.toUpperCase().contains("LIMIT")) {
+        if (executeSql.trim().toUpperCase().startsWith("SELECT") && !executeSql.toUpperCase().contains("LIMIT")) {
             executeSql = executeSql + " limit 200";
         }
         if (executeSql.toUpperCase().contains("DROP") && !executeSql.toUpperCase().contains("DELETE")) {
@@ -49,16 +50,20 @@ public class ClickhouseExecuteService {
         return executeSql;
     }
     
-    public JSON execute(Integer deviceId, String database, String executeSql) {
+    public JSON execute(Integer deviceId, String database, String executeSql, String launcherIp, Boolean isDataFrameOutput) {
         Connection connection = null;
         Statement st = null;
         ResultSet rst = null;
         long startTime = System.currentTimeMillis();
         try {
-            connection = clickhouseUtil.getClickHouseConnection(database, deviceId);
+            connection = clickhouseUtil.getClickHouseConnection(database, deviceId, launcherIp);
             st = connection.createStatement();
             rst = st.executeQuery(executeSql);
-            return clickhouseUtil.resultSetToJSON(rst);
+            if (isDataFrameOutput != null && isDataFrameOutput) {
+                return clickhouseUtil.resultSetToJsonDataFrame(rst);
+            } else {
+                return clickhouseUtil.resultSetToJson(rst);
+            }
         } catch (Exception e) {
             logger.info(e.getMessage());
             throw new RuntimeException(e);

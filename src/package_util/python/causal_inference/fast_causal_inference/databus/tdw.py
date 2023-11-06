@@ -368,8 +368,7 @@ class TDWUtils(object):
     # multi partition write everyone node, as distribute clickhouse table
     @classmethod
     def datafame_2_clickhouse_distribute(self, dataframe, clickhouse_table_name, clickhouse_partition_column,
-                                         clickhouse_primary_column, bucket_column=None, mode="append",
-                                         is_auto_create=True,
+                                         clickhouse_primary_column, mode="append", is_auto_create=True,
                                          num_partitions=5, batch_size=100000):
         from pyspark.storagelevel import StorageLevel
         from pyspark.sql import functions
@@ -385,14 +384,14 @@ class TDWUtils(object):
         cluster_hosts_len = clickhouse_utils.cluster_hosts_len
         cluster_hosts = clickhouse_utils.cluster_hosts
         clickhouse_utils.close()
-        if bucket_column:
+        if clickhouse_primary_column:
             import mmh3
 
             def murmurhash3(uin):
                 return mmh3.hash(str(uin)) % cluster_hosts_len
 
             murmurhash3_udf = functions.udf(murmurhash3, types.IntegerType())
-            bucket_dataframe = dataframe.withColumn("bucket_key", murmurhash3_udf(bucket_column))
+            bucket_dataframe = dataframe.withColumn("bucket_key", murmurhash3_udf(clickhouse_primary_column))
             # dataframe = dataframe.withColumn("bucket_key", functions.col(bucket_column) % 40)
             split_datasets = list()
             for i in range(cluster_hosts_len):

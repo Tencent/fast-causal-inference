@@ -14,9 +14,7 @@ def set_tenant(tenant_id, secret_key):
     from .common.rainbow import RainbowConfCenter
     if not tenant_id or not secret_key:
         raise Exception("please input tenant_id and secret_key")
-    _global_tenant_id = tenant_id
-    _global_secret_key = secret_key
-    PROJECT_CONF = RainbowConfCenter(tenant_id=_global_tenant_id, secret_key=_global_secret_key).get_conf()
+    PROJECT_CONF = RainbowConfCenter(tenant_id=tenant_id, secret_key=secret_key).get_conf()
 
 
 def set_config(conf_path):
@@ -31,7 +29,7 @@ def set_config(conf_path):
 
 import logging.config
 import os
-
 logging.config.fileConfig(os.path.abspath(__file__).replace("__init__.py", "conf/fast_causal_inference_logging.conf"))
 logger = logging.getLogger('my_custom')
+
 # logger.setLevel("INFO")

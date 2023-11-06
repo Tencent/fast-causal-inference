@@ -27,22 +27,28 @@ import java.util.List;
 import static java.util.Collections.sort;
 
 public class Ttest2SampParser extends SqlCallCausal {
-  private HashMap<String, String> map, map_cuped;
+  private ArrayList<String> map, map_cuped;
   private String func, func_cuped, index, altertive;
+
+  private ArrayList<String> pses;
 
   public Ttest2SampParser(SqlParserPos pos) {
     super(pos);
   }
 
-  public Ttest2SampParser(SqlParserPos pos, HashMap<String, String> map, String func, String index, String altertive, HashMap<String, String> map_cuped, String func_cuped) {
+  public Ttest2SampParser(SqlParserPos pos, ArrayList<String> map, String func, String index, String altertive, ArrayList<String> map_cuped, String func_cuped, ArrayList<String> pses) {
     super(pos);
     this.map = map;
     this.func = func;
     this.func_cuped = func_cuped;
     this.map_cuped = map_cuped;
-    this.index = index.replaceAll("'", "").replaceAll("\"", "");
+    //this.index = index.replaceAll("'", "").replaceAll("\"", "");
+    this.index = index;
     this.altertive = altertive.replaceAll("'", "").replaceAll("\"", "");
     this.causal_function_name = "ttest_2samp";
+    System.out.println(map);
+    System.out.println(map_cuped);
+    this.pses = pses;
   }
 
   @Override public SqlOperator getOperator() {
@@ -67,29 +73,25 @@ public class Ttest2SampParser extends SqlCallCausal {
     writer.print("Ttest_2samp");
     writer.print("(\'" + func + "\',");
     writer.print("\'" + altertive + "\'");
+    if (!pses.isEmpty()) {
+      writer.print("," + String.valueOf(pses.size()));
+    }
     if (func_cuped.length() != 0) {
       writer.print(",\'X=" + exchangeFunc(func_cuped, map.size()) + "\'");
     }
     writer.print(")(");
 
-    ArrayList<Pair<Integer, String>> args = new ArrayList<>();
-    map.forEach((key,value) -> {
-      args.add(new Pair<>(Integer.valueOf(value), key));
-    });
-    sort(args);
-    for (int i = 0; i < args.size(); i++) {
+    for (int i = 0; i < map.size(); i++) {
       if (i != 0) writer.print(",");
-      writer.print(args.get(i).getValue().replaceAll("`", "").replaceAll(" ", ""));
+      writer.print(map.get(i).replaceAll("`", "").replaceAll(" ", ""));
     }
 
-    ArrayList<Pair<Integer, String>> args_cuped = new ArrayList<>();
-    map_cuped.forEach((key,value) -> {
-      args_cuped.add(new Pair<>(Integer.valueOf(value), key));
-    });
-    sort(args_cuped);
-    for (int i = 0; i < args_cuped.size(); i++) {
+    for (int i = 0; i < map_cuped.size(); i++) {
       writer.print(",");
-      writer.print(args_cuped.get(i).getValue().replaceAll("`", "").replaceAll(" ", ""));
+      writer.print(map_cuped.get(i).replaceAll("`", "").replaceAll(" ", ""));
+    }
+    for (int i = 0; i < pses.size(); i++) {
+      writer.print("," + pses.get(i));
     }
     writer.print("," + index + ")");
   }

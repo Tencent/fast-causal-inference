@@ -33,4 +33,9 @@ public class SqlDetailModel {
     private Integer retcode;
     private Timestamp createTime;
     private Timestamp updateTime;
+    
+    //other
+    private String launcherIp;
+    private Boolean isCalciteParse;
+    private Boolean isDataframeOutput;
 }

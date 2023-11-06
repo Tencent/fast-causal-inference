@@ -1,6 +1,6 @@
 import csv
 import math
-import os
+from time import perf_counter as _perf_counter
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor, wait, ALL_COMPLETED
@@ -22,7 +22,7 @@ class ClickHouseUtils(object):
     # 5min
     JDBC_ARGS = "?socket_timeout=7203000&max_execution_time=7202&compress=0"
     MAX_ROWS = 150 * 10000 * 10000
-    MAX_CSV_ROWS = 100 * 10000
+    MAX_CSV_ROWS = 1000 * 10000
     MAX_VIEW_MATERIALIZE_ROWS = MAX_CSV_ROWS
     MAX_EXECUTION_TIME = 15 * 60
 
@@ -108,13 +108,17 @@ class ClickHouseUtils(object):
                 self.DEFAULT_HTTP_PORT) + "/" + database + ClickHouseUtils.JDBC_ARGS, host))
         return jdbc_strings
 
-    def execute(self, sql):
-        logger.debug(self.host + ",sql=" + sql)
-        return self.client.execute(sql)
+    def execute(self, sql, values=None):
+        if values:
+            logger.debug(self.host + ",sql=" + sql + ",values ...")
+            return self.client.execute(sql, values)
+        else:
+            logger.debug(self.host + ",sql=" + sql)
+            return self.client.execute(sql)
 
-    def sqlgateway_execute(self, sql, data_key="result"):
+    def sqlgateway_execute(self, sql, is_calcite_parse=False):
         logger.debug("sqlgateway, sql=" + sql)
-        return self.sql_instance.execute(sql, data_key)
+        return self.sql_instance.sql(sql=sql, is_calcite_parse=is_calcite_parse, is_dataframe=False)
 
     def execute_with_progress(self, sql):
         progress = self.client.execute_with_progress(sql)
@@ -182,6 +186,21 @@ class ClickHouseUtils(object):
 
     def csv_2_clickhouse(self, csv_file_abs_path, clickhouse_table_name, columns,
                          clickhouse_database_name=None, is_auto_create=True):
+        if not columns:
+            #类型推断
+            import pandas as pd
+            df = pd.read_csv(csv_file_abs_path)
+            columns = dict()
+            for column_name, column_type in df.dtypes.to_dict().items():
+                if 'Unnamed: 0' == column_name:
+                    column_name = "id"
+                if "int" in column_type.name:
+                    columns[column_name] = int
+                elif "float" in column_type.name:
+                    columns[column_name] = float
+                else:
+                    columns[column_name] = str
+            logger.debug(columns)
         if not clickhouse_database_name:
             clickhouse_database_name = self.DEFAULT_DATABASE
         def iter_csv(filename):
@@ -190,6 +209,8 @@ class ClickHouseUtils(object):
                 for line in reader:
                     res = dict()
                     for k, v in line.items():
+                        if not k:
+                            k = "id"
                         if k in columns:
                             value = columns[k](v)
                         else:
@@ -210,7 +231,7 @@ class ClickHouseUtils(object):
             self.create_table(clickhouse_table_name, sql_statement, type="memory",
                               database_name=clickhouse_database_name)
         self.execute('INSERT INTO ' + clickhouse_database_name + '.' + clickhouse_table_name + ' VALUES',
-                            iter_csv(csv_file_abs_path))
+                     iter_csv(csv_file_abs_path))
         self.close()
 
     def clickhouse_2_csv(self, clickhouse_table_name, csv_file_abs_path, clickhouse_database_name=None):
@@ -228,6 +249,7 @@ class ClickHouseUtils(object):
 
     def create_table(self, table_name, col_statement, type="local", format="ORC", location=None, cluster=None,
                      partition_column=None, primary_column=None, database_name=None):
+        timestamp_start = _perf_counter()
         if not database_name:
             database_name = self.DEFAULT_DATABASE
         if partition_column:
@@ -288,7 +310,8 @@ class ClickHouseUtils(object):
             self.execute(sql)
         else:
             raise Exception("type value exception")
-        logger.debug("create table done")
+        timestamp_end = _perf_counter()
+        logger.debug("create table done, " + 'time cost: %s Seconds' % (timestamp_end - timestamp_start))
 
     def insert_table(self, clickhouse_table_name, external_table_name, col_name_statement, col_if_statement):
         start = time.perf_counter()
@@ -466,14 +489,16 @@ class ClickHouseUtils(object):
 
     # select from distribute table
     @classmethod
-    def clickhouse_2_dataframe(self, spark, clickhouse_table_name, partition_num, clickhouse_database_name=None):
+    def clickhouse_2_dataframe(self, spark, clickhouse_table_name, partition_num, clickhouse_database_name=None, batch_size=100000):
         predicates = list()
+        clickhouse_utils = ClickHouseUtils()
         if not clickhouse_database_name:
-            clickhouse_database_name = self.DEFAULT_DATABASE
-        clickhouse_utils = ClickHouseUtils(rand=True)
+            clickhouse_database_name = clickhouse_utils.DEFAULT_DATABASE
         num = clickhouse_utils.table_rows(clickhouse_table_name, clickhouse_database_name)
         logger.debug("clickhouse table count=" + str(num))
-        if num > ClickHouseUtils.MAX_ROWS:
+        if num == 0:
+            raise Exception("clickhouse table rows is empty")
+        elif num > ClickHouseUtils.MAX_ROWS:
             raise Exception("clickhouse table rows num too big, >" + str(ClickHouseUtils.MAX_ROWS) + " not support")
         step = math.floor(num / partition_num + 1)
         logger.debug("step=" + str(step))
@@ -483,7 +508,7 @@ class ClickHouseUtils(object):
             "1 = 1 limit " + str(step * (partition_num - 1)) + ", " + str(num - step * (partition_num - 1)))
         logger.debug("predicates=" + str(predicates))
         clickhouse_utils.close()
-        return spark.read.jdbc(url=ClickHouseUtils.get_jdbc_connect_string(clickhouse_database_name),
+        return spark.read.option("batch_size", batch_size).jdbc(url=ClickHouseUtils.get_jdbc_connect_string(clickhouse_database_name),
                                table=clickhouse_table_name, predicates=predicates,
                                properties=ClickHouseUtils.get_jdbc_properties())
 
@@ -519,78 +544,99 @@ class ClickHouseUtils(object):
         global_clickhouse_utils.close()
         return dataframe
 
-    def __materialize_table(self, clickhouse_utils, select_sql, select_sql_example, sql_table_name, database, clickhouse_view_name,
-                            bucket_column):
+    def __materialize_table(self, clickhouse_utils, select_sql, sql_table_name, database, clickhouse_view_name,
+                            primary_column, is_use_local):
         logger.debug("materialize view doing")
-        select_sql = select_sql.replace(sql_table_name, database + "." + sql_table_name + "_local")
-        if self.CLUSTER:
-            sql = "CREATE TABLE " + database + "." + clickhouse_view_name + "_local on cluster " + self.CLUSTER \
-                  + " ENGINE = MergeTree ORDER BY " + bucket_column + " AS " + select_sql
-            logger.debug("insert table running")
-            logger.debug(sql)
-            start = time.perf_counter()
-            clickhouse_utils.execute(sql)
-            end = time.perf_counter()
-            logger.debug("insert table done" + 'time cost: ' + str(end - start) + ' Seconds')
-        if self.CLUSTER:
-            sql = "DROP VIEW if exists " + database + "." + clickhouse_view_name + " on cluster " + self.CLUSTER
+        if is_use_local:
+            clickhouse_view_name_real = clickhouse_view_name + "_local"
+            select_sql = select_sql.replace(sql_table_name, sql_table_name + "_local")
         else:
-            sql = "DROP VIEW if exists " + database + "." + clickhouse_view_name
-        logger.debug(sql)
-        clickhouse_utils.execute(sql)
-        if self.CLUSTER:
-            sql = "CREATE TABLE " + database + "." + clickhouse_view_name + " on cluster " + self.CLUSTER \
-                  + " as " + database + "." + clickhouse_view_name + "_local" \
-                  + " ENGINE = Distributed(" + self.CLUSTER + ", " + database + ", " + clickhouse_view_name \
-                  + "_local" + ", rand())"
-        else:
-            select_sql = clickhouse_utils.sqlgateway_execute(select_sql_example, data_key="executeSql")
-            select_sql = select_sql[:select_sql.__len__() - " LIMIT 100".__len__()]
-            sql = "CREATE TABLE " + database + "." + clickhouse_view_name \
-                  + " ENGINE = MergeTree ORDER BY " + bucket_column + " AS " + select_sql
-        clickhouse_utils.execute(sql)
-        logger.debug(sql)
-        logger.debug("materialize view done")
+            clickhouse_view_name_real = clickhouse_view_name
+        if sql_table_name:
+            select_sql = select_sql.replace(sql_table_name, database + "." + sql_table_name)
 
+        calcite_select_sql = clickhouse_utils.sqlgateway_execute(select_sql, is_calcite_parse=True)
+        if "error message" in calcite_select_sql:
+            raise Exception("sql execute or sqlparse is error, please check, info:" + calcite_select_sql)
+
+        if is_use_local and self.CLUSTER:
+            sql = "CREATE TABLE " + clickhouse_view_name_real + " on cluster " + self.CLUSTER \
+                  + " ENGINE = MergeTree ORDER BY " + primary_column + " AS " + calcite_select_sql
+        else:
+            sql = "CREATE TABLE " + clickhouse_view_name_real \
+                  + " ENGINE = MergeTree ORDER BY " + primary_column + " AS " + calcite_select_sql
+        logger.debug("insert table running")
+        logger.debug(sql)
+        start = time.perf_counter()
+        clickhouse_utils.execute(sql)
+        end = time.perf_counter()
+        logger.debug("insert table done" + 'time cost: ' + str(end - start) + ' Seconds')
+
+        if is_use_local:
+            if self.CLUSTER:
+                sql = "DROP VIEW if exists " + clickhouse_view_name + " on cluster " + self.CLUSTER
+            else:
+                sql = "DROP VIEW if exists " + clickhouse_view_name
+            logger.debug(sql)
+            clickhouse_utils.execute(sql)
+            if self.CLUSTER:
+                sql = "CREATE TABLE " + clickhouse_view_name + " on cluster " + self.CLUSTER \
+                      + " as " + clickhouse_view_name + "_local" \
+                      + " ENGINE = Distributed(" + self.CLUSTER + ", " + database + ", " + clickhouse_view_name \
+                      + "_local" + ", rand())"
+                clickhouse_utils.execute(sql)
+                logger.debug(sql)
+                logger.debug("materialize view done")
+
+
+    """
+    primary_column 是clickhouse MergeTree表引擎用户排序的列，在该列实现跳数索引，查询频率大的列建议放在前面做索引
+    is_force_materialize 是否强制将视图物化为物理表, 会执行计算落表
+    is_sql_complete sql_statement字段是否提供的是完整的sql声明
+    is_use_local 是否要转化为本地表的方式执行
+    """
     @classmethod
     def create_view(self, clickhouse_view_name, sql_statement, sql_table_name=None, sql_where=None, sql_group_by=None,
-                    sql_limit=None,
-                    bucket_column="uin", is_force_materialize=False, database=None, is_sql_complete=False):
-        if sql_limit:
-            sql_limit = " LIMIT " + str(sql_limit)
-        else:
-            sql_limit = ""
-        if sql_where:
-            sql_where = " WHERE " + sql_where
-        else:
-            sql_where = ""
-        if sql_group_by:
-            sql_group_by = " GROUP BY " + sql_group_by
-        else:
-            sql_group_by = ""
-        select_sql = " SELECT " + sql_statement + " FROM " + sql_table_name + " \n" + sql_where + sql_group_by \
-                     + sql_limit
-        if is_sql_complete == True:
+                    sql_limit=None, primary_column="tuple()", database=None, is_force_materialize=False, is_sql_complete=False, is_use_local=True):
+        clickhouse_utils = ClickHouseUtils()
+        if not database:
+            database = clickhouse_utils.DEFAULT_DATABASE
+        if is_sql_complete:
             select_sql = sql_statement
+        else:
+            if sql_limit:
+                sql_limit = " LIMIT " + str(sql_limit)
+            else:
+                sql_limit = ""
+            if sql_where:
+                sql_where = " WHERE " + sql_where
+            else:
+                sql_where = ""
+            if sql_group_by:
+                sql_group_by = " GROUP BY " + sql_group_by
+            else:
+                sql_group_by = ""
+            select_sql = " SELECT " + sql_statement + " FROM " + sql_table_name + " \n" + sql_where + sql_group_by + sql_limit
+        select_sql = select_sql.replace('{database}', database)
         logger.debug("raw sql = \n" + select_sql)
-        if "LIMIT" not in sql_limit:
+        if sql_limit and "LIMIT" not in sql_limit.upper():
             select_sql_example = select_sql + " LIMIT 100"
         else:
             select_sql_example = select_sql
 
-        clickhouse_utils = ClickHouseUtils()
+        # 判断sql语句是否有效,可执行
         try:
             logger.debug("check sql whether valid, now...")
-            clickhouse_utils.sqlgateway_execute(select_sql_example)
+            sqlgateway_res = clickhouse_utils.sqlgateway_execute(select_sql_example)
+            if "error message" in sqlgateway_res:
+                raise Exception("sql execute or sqlparse is error, please check, info:" + sqlgateway_res)
         except Exception:
             clickhouse_utils.close()
-            raise Exception("sql is error, please check")
+            raise Exception("sql execute or sqlparse is error, please check")
 
-        if not database:
-            database = clickhouse_utils.DEFAULT_DATABASE
         if is_force_materialize:
-            clickhouse_utils.__materialize_table(clickhouse_utils, select_sql, select_sql_example, sql_table_name, database,
-                                                 clickhouse_view_name, bucket_column)
+            clickhouse_utils.__materialize_table(clickhouse_utils, select_sql, sql_table_name, database,
+                                                 clickhouse_view_name, primary_column, is_use_local)
         else:
             if clickhouse_utils.CLUSTER:
                 sql = "CREATE VIEW " + database + "." + clickhouse_view_name + " on cluster " + clickhouse_utils.CLUSTER \
@@ -602,12 +648,14 @@ class ClickHouseUtils(object):
             for i in clickhouse_utils.execute('DESC ' + database + '.' + clickhouse_view_name):
                 fields.append(i[0])
             logger.debug("view table fields =" + str(fields))
-            if bucket_column in fields:
-                rows_number = clickhouse_utils.table_rows(clickhouse_view_name, database=database)
-                logger.debug("view rows number is " + str(rows_number))
-                if rows_number < ClickHouseUtils.MAX_VIEW_MATERIALIZE_ROWS:
-                    clickhouse_utils.__materialize_table(clickhouse_utils, select_sql, select_sql_example, sql_table_name, database,
-                                                         clickhouse_view_name, bucket_column)
+            if primary_column != 'tuple()' and primary_column not in fields:
+                raise Exception("primary_column set not valid")
+            rows_number = clickhouse_utils.table_rows(clickhouse_view_name, database=database)
+            logger.debug("view rows number is " + str(rows_number))
+            if rows_number < ClickHouseUtils.MAX_VIEW_MATERIALIZE_ROWS:
+                clickhouse_utils.execute("DROP VIEW " + database + "." + clickhouse_view_name)
+                clickhouse_utils.__materialize_table(clickhouse_utils, select_sql, sql_table_name, database,
+                                                     clickhouse_view_name, primary_column, is_use_local)
             logger.debug("create view success")
         clickhouse_utils.close()
 

@@ -125,6 +125,7 @@ import org.apache.calcite.sql.olap.Ttest1SampParser;
 import org.apache.calcite.sql.olap.Ttest2SampParser;
 import org.apache.calcite.sql.olap.XexptTtest2SampParser;
 import org.apache.calcite.sql.olap.DIDParser;
+import org.apache.calcite.sql.olap.RecursiveForcasting;
 import org.apache.calcite.sql.olap.LiftParser;
 import org.apache.calcite.sql.olap.LinearDMLParser;
 import org.apache.calcite.sql.olap.NonParamDMLParser;
@@ -1977,7 +1978,8 @@ void AddSelectItem(List<SqlNode> list) :
 SqlNode DeltaMethod() :
 {
     SqlParserPos pos;
-    HashMap<String, String> map = new HashMap<String, String>();
+    ArrayList<String> map = new ArrayList<String>();
+
     String func;
 }
 {
@@ -1991,23 +1993,45 @@ SqlNode DeltaMethod() :
     }
 }
 
+String ExpressionWithOutPlus() :
+{
+    String res;
+}
+{
+    {
+        res = Expression3(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+
+    (
+        <STAR> {
+            res = res + "*" + Expression3(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+        |
+        <SLASH> {
+            res = res + "/" + Expression3(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+    )*
+    { return res; }
+}
+
 SqlNode Ols() :
 {
     SqlParserPos pos;
-    ArrayList<SqlNode> args = new ArrayList<SqlNode>();
+    ArrayList<String> args = new ArrayList<String>();
     ArrayList<SqlNode> params = new ArrayList<SqlNode>();
 }
 {
     <LPAREN> {
         pos = getPos();
-        args.add(Expression3(ExprContext.ACCEPT_SUB_QUERY));
+        args.add(Expression3(ExprContext.ACCEPT_SUB_QUERY).toString());
     }
     <WAVY> {
-        args.add(Expression3(ExprContext.ACCEPT_SUB_QUERY));
+        args.add(ExpressionWithOutPlus().toString());
     }
     (
-        <PLUS>
-            {args.add(Expression3(ExprContext.ACCEPT_SUB_QUERY));}
+        <PLUS> {
+            args.add(ExpressionWithOutPlus());
+        }
     )*
     (
         <COMMA>
@@ -2071,12 +2095,14 @@ SqlNode Wls() :
 SqlNode Ttest1Samp() :
 {
     SqlParserPos pos;
-    HashMap<String, String> map = new HashMap<String, String>();
+    //HashMap<String, String> map = new HashMap<String, String>();
+    ArrayList<String> map = new ArrayList<String>();
     String func = "";
     String altertive = "two-sided";
     String mu = "0";
     String func_cuped = "";
-    HashMap<String, String> map_cuped = new HashMap<String, String>();
+    //HashMap<String, String> map_cuped = new HashMap<String, String>();
+    ArrayList<String> map_cuped = new ArrayList<String>();
 }
 {
     <LPAREN> {
@@ -2106,12 +2132,15 @@ SqlNode Ttest1Samp() :
 SqlNode Ttest2Samp() :
 {
     SqlParserPos pos;
-    HashMap<String, String> map = new HashMap<String, String>();
+    //HashMap<String, String> map = new HashMap<String, String>();
+    ArrayList<String> map = new ArrayList<String>();
     String func = "";
     String altertive = "two-sided";
     String index = "0";
     String func_cuped = "";
-    HashMap<String, String> map_cuped = new HashMap<String, String>();
+    //HashMap<String, String> map_cuped = new HashMap<String, String>();
+    ArrayList<String> map_cuped = new ArrayList<String>();
+    ArrayList<String> pses = new ArrayList<String>();
 }
 {
     <LPAREN> {
@@ -2127,14 +2156,27 @@ SqlNode Ttest2Samp() :
             altertive = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
         }
     )?
+
     (
         <COMMA> {
-            func_cuped = AvgFuncParser(map_cuped);
         }
-    )?
+        (
+        func_cuped = AvgFuncParser(map_cuped)
+    |
+        <PSE><EQ>
+        {
+            pses.add(Expression3(ExprContext.ACCEPT_SUB_QUERY).toString());
+        }
+        (
+            <PLUS>
+                {pses.add(Expression3(ExprContext.ACCEPT_SUB_QUERY).toString());}
+        )*
+        )
+    )*
+
     <RPAREN>
     {
-        return new Ttest2SampParser(getPos(), map, func, index, altertive, map_cuped, func_cuped);
+        return new Ttest2SampParser(getPos(), map, func, index, altertive, map_cuped, func_cuped, pses);
     }
 }
 
@@ -2168,7 +2210,7 @@ SqlNode XexptTtest2Samp():
     String numerator = "";
     String denominator = "";
     String uin = "";
-    HashMap<String, String> map_cuped = new HashMap<String, String>();
+    ArrayList<String> map_cuped = new ArrayList<String>();
     String func_cuped = "";
     ArrayList<String> args = new ArrayList<String>();
     SqlNode e;
@@ -2455,6 +2497,92 @@ SqlNode IvRegression() :
     }
 }
 
+SqlNode RecursiveForcasting() :
+{
+    ArrayList<String> surrogate = new ArrayList<String>();
+    ArrayList<ArrayList<String>> surrogates = new ArrayList<ArrayList<String>>();
+    String formula;
+    String predict;
+    String y;
+    String group;
+    String model;
+    String bs_param;
+    String sample_num;
+    String bs_num;
+}
+{
+    <LPAREN> <LBRACKET> {
+    }
+
+    (
+        <LPAREN> {
+            surrogate.add(Expression(ExprContext.ACCEPT_SUB_QUERY).toString());
+        }
+        (
+            <COMMA> {
+                surrogate.add(Expression(ExprContext.ACCEPT_SUB_QUERY).toString());
+            }
+        )*
+        <RPAREN> {
+          surrogates.add(surrogate);
+          surrogate = new ArrayList<String>();
+        }
+    )
+
+    (
+        <COMMA><LPAREN> {
+            surrogate.add(Expression(ExprContext.ACCEPT_SUB_QUERY).toString());
+        }
+        (
+            <COMMA> {
+                surrogate.add(Expression(ExprContext.ACCEPT_SUB_QUERY).toString());
+            }
+        )*
+        <RPAREN> {
+            surrogates.add(surrogate);
+            surrogate = new ArrayList<String>();
+        }
+    )+
+
+
+    <RBRACKET> <COMMA> {
+        formula = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+
+    <WAVY> {
+        formula += "+" + Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+
+    <COMMA> {
+        predict = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+
+    <COMMA> {
+        y = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+
+    <COMMA> {
+        group = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+
+    <COMMA> {
+        model = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    <COMMA> {
+        bs_param = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    <COMMA> {
+        sample_num = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    <COMMA> {
+        bs_num = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+
+    <RPAREN> {
+        return new RecursiveForcasting(getPos(), surrogates, formula, predict, y, group, model, bs_param, sample_num, bs_num);
+    }
+}
+
 SqlNode SelectCausalFunction() :
 {
     SqlNode e;
@@ -2468,6 +2596,8 @@ SqlNode SelectCausalFunction() :
     e = Ols()
 |   <IVREGRESSION>
     e = IvRegression()
+|   <RECURSIVEFORCASTING>
+    e = RecursiveForcasting()
 /*
 |   <OLSSTATE>
     e = OlsState()
@@ -2517,16 +2647,18 @@ SqlNode SelectExpression() :
         return SqlIdentifier.star(getPos());
     }
 |
+/*
     e = SelectCausalFunction() {
        return e;
     }
 |
+ */
     e = Expression(ExprContext.ACCEPT_SUB_QUERY) {
         return e;
     }
 }
 
-String AvgFuncParser_Avg(HashMap<String, String> map ) :
+String AvgFuncParser_Avg(ArrayList<String> map ) :
 {
   String res;
   String id;
@@ -2534,16 +2666,15 @@ String AvgFuncParser_Avg(HashMap<String, String> map ) :
 {
   <AVG> <LPAREN> {
     id = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
-    if (!map.containsKey(id))
-      map.put(id, String.valueOf(map.size()+1));
-    res = "x" + map.get(id);
+    map.add(id);
+    res = "x" + String.valueOf(map.size());
   }
   <RPAREN> {
     return res;
   }
 }
 
-String AvgFuncParser(HashMap<String, String> map ) :
+String AvgFuncParser(ArrayList<String> map) :
 {
   String tmp, tmpOp;
 }
@@ -4444,6 +4575,10 @@ SqlNode Expression3(ExprContext exprContext) :
     final Span rowSpan;
 }
 {
+    e = SelectCausalFunction() {
+       return e;
+    }
+|
     LOOKAHEAD(2)
     e = AtomicRowExpression()
     {
@@ -8352,9 +8487,11 @@ SqlBinaryOperator BinaryRowOperator() :
 |   <STAR> { return SqlStdOperatorTable.MULTIPLY; }
 |   <SLASH> { return SqlStdOperatorTable.DIVIDE; }
 |   <PERCENT_REMAINDER> {
+        /*
         if (!this.conformance.isPercentRemainderAllowed()) {
             throw SqlUtil.newContextException(getPos(), RESOURCE.percentRemainderNotAllowed());
         }
+        */
         return SqlStdOperatorTable.PERCENT_REMAINDER;
     }
 |   <CONCAT> { return SqlStdOperatorTable.CONCAT; }
@@ -9154,10 +9291,12 @@ SqlPostfixOperator PostfixRowOperator() :
 |   < ZONE: "ZONE" >
 |   < OLS: "ols" >
 |   < IVREGRESSION: "ivRegression" >
+|   < PSE: "pse" >
 //|   < OLSSTATE: "olsState" >
 |   < PREDICT: "predict" >
 |   < WLS: "wls" >
 |   < DELTAMETHOD: "deltamethod" >
+|   < RECURSIVEFORCASTING: "recursiveforcasting" >
 |   < TTEST_1SAMP: "ttest_1samp" >
 |   < TTEST_2SAMP: "ttest_2samp" >
 |   < XEXPT_TTEST_2SAMP: "xexpt_ttest_2samp" >

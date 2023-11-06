@@ -20,24 +20,23 @@ class LiftGainCurveResult:
 
 def get_lift_gain(ITE, Y, T, table, discrete_treatment=False, K=1000):
     sql = "select lift(" + str(ITE) + "," + str(Y) + "," + str(T) + "," + str(K) + "," + str(
-        discrete_treatment).lower() + ") from " + str(table)
-    sql_instance = AllInSqlConn()
+        discrete_treatment).lower() + ") from " + str(table) + ' limit 100000'
+    print(sql)
+    sql_instance = create_sql_instance()
     result = sql_instance.sql(sql)
     if discrete_treatment == False:
-        result = [row[:1] + row[3:] for row in result]
+        result = result[['ratio', 'lift', 'gain', 'ate', 'ramdom_gain']]
     return LiftGainCurveResult(result)
 
-
 def hte_plot(results, labels=[]):
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, sharex=True, figsize=(12, 4.8))
     if len(labels) == 0:
         labels = [f'model_{i + 1}' for i in range(len(results))]
 
-    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, sharex=True, figsize=(12, 4.8))
     for i in range(len(results)):
         result = results[i].get_result()
         result = result.replace('nan', np.nan)
-        result['ate'] = result['ate'].astype(float)
-        result['ramdom_gain'] = result['ramdom_gain'].astype(float)
+        result = result.astype(float)
         result = result.dropna()
         ax1.plot(result['ratio'], result['lift'], label=labels[i])
         ax2.plot([0] + list(result['ratio']), [0] + list(result['gain']), label=labels[i])
@@ -49,3 +48,6 @@ def hte_plot(results, labels=[]):
     ax2.legend()
     fig.suptitle('Lift and Gain Curves')
     plt.show()
+
+
+
