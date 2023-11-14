@@ -28,7 +28,6 @@ init_dir() {
     mkdir -p jupyter
     if [ -f "examples/demo.ipynb" ]; then
       cp examples/demo.ipynb jupyter/
-      chmod u-w jupyter/demo.ipynb
     fi
     if [ ! -d "jupyter/.jupyter" ]; then
       mkdir -p jupyter/.jupyter
