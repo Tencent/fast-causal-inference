@@ -1,6 +1,10 @@
 server:
   port: 9099
   address: 0.0.0.0
+  tomcat:
+    threads:
+      max: 800         # Maximum number of worker threads, default 200
+      min-spare: 100     # Minimum number of idle worker threads, default 10
 
 spring:
   datasource:
@@ -10,6 +14,14 @@ spring:
       password: allinsql666
       jdbc-url: jdbc:mysql://172.22.0.2:3306/mmexptdataplatform?characterEncoding=utf-8
       driver-class-name: com.mysql.cj.jdbc.Driver
+      # hikari 数据库连接池配置
+      type: com.zaxxer.hikari.HikariDataSource
+      pool-name: SqlGateway-MysqlHiKariPool
+      minimum-idle: 10 # 最小空闲连接，默认值10
+      maximum-pool-size: 200 # 最大连接数，默认值10
+      idle-timeout: 500000 # 池中空闲连接超时时间, 默认值600000(10分钟), 大于等于max-lifetime且max-lifetime>0, 会被重置为0
+      max-lifetime: 540000 # 池中连接最大存活时间, 不等于0且小于30秒, 会被重置为默认值30分钟.设置应该比mysql设置的超时时间短
+      connection-timeout: 60000 # 连接超时时间, 默认值30000毫秒(5分钟)
     clickhouse:
       username: default
       password: allinsql666

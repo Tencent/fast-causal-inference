@@ -64,7 +64,7 @@ public class NonParamDMLParser extends SqlCallCausal {
   +
       "    )\n"
   +
-      "  ) as weight_sum";
+      "  ) as weight_sum_nullable";
 
   static String with_template_final_model = " (\n"
   +
@@ -78,7 +78,7 @@ public class NonParamDMLParser extends SqlCallCausal {
   +
       "  ) as final_model";
 
-  static String with_each_union_with_weight = "SELECT *, @PH_T - evalMLMethod(mm_models.2.@PH_INDEX_1 @PH_X @PH_W) as mm_t, @PH_Y - evalMLMethod(mm_models.1.@PH_INDEX_1 @PH_X @PH_W) as mm_y, sqrt(mm_t * mm_t * mm_models.3 / weight_sum) as sqrt_weight from @TBL where rowNumberInAllBlocks()%@PH_CV = @PH_INDEX\n";
+  static String with_each_union_with_weight = "SELECT Cast(weight_sum_nullable as Float64) as weight_sum, *, @PH_T - evalMLMethod(mm_models.2.@PH_INDEX_1 @PH_X @PH_W) as mm_t, @PH_Y - evalMLMethod(mm_models.1.@PH_INDEX_1 @PH_X @PH_W) as mm_y, sqrt(mm_t * mm_t * mm_models.3 / weight_sum) as sqrt_weight from @TBL where rowNumberInAllBlocks()%@PH_CV = @PH_INDEX\n";
 
   static String with_each_union = "SELECT *, @PH_T - evalMLMethod(mm_models.2.@PH_INDEX_1 @PH_X @PH_W) as mm_t, @PH_Y - evalMLMethod(mm_models.1.@PH_INDEX_1 @PH_X @PH_W) as mm_y from @TBL where rowNumberInAllBlocks()%@PH_CV = @PH_INDEX\n";
 

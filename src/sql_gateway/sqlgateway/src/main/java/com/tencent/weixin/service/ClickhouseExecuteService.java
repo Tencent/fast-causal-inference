@@ -39,10 +39,6 @@ public class ClickhouseExecuteService {
     
     public String sqlPretreatment(String executeSql) {
         logger.info("sql pretreatment raw executeSql:" + executeSql);
-//        executeSql = StringEscapeUtils.escapeSql(executeSql);
-        if (executeSql.trim().toUpperCase().startsWith("SELECT") && !executeSql.toUpperCase().contains("LIMIT")) {
-            executeSql = executeSql + " limit 200";
-        }
         if (executeSql.toUpperCase().contains("DROP") && !executeSql.toUpperCase().contains("DELETE")) {
             throw new RuntimeException("sql not can exists drop/delete");
         }
@@ -58,7 +54,7 @@ public class ClickhouseExecuteService {
         try {
             connection = clickhouseUtil.getClickHouseConnection(database, deviceId, launcherIp);
             st = connection.createStatement();
-            rst = st.executeQuery(executeSql);
+            rst = st.executeQuery("SET max_result_rows = 1000, result_overflow_mode = 'break', distributed_ddl_task_timeout = 1800, max_execution_time = 1800; " + executeSql);
             if (isDataFrameOutput != null && isDataFrameOutput) {
                 return clickhouseUtil.resultSetToJsonDataFrame(rst);
             } else {

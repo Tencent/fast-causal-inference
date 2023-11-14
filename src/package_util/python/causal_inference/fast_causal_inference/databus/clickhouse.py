@@ -54,6 +54,8 @@ class ClickHouseUtils(object):
         self.client = Client(host=self.host, port=self.DEFAULT_PORT,
                              database=database, user=self.DEFAULT_USER,
                              password=self.DEFAULT_PASSWORD, settings=settings)
+        self.client.execute("set distributed_ddl_task_timeout = 1800")
+        self.client.execute("set max_execution_time = 1800")
         if self.CLUSTER:
             self.cluster_hosts = self.system_clusters(self.CLUSTER)
             self.cluster_hosts_len = self.cluster_hosts.__len__()
@@ -547,7 +549,7 @@ class ClickHouseUtils(object):
     def __materialize_table(self, clickhouse_utils, select_sql, sql_table_name, database, clickhouse_view_name,
                             primary_column, is_use_local):
         logger.debug("materialize view doing")
-        if is_use_local:
+        if is_use_local and self.CLUSTER:
             clickhouse_view_name_real = clickhouse_view_name + "_local"
             select_sql = select_sql.replace(sql_table_name, sql_table_name + "_local")
         else:
@@ -572,21 +574,17 @@ class ClickHouseUtils(object):
         end = time.perf_counter()
         logger.debug("insert table done" + 'time cost: ' + str(end - start) + ' Seconds')
 
-        if is_use_local:
-            if self.CLUSTER:
-                sql = "DROP VIEW if exists " + clickhouse_view_name + " on cluster " + self.CLUSTER
-            else:
-                sql = "DROP VIEW if exists " + clickhouse_view_name
+        if is_use_local and self.CLUSTER:
+            sql = "DROP VIEW if exists " + clickhouse_view_name + " on cluster " + self.CLUSTER
             logger.debug(sql)
             clickhouse_utils.execute(sql)
-            if self.CLUSTER:
-                sql = "CREATE TABLE " + clickhouse_view_name + " on cluster " + self.CLUSTER \
-                      + " as " + clickhouse_view_name + "_local" \
-                      + " ENGINE = Distributed(" + self.CLUSTER + ", " + database + ", " + clickhouse_view_name \
-                      + "_local" + ", rand())"
-                clickhouse_utils.execute(sql)
-                logger.debug(sql)
-                logger.debug("materialize view done")
+            sql = "CREATE TABLE " + clickhouse_view_name + " on cluster " + self.CLUSTER \
+                  + " as " + clickhouse_view_name + "_local" \
+                  + " ENGINE = Distributed(" + self.CLUSTER + ", " + database + ", " + clickhouse_view_name \
+                  + "_local" + ", rand())"
+            clickhouse_utils.execute(sql)
+            logger.debug(sql)
+            logger.debug("materialize view done")
 
 
     """
@@ -619,20 +617,6 @@ class ClickHouseUtils(object):
             select_sql = " SELECT " + sql_statement + " FROM " + sql_table_name + " \n" + sql_where + sql_group_by + sql_limit
         select_sql = select_sql.replace('{database}', database)
         logger.debug("raw sql = \n" + select_sql)
-        if sql_limit and "LIMIT" not in sql_limit.upper():
-            select_sql_example = select_sql + " LIMIT 100"
-        else:
-            select_sql_example = select_sql
-
-        # 判断sql语句是否有效,可执行
-        try:
-            logger.debug("check sql whether valid, now...")
-            sqlgateway_res = clickhouse_utils.sqlgateway_execute(select_sql_example)
-            if "error message" in sqlgateway_res:
-                raise Exception("sql execute or sqlparse is error, please check, info:" + sqlgateway_res)
-        except Exception:
-            clickhouse_utils.close()
-            raise Exception("sql execute or sqlparse is error, please check")
 
         if is_force_materialize:
             clickhouse_utils.__materialize_table(clickhouse_utils, select_sql, sql_table_name, database,

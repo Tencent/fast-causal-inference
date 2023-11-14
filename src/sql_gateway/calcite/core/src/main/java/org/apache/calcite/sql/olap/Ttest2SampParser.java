@@ -46,8 +46,6 @@ public class Ttest2SampParser extends SqlCallCausal {
     this.index = index;
     this.altertive = altertive.replaceAll("'", "").replaceAll("\"", "");
     this.causal_function_name = "ttest_2samp";
-    System.out.println(map);
-    System.out.println(map_cuped);
     this.pses = pses;
   }
 

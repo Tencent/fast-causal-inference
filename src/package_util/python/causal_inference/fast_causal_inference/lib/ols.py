@@ -32,6 +32,7 @@ class Ols:
 
         if self.is_ols == False:
             return
+            
         tail = tail.replace("\n", "")
         tail = tail.replace("Residual standard error: ", "")
         tail = tail.replace("on ", "")
@@ -40,7 +41,9 @@ class Ols:
         tail = tail.replace("F-statistic:", "")
         tail = tail.replace(" and", "")
         tail = tail.replace(" DF,  p-value:", "")
+        tail = tail.replace("degrees of freedom  Multiple R-squared: ", "")
         tail_list = tail.split(" ")
+        tail_list = [item for item in tail_list if item is not None and item != '']
 
         self.standard_error = round(float(tail_list[0]), 6)
         self.df = int(tail_list[1])
@@ -107,3 +110,4 @@ class Ols:
         result += "cate_intercept" + "\t" + str(self.estimate[i]).ljust(ljust_len) + str(self.std_err[i]).ljust(
             ljust_len) + str(self.t_values[i]).ljust(ljust_len) + str(self.pr[i]).ljust(ljust_len) + "\n"
         return result
+

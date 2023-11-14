@@ -12,7 +12,8 @@ from sklearn.metrics import roc_auc_score, auc, roc_curve, precision_recall_curv
 from sklearn.model_selection import cross_val_predict, KFold
 from sklearn.model_selection import train_test_split
 from matplotlib import rcParams
-
+import warnings
+warnings.filterwarnings('ignore')
 
 
 
@@ -80,8 +81,8 @@ def check_column(table, col):
 def matching_plot(table,T,col):
     sql_instance = create_sql_instance()
     check_table(table)
-    x1 = sql_instance.sql(f"select {col} from {table} where {T}=1 limit 1000000")
-    x0 = sql_instance.sql(f"select {col} from {table} where {T}=0 limit 1000000")
+    x1 = sql_instance.sql(f"select {col} from {table} where {T}=1 limit 10000")
+    x0 = sql_instance.sql(f"select {col} from {table} where {T}=0 limit 10000")
     rcParams['figure.figsize'] = 8,8
     ax = sns.distplot(x0)
     sns.distplot(x1)
@@ -94,6 +95,7 @@ def matching_plot(table,T,col):
     
 
 def SMD(table,T,cols):
+    cols = list(set(cols))
     sql_instance = create_sql_instance()
     check_table(table)
     numerical_cols,string_cols = check_columns(table, cols)
@@ -155,15 +157,16 @@ def describe(table,cols='*'):
         cols = list(get_columns(table).keys())
     numerical_cols_all,string_cols = check_columns(table, cols)
     k = len(numerical_cols_all)
-    res_all = pd.DataFrame([],columns = ['count','std','min','quantile_0.25','quantile_0.5',
+    res_all = pd.DataFrame([],columns = ['count','avg','std','min','quantile_0.25','quantile_0.5',
                                                'quantile_0.75','quantile_0.90','quantile_0.99','max'])
     for i in range(k):
         numerical_cols = numerical_cols_all[i*10:min((i+1)*10,k)]
         if len(numerical_cols)==0:
             break
         sql_list = [f"""count({numerical_cols[i]}) as cnt_{i},
+                    avg({numerical_cols[i]}) as x{i}_avg, 
                     stddevSamp({numerical_cols[i]}) as x{i}_std,
-                    min({numerical_cols[i]}) as x{i}_min,         
+                    min({numerical_cols[i]}) as x{i}_min,                   
                     quantile(0.25)({numerical_cols[i]}) as x{i}_25_quantile,
                     quantile(0.50)({numerical_cols[i]}) as x{i}_50_quantile,
                     quantile(0.75)({numerical_cols[i]}) as x{i}_75_quantile,
@@ -171,7 +174,7 @@ def describe(table,cols='*'):
                     quantile(0.99)({numerical_cols[i]}) as x{i}_99_quantile,
                     max({numerical_cols[i]}) as x{i}_max""" for i in range(len(numerical_cols))]
         result = sql_instance.sql(f'''select {','.join(sql_list)}  from {table}''').astype(float).values[0]
-        res2 = pd.DataFrame(result.reshape(-1,9),columns=['count','std','min','quantile_0.25','quantile_0.5',
+        res2 = pd.DataFrame(result.reshape(-1,10),columns=['count','avg','std','min','quantile_0.25','quantile_0.5',
                                                'quantile_0.75','quantile_0.90','quantile_0.99','max'])
         # res = pd.concat([res1,res2],axis=1)
         res = res2

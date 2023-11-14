@@ -60,6 +60,16 @@ public class SqlForward {
     String parse_sql = sql.replaceAll("==", "=");
     parse_sql = sql.replaceAll("treat", "treat_to_solve_treat_occupied_by_the_system");
 
+    if (parse_sql.contains("predict")) {
+      // 对于 predict 函数，需要添加 State 后缀表示为聚合函数中间状态
+      parse_sql = parse_sql.replaceAll("ols\\(", "OlsState\\(").replaceAll("~", "+");
+      // 对于带有置信区间的 predict， 需改为 OlsIntervalState 算子
+      if (parse_sql.contains("confidence") || parse_sql.contains("prediction")) {
+        System.out.println("confidence!");
+        parse_sql = parse_sql.replaceAll("OlsState", "OlsIntervalState");
+      }
+    }
+
     this.sql = sql;
     forwardUdfs = new ArrayList<String>();
     SqlParser parser = SqlParser.create(parse_sql, SqlParser.Config.DEFAULT
@@ -128,7 +138,6 @@ public class SqlForward {
       forwardSql += unparserSql;
     else
       forwardSql += replace_sql;
-    System.out.println("tablename:" + table_name);
     if (!table_name.equals(""))
       forwardSql = forwardSql.replace("@TBL", table_name);
 

@@ -35,6 +35,26 @@ public class SqlForwardTest {
         "SELECT Deltamethod('x1/x2+x3')(if(a, b, c),8,e / f)\n"
   +
             "FROM tBl");
+    sql = "SELECT\n" +
+        "    groupname,\n" +
+        "    count(*) as cnt, -- 样本量\n" +
+        "    avg(numerator)/avg(denominator) as mean, -- 指标均值\n" +
+        "    deltamethod(avg(numerator)/avg(denominator)) as std, -- 指标均值的标准差\n" +
+        "    deltamethod(avg(numerator)/avg(denominator)) * SQRT(sum(denominator)) AS " +
+        "sample_std\n" +
+        "FROM\n" +
+        "    tbl\n" +
+        "where\n" +
+        "        metric_id = 8371\n" +
+        "group by\n" +
+        "    groupname\n";
+    assertEquals(sqlForward(sql),
+        "SELECT groupname, COUNT(*) AS cnt, AVG(numerator) / AVG(denominator) AS mean, " +
+            "Deltamethod('x1/x2')(numerator,denominator) AS std, Deltamethod('x1/x2')(numerator," +
+            "denominator) * SQRT(SUM(denominator)) AS sample_std\n" +
+            "FROM tbl\n" +
+            "WHERE metric_id = 8371\n" +
+            "GROUP BY groupname");
   }
 
   @Test void testOls() throws SqlParseException {
@@ -96,11 +116,32 @@ public class SqlForwardTest {
             "SELECT evalMLMethod(model,x1,x2) AS res\n" +
             "FROM test_data_small\n" +
             "LIMIT 10");
-    System.out.println(sqlForward(sql));
+    sql = "SELECT\n" +
+        "    predict(ols(numerator~numerator_pre+psex), numerator_pre, psex) from " +
+        "tbl\n" +
+        "where\n" +
+        "    metric_id = 8371";
+    assertEquals(sqlForward(sql),
+        "with (select OlsState(numerator , numerator_pre , psex) from " +
+            "tbl) as model \n" +
+            "SELECT evalMLMethod(model,numerator_pre,psex)\n" +
+            "FROM tbl\n" +
+            "WHERE metric_id = 8371");
+    sql = "SELECT\n" +
+        "    predict(ols(numerator~numerator_pre+psex),'confidence',0.95,numerator_pre,psex) from" +
+        " tbl\n" +
+        "where\n" +
+        "    metric_id = 8371";
+    assertEquals(sqlForward(sql), "" +
+        "with (select OlsIntervalState(numerator , numerator_pre , psex) from " +
+        "tbl) as model \n" +
+        "SELECT evalMLMethod(model,'confidence',0.95,numerator_pre,psex)\n" +
+        "FROM tbl\n" +
+        "WHERE metric_id = 8371");
   }
 
   @Test void tmpTest() throws SqlParseException {
-     String sql = "select *,caliperMatching(if(treat=1,1,-1),propensity_score,0.01) AS matchingIndex from test_tmp_shichao_1102_1026_ios_observational_data where matchingIndex!=0";
+     String sql = "select corr(a, b) from tbl";
      //String sql = "select caliperMatching(if(groupname = 'A1', -1, 1), propensity_score, 0.01) as matchingIndex FROM test_tmp_shichao_1102_1026_ios_observational_data where matchingIndex!=0";
 
      System.out.println(sqlForward(sql));
@@ -241,6 +282,49 @@ public class SqlForwardTest {
             "FROM expt_detail_57360319_adamdeng_1697704507283\n" +
             "WHERE metric_id = 10223 AND groupname IN ('A1', 'A2', 'B19')\n" +
             "GROUP BY bucketsrc_hit, if(groupname = 'B19', 1, 0))");
+    sql = "select\n" +
+        "    ttest_2samp(avg(numerator)/avg(denominator),if(groupname='B2',1,0),'two-sided') as " +
+        "ttest_result\n" +
+        "FROM\n" +
+        "    tbl\n" +
+        "where\n" +
+        "        metric_id = 8371\n" +
+        "  and groupname in ('A1','A2','B2')";
+    assertEquals(sqlForward(sql),
+        "SELECT Ttest_2samp('x1/x2','two-sided')(numerator,denominator,if(groupname = 'B2', 1, 0)" +
+            ") AS ttest_result\n" +
+            "FROM tbl\n" +
+            "WHERE metric_id = 8371 AND groupname IN ('A1', 'A2', 'B2')");
+    sql = "select\n" +
+        "    ttest_2samp(avg(numerator)/avg(denominator),if(groupname='B2',1,0),'two-sided',avg" +
+        "(numerator_pre)/avg(denominator_pre)+avg(psex)) AS ttest_result\n" +
+        "FROM\n" +
+        "    tbl\n" +
+        "where\n" +
+        "        metric_id = 8371\n" +
+        "  and groupname in ('A1','A2','B2')";
+    assertEquals(sqlForward(sql),
+        "SELECT Ttest_2samp('x1/x2','two-sided','X=x3/x4+x5')(numerator,denominator," +
+            "numerator_pre,denominator_pre,psex,if(groupname = 'B2', 1, 0)) AS ttest_result\n" +
+            "FROM tbl\n" +
+            "WHERE metric_id = 8371 AND groupname IN ('A1', 'A2', 'B2')");
+    sql = "select\n" +
+        "    psex,\n" +
+        "    ttest_2samp(avg(numerator)/avg(denominator),if(groupname='B2',1,0),'two-sided') as " +
+        "ttest_result\n" +
+        "FROM\n" +
+        "    tbl\n" +
+        "where\n" +
+        "    metric_id = 8371\n" +
+        "    and groupname in ('A1','A2','B2')\n" +
+        "group by\n" +
+        "    psex";
+    assertEquals(sqlForward(sql),
+        "SELECT psex, Ttest_2samp('x1/x2','two-sided')(numerator,denominator,if(groupname = 'B2'," +
+            " 1, 0)) AS ttest_result\n" +
+            "FROM tbl\n" +
+            "WHERE metric_id = 8371 AND groupname IN ('A1', 'A2', 'B2')\n" +
+            "GROUP BY psex");
   }
 
   @Test void testDid() throws SqlParseException {
@@ -267,6 +351,32 @@ public class SqlForwardTest {
             "FROM tbl\n"
   +
             "WHERE aa = bb");
+    sql = "SELECT \n" +
+        "    xexpt_ttest_2samp(numerator, denominator, if(groupname = 'B2','B','A'), uin, 0.05, 0" +
+        ".005, 0.8) -- 0.05代表显著性水平， 0.005代表MDE，0.8代表power，三个参数可省略\n" +
+        "FROM\n" +
+        "    tbl\n" +
+        "where\n" +
+        "    metric_id = 8371\n" +
+        "    and groupname in ('A1','A2','B2')";
+    assertEquals(sqlForward(sql),
+        "SELECT Xexpt_Ttest_2samp(0.05,0.005,0.8)(numerator,denominator,uin,if(groupname = 'B2', " +
+            "'B', 'A'))\n" +
+            "FROM tbl\n" +
+            "WHERE metric_id = 8371 AND groupname IN ('A1', 'A2', 'B2')");
+    sql = "SELECT \n" +
+        "    xexpt_ttest_2samp(numerator, denominator, if(groupname = 'B2', 'B', 'A'), uin, avg" +
+        "(numerator_pre)/avg(denominator_pre), 0.05, 0.005, 0.8)\n" +
+        "FROM\n" +
+        "    tbl\n" +
+        "where\n" +
+        "    metric_id = 8371\n" +
+        "    and groupname in ('A1','A2','B2')";
+    assertEquals(sqlForward(sql),
+        "SELECT Xexpt_Ttest_2samp(0.05,0.005,0.8,'X=x3/x4')(numerator,denominator,numerator_pre," +
+            "denominator_pre,uin,if(groupname = 'B2', 'B', 'A'))\n" +
+            "FROM tbl\n" +
+            "WHERE metric_id = 8371 AND groupname IN ('A1', 'A2', 'B2')");
   }
 
   @Test void testNestedQuery() throws SqlParseException {
@@ -344,8 +454,70 @@ public class SqlForwardTest {
   }
 
   @Test void testNonParamDML() throws SqlParseException {
-    String sql = "select nonParamDML(y,treatment,x1+x2,x7_needcut,model_y='Ols',model_t='Ols',cv=2) from test_data_small";
+    String sql = "select nonParamDML(numerator,treatment,flast_used_device+modelclass+psex+page+fcity_level+fgrade+fans_level_int,model_y='Ols',model_t='Ols',cv=2) from test_data_small_load3";
     System.out.println(sqlForward(sql));
+    assertEquals(sqlForward(sql),
+        "with   (\n" +
+            "    SELECT\n" +
+            "    (\n" +
+            "     tuple(\n" +
+            "        OlsStateIf(toFloat64(numerator) ,flast_used_device,modelclass,psex,page," +
+            "fcity_level,fgrade,fans_level_int , rowNumberInAllBlocks()%2 != 0),\n" +
+            "OlsStateIf(toFloat64(numerator) ,flast_used_device,modelclass,psex,page,fcity_level," +
+            "fgrade,fans_level_int , rowNumberInAllBlocks()%2 != 1) \n" +
+            "\n" +
+            "),\n" +
+            "     tuple(\n" +
+            "        OlsStateIf(toFloat64(treatment) ,flast_used_device,modelclass,psex,page," +
+            "fcity_level,fgrade,fans_level_int , rowNumberInAllBlocks()%2 != 0),\n" +
+            "OlsStateIf(toFloat64(treatment) ,flast_used_device,modelclass,psex,page,fcity_level," +
+            "fgrade,fans_level_int , rowNumberInAllBlocks()%2 != 1) \n" +
+            "\n" +
+            "), \n" +
+            "     count()\n" +
+            "    )\n" +
+            "    FROM test_data_small_load3\n" +
+            "  ) as mm_models\n" +
+            ",\n" +
+            "  (\n" +
+            "   SELECT sum(mm_t * mm_t) from\n" +
+            "   (\n" +
+            "          SELECT *, treatment - evalMLMethod(mm_models.2.1 ,flast_used_device," +
+            "modelclass,psex,page,fcity_level,fgrade,fans_level_int ) as mm_t, numerator - " +
+            "evalMLMethod(mm_models.1.1 ,flast_used_device,modelclass,psex,page,fcity_level," +
+            "fgrade,fans_level_int ) as mm_y from test_data_small_load3 where " +
+            "rowNumberInAllBlocks()%2 = 0\n" +
+            " union all \n" +
+            " SELECT *, treatment - evalMLMethod(mm_models.2.2 ,flast_used_device,modelclass," +
+            "psex,page,fcity_level,fgrade,fans_level_int ) as mm_t, numerator - evalMLMethod" +
+            "(mm_models.1.2 ,flast_used_device,modelclass,psex,page,fcity_level,fgrade," +
+            "fans_level_int ) as mm_y from test_data_small_load3 where rowNumberInAllBlocks()%2 =" +
+            " 1\n" +
+            "\n" +
+            "    )\n" +
+            "  ) as weight_sum_nullable,\n" +
+            " (\n" +
+            "   SELECT Ols(false)(mm_y / mm_t * sqrt_weight ,flast_used_device*sqrt_weight," +
+            "modelclass*sqrt_weight,psex*sqrt_weight,page*sqrt_weight,fcity_level*sqrt_weight," +
+            "fgrade*sqrt_weight,fans_level_int*sqrt_weight, sqrt_weight) FROM \n" +
+            "   ( \n" +
+            "          SELECT Cast(weight_sum_nullable as Float64) as weight_sum, *, treatment - " +
+            "evalMLMethod(mm_models.2.1 ,flast_used_device,modelclass,psex,page,fcity_level," +
+            "fgrade,fans_level_int ) as mm_t, numerator - evalMLMethod(mm_models.1.1 ," +
+            "flast_used_device,modelclass,psex,page,fcity_level,fgrade,fans_level_int ) as mm_y, " +
+            "sqrt(mm_t * mm_t * mm_models.3 / weight_sum) as sqrt_weight from " +
+            "test_data_small_load3 where rowNumberInAllBlocks()%2 = 0\n" +
+            " union all \n" +
+            " SELECT Cast(weight_sum_nullable as Float64) as weight_sum, *, treatment - " +
+            "evalMLMethod(mm_models.2.2 ,flast_used_device,modelclass,psex,page,fcity_level," +
+            "fgrade,fans_level_int ) as mm_t, numerator - evalMLMethod(mm_models.1.2 ," +
+            "flast_used_device,modelclass,psex,page,fcity_level,fgrade,fans_level_int ) as mm_y, " +
+            "sqrt(mm_t * mm_t * mm_models.3 / weight_sum) as sqrt_weight from " +
+            "test_data_small_load3 where rowNumberInAllBlocks()%2 = 1\n" +
+            "\n" +
+            "    ) \n" +
+            "  ) as final_model \n" +
+            "select final_model");
   }
 
   @Test void testIvRegression() throws SqlParseException {

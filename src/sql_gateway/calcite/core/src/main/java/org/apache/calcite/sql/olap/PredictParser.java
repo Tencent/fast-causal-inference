@@ -43,7 +43,7 @@ public class PredictParser extends SqlCallCausal {
   }
 
   @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
-    withs.add("(select " + model.replaceAll("olsState", "OlsState").replaceAll("\\+",",") + " from @TBL) as model");
+    withs.add("(select " + model.replaceAll("olsState", "OlsState").replaceAll("\\+",",").replaceAll("~", ",") + " from @TBL) as model");
     writer.print("evalMLMethod(model");
     for (int i = 0; i < params.size(); ++i) {
       writer.print("," + params.get(i));

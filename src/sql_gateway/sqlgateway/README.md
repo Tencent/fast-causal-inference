@@ -17,5 +17,5 @@ curl -H "Accept: application/json" -H "Content-Type: application/json" -X POST -
 curl -H "Accept: application/json" -H "Content-Type: application/json" -X POST -d"{\"rawSql\": \"SELECT  xexpt_ttest_2samp(numerator, denominator, if(groupname = 'B1','B','A'), uin, 0.05, 0.005, 0.8) FROM expt_detail_8740718_shichaohan_1693799227533 where groupname in ('A1','A2','B1');\",\"creator\": \"bearlyhuang\",\"database\": \"all_in_sql\",\"deviceId\": 556}" 'http://127.0.0.1:9099/api/v1/sqlgateway/sql-run'|jq
 仅做calcite sqlparse:
 curl -H "Accept: application/json" -H "Content-Type: application/json" -X POST -d"{\"rawSql\": \"SELECT  xexpt_ttest_2samp(numerator, denominator, if(groupname = 'B1','B','A'), uin, 0.05, 0.005, 0.8) FROM expt_detail_8740718_shichaohan_1693799227533 where groupname in ('A1','A2','B1');\",\"creator\": \"bearlyhuang\",\"database\": \"all_in_sql\",\"deviceId\": 556,\"isCalciteParse\":true}" 'http://127.0.0.1:9099/api/v1/sqlgateway/sql-run'|jq
-nohup java -jar sqlgateway-0.0.1-SNAPSHOT.jar --spring.config.location=./sqlgateway_application.yml &> sqlgateway.log &
+nohup java -Xms10g -Xmx25g -jar sqlgateway-0.0.1-SNAPSHOT.jar --spring.config.location=./sqlgateway_application.yml &> sqlgateway.log &
 

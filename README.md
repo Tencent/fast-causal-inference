@@ -69,7 +69,5 @@ github: https://github.com/Tencent/fast-causal-inference
 ##### One-Click Deployment: 
 > git clone https://github.com/Tencent/fast-causal-inference  
 > cd fast-causal-inference && sh bin/deploy.sh   
-> http://127.0.0.1/lab
+> http://127.0.0.1
 >>  To start causal analysis, please refer to the built-in demo.ipynb
-
-

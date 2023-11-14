@@ -18,7 +18,8 @@ import pyspark.sql.functions as f
 from pyspark.sql.functions import udf
 from pyspark.sql.types import IntegerType
 import random
-
+import warnings
+warnings.filterwarnings('ignore')
 
 def ROC_curve(table, label, P):
     sql_instance = create_sql_instance()
@@ -62,11 +63,13 @@ def ROC_curve(table, label, P):
     plt.title("Roc Curve")
     plt.show()
 
-def random_func(n):
+def LogisticRegression_spark(spark, table, label, X, categorical_columns, 
+                             maxIter=40, regParam=0, elasticNetParam=0.8,repartition_num = 400):
+    def random_func(n):
         return random.randint(0, n)
-def LogisticRegression_spark(spark, table, label, X, categorical_columns, maxIter=40, regParam=0, elasticNetParam=0.8):
+    
     data = clickhouse_2_dataframe(spark, table)
-    repartition_num = 4000
+    data = data.replace("", "fill_unknown")
     random_udf = udf(random_func, IntegerType())
     data = data.withColumn("bucket_id", random_udf(f.lit(repartition_num))).repartition(repartition_num, "bucket_id")
     data = data.cache()
@@ -76,7 +79,7 @@ def LogisticRegression_spark(spark, table, label, X, categorical_columns, maxIte
     assembler = VectorAssembler(inputCols=X + [column + "_onehot" for column in categorical_columns],
                                 outputCol="features")
     label_indexer = StringIndexer(inputCol=label, outputCol="label")
-    lr = LogisticRegression(maxIter=40, regParam=0, elasticNetParam=0.8)
+    lr = LogisticRegression(maxIter=maxIter, regParam=regParam, elasticNetParam=elasticNetParam)
     pipeline = Pipeline(stages=indexers + encoders + [assembler, label_indexer, lr])
     model = pipeline.fit(data)
     predictions = model.transform(data)

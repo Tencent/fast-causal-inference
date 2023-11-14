@@ -112,7 +112,7 @@ class LinearDML:
             if X.count("+") >= 30 or X.count(",") >= 30:
                 print("The number of x exceeds the limit 30")
             t = clickhouse_create_view(clickhouse_view_name=table_output, sql_statement=sql, primary_column='predict',
-                                       is_force_materialize=True, is_sql_complete=True, sql_table_name=self.table)
+                                       is_force_materialize=True, is_sql_complete=True, sql_table_name=self.table,is_use_local=True)
         else:
             t = self.sql_instance.sql(sql)
         return t
@@ -149,7 +149,7 @@ class LinearDML:
         if table_output != '':
             clickhouse_create_view(clickhouse_view_name=table_output, sql_statement=sql, primary_column='predict',
                                    is_force_materialize=True, is_sql_complete=True,
-                                   sql_table_name=self.table)
+                                   sql_table_name=self.table,is_use_local=True)
             return
         logger.debug("effect interval sql: " + sql)
         t = self.sql_instance.sql(sql)

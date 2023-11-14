@@ -742,11 +742,13 @@ class CausalTree():
     def __init__(
             self,
             depth=3,
-            min_sample_ratio_leaf=0.001
+            min_sample_ratio_leaf=0.001,
+            bin_num = 10
 
     ):
         self.depth = depth
         self.threshold = min_sample_ratio_leaf
+        self.bin_num = bin_num
         self.Y = ''
         self.T = ''
         self.X = ''
@@ -805,6 +807,7 @@ class CausalTree():
         self.X = X
         self.needcut_X = needcut_X
         depth = self.depth
+        bin_num = self.bin_num
         self.__params_input_check()
 
         x_names = list(set(FeatNames(X)))
@@ -828,8 +831,9 @@ class CausalTree():
         # get bins for cut_x_names
         print("****STEP2.  Bucket the continuous variables(cut_x_names).")
         bins_dict = {}
+        quantiles = ','.join([str(i) for i in list(np.linspace(0,1,bin_num+1)[1:-1])])
         if len(cut_x_names_new) != 0:
-            string = ','.join([f'quantiles(0.25,0.5,0.75,0.9,0.95,0.99)({i}) as {i}' for i in cut_x_names])
+            string = ','.join([f'quantiles({quantiles})({i}) as {i}' for i in cut_x_names])
             result = sql_instance.sql(f'''select {string} from  {table}''')
             bins_dict = {}
             for i in range(len(cut_x_names)):
