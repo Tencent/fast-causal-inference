@@ -1,0 +1,6 @@
+﻿dataframe.readSparkDf
+=====================
+
+.. currentmodule:: dataframe
+
+.. autofunction:: readSparkDf

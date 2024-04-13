@@ -1,0 +1,6 @@
+﻿dataframe.readCsv
+=================
+
+.. currentmodule:: dataframe
+
+.. autofunction:: readCsv

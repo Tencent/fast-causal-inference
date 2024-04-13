@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Causal Inference &mdash; Fast-Causal-Inference  documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+        <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Dataframe Operations" href="dataframe.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            Fast-Causal-Inference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="input-output.html">Input/output</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="dataframe.html">Dataframe Operations</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Causal Inference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#statistics">Statistics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.ATEestimator"><code class="docutils literal notranslate"><span class="pre">ATEestimator()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.IPWestimator"><code class="docutils literal notranslate"><span class="pre">IPWestimator()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.boot_strap"><code class="docutils literal notranslate"><span class="pre">boot_strap()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.delta_method"><code class="docutils literal notranslate"><span class="pre">delta_method()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.kolmogorov_smirnov_test"><code class="docutils literal notranslate"><span class="pre">kolmogorov_smirnov_test()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.mann_whitney_utest"><code class="docutils literal notranslate"><span class="pre">mann_whitney_utest()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.matrix_multiplication"><code class="docutils literal notranslate"><span class="pre">matrix_multiplication()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.mean_z_test"><code class="docutils literal notranslate"><span class="pre">mean_z_test()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.permutation"><code class="docutils literal notranslate"><span class="pre">permutation()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.srm"><code class="docutils literal notranslate"><span class="pre">srm()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.student_ttest"><code class="docutils literal notranslate"><span class="pre">student_ttest()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.ttest_1samp"><code class="docutils literal notranslate"><span class="pre">ttest_1samp()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.ttest_2samp"><code class="docutils literal notranslate"><span class="pre">ttest_2samp()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.welch_ttest"><code class="docutils literal notranslate"><span class="pre">welch_ttest()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.statistics.xexpt_ttest_2samp"><code class="docutils literal notranslate"><span class="pre">xexpt_ttest_2samp()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#regression">Regression</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.regression.DID"><code class="docutils literal notranslate"><span class="pre">DID</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.regression.IV"><code class="docutils literal notranslate"><span class="pre">IV</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#dataframe.regression.IV.fit"><code class="docutils literal notranslate"><span class="pre">IV.fit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#dataframe.regression.IV.summary"><code class="docutils literal notranslate"><span class="pre">IV.summary()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.regression.Logistic"><code class="docutils literal notranslate"><span class="pre">Logistic</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.regression.Ols"><code class="docutils literal notranslate"><span class="pre">Ols</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.regression.StochasticLinearRegression"><code class="docutils literal notranslate"><span class="pre">StochasticLinearRegression</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.regression.StochasticLogisticRegression"><code class="docutils literal notranslate"><span class="pre">StochasticLogisticRegression</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.regression.Wls"><code class="docutils literal notranslate"><span class="pre">Wls</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#uplift">Uplift</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.uplift.CausalForest"><code class="docutils literal notranslate"><span class="pre">CausalForest</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#dataframe.uplift.CausalForest.effect"><code class="docutils literal notranslate"><span class="pre">CausalForest.effect()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#dataframe.uplift.CausalForest.fit"><code class="docutils literal notranslate"><span class="pre">CausalForest.fit()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.uplift.CausalTree"><code class="docutils literal notranslate"><span class="pre">CausalTree</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#dataframe.uplift.CausalTree.effect"><code class="docutils literal notranslate"><span class="pre">CausalTree.effect()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.uplift.get_lift_gain"><code class="docutils literal notranslate"><span class="pre">get_lift_gain()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.uplift.hte_plot"><code class="docutils literal notranslate"><span class="pre">hte_plot()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#match">Match</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.match.CaliperMatching"><code class="docutils literal notranslate"><span class="pre">CaliperMatching</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#dataframe.match.CaliperMatching.fit"><code class="docutils literal notranslate"><span class="pre">CaliperMatching.fit()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.match.matching_plot"><code class="docutils literal notranslate"><span class="pre">matching_plot()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dataframe.match.smd"><code class="docutils literal notranslate"><span class="pre">smd()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Fast-Causal-Inference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Causal Inference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/inference.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="causal-inference">
+<h1>Causal Inference<a class="headerlink" href="#causal-inference" title="Permalink to this heading"></a></h1>
+<section id="statistics">
+<h2>Statistics<a class="headerlink" href="#statistics" title="Permalink to this heading"></a></h2>
+<span class="target" id="module-dataframe.statistics"><span id="stats-api"></span></span><dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.ATEestimator">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">ATEestimator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">B</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">500</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#ATEestimator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.ATEestimator" title="Permalink to this definition"></a></dt>
+<dd><p>Estimate the Average Treatment Effect (ATE) using a simple difference in means approach.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table</strong> (<em>str</em><em>, </em><em>required</em>) – the name of the input data table.</p></li>
+<li><p><strong>Y</strong> (<em>str</em><em>, </em><em>required</em>) – the column name of the outcome variable.</p></li>
+<li><p><strong>T</strong> (<em>str</em><em>, </em><em>required</em>) – the column name of the treatment variable.</p></li>
+<li><p><strong>B</strong> (<em>int</em><em>, </em><em>optional</em>) – the number of bootstrap samples, default is 500.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict, containing the following key-value pairs:</p>
+</dd>
+</dl>
+<p>‘ATE’: Average Treatment Effect.
+‘stddev’: Standard deviation.
+‘p_value’: p-value.
+‘95% confidence_interval’: 95% confidence interval.</p>
+<section id="example">
+<h3>Example<a class="headerlink" href="#example" title="Permalink to this heading"></a></h3>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.IPWestimator">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">IPWestimator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">P</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">B</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">500</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#IPWestimator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.IPWestimator" title="Permalink to this definition"></a></dt>
+<dd><p>Estimate the Average Treatment Effect (ATE) using Inverse Probability of Treatment Weighting (IPTW).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>table</strong> (<em>str</em><em>, </em><em>required</em>) – the name of the input data table.</p></li>
+<li><p><strong>Y</strong> (<em>str</em><em>, </em><em>required</em>) – the column name of the outcome variable.</p></li>
+<li><p><strong>T</strong> (<em>str</em><em>, </em><em>required</em>) – the column name of the treatment variable.</p></li>
+<li><p><strong>P</strong> (<em>str</em><em>, </em><em>required</em>) – the column name of the propensity score.</p></li>
+<li><p><strong>B</strong> (<em>int</em><em>, </em><em>optional</em>) – the number of bootstrap samples, default is 500.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict, containing the following key-value pairs:</p>
+</dd>
+</dl>
+<p>‘ATE’: Average Treatment Effect.
+‘stddev’: Standard deviation.
+‘p_value’: p-value.
+‘95% confidence_interval’: 95% confidence interval.</p>
+<section id="id1">
+<h3>Example<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="n">table</span> <span class="o">=</span> <span class="s1">&#39;test_data_small&#39;</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+<span class="n">Y</span> <span class="o">=</span> <span class="s1">&#39;numerator&#39;</span>
+<span class="n">T</span> <span class="o">=</span> <span class="s1">&#39;treatment&#39;</span>
+<span class="n">P</span> <span class="o">=</span> <span class="s1">&#39;weight&#39;</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="n">S</span><span class="o">.</span><span class="n">IPWestimator</span><span class="p">(</span><span class="n">df</span><span class="p">,</span><span class="n">Y</span><span class="p">,</span><span class="n">T</span><span class="p">,</span><span class="n">P</span><span class="p">,</span><span class="n">B</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.boot_strap">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">boot_strap</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_num</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bs_num</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#boot_strap"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.boot_strap" title="Permalink to this definition"></a></dt>
+<dd><p>Compute a two-sided bootstrap confidence interval of a statistic.
+boot_strap sample_num samples from data and compute the func.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>func</strong> (<em>str</em><em>, </em><em>required</em>) – function to apply.</p></li>
+<li><p><strong>sample_num</strong> (<em>int</em><em>, </em><em>required</em>) – number of samples.</p></li>
+<li><p><strong>bs_num</strong> (<em>int</em><em>, </em><em>required</em>) – number of bootstrap samples.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list of calculated statistics.</p>
+</dd>
+</dl>
+<section id="id2">
+<h3>Example<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h3>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.delta_method">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">delta_method</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expr</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">std</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#delta_method"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.delta_method" title="Permalink to this definition"></a></dt>
+<dd><p>Compute the delta method on the given expression.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>expr</strong> (<em>str</em><em>, </em><em>optional</em>) – Form like f (avg(x1), avg(x2), …) , f is the complex function expression, x1 and x2 are column names, the columns involved here must be numeric.</p></li>
+<li><p><strong>std</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to return standard deviation, default is True.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame contains the following columns: var or std computed by delta_method.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="dataframe.html#dataframe.dataframe.DataFrame" title="dataframe.dataframe.DataFrame">DataFrame</a></p>
+</dd>
+</dl>
+<section id="id3">
+<h3>Example<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+<span class="n">df</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s1">&#39;treatment&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">delta_method</span><span class="p">(</span><span class="s1">&#39;avg(x1)&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">df</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s1">&#39;treatment&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">delta_method</span><span class="p">(</span><span class="s1">&#39;avg(x1)&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>This will output:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>treatment             std
+0         0         1.934587277675054E-4
+1         1        1.9646284055862068E-4
+treatment             var
+0         0        0.013908944164367954
+1         1        0.014016520272828797
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.kolmogorov_smirnov_test">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">kolmogorov_smirnov_test</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sample_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_index</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#kolmogorov_smirnov_test"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.kolmogorov_smirnov_test" title="Permalink to this definition"></a></dt>
+<dd><p>This function is used to calculate the Kolmogorov-Smirnov test for goodness of fit. It returns the calculated statistic and the two-tailed p-value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sample_data</strong> (<em>int</em><em>, </em><em>float</em><em> or </em><em>decimal</em><em>, </em><em>required</em>) – Sample data. Integer, Float or Decimal.</p></li>
+<li><p><strong>sample_index</strong> (<em>int</em><em>, </em><em>required</em>) – Sample index. Integer.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple with two elements:</p>
+</dd>
+</dl>
+<p>calculated statistic: Float64.
+calculated p-value: Float64.</p>
+<section id="id4">
+<h3>Example:<a class="headerlink" href="#id4" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">kolmogorov_smirnov_test</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">[0.6382961593945475, 0.0]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">kolmogorov_smirnov_test</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">[0.6382961593945475, 0.0]</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.mann_whitney_utest">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">mann_whitney_utest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sample_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternative</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'two-sided'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">continuity_correction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#mann_whitney_utest"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.mann_whitney_utest" title="Permalink to this definition"></a></dt>
+<dd><p>This function is used to calculate the Mann-Whitney U test. It returns the calculated U-statistic and the two-tailed p-value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sample_data</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the numerator of the metric, can use SQL expression, the column must be numeric.</p></li>
+<li><p><strong>sample_index</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the index to represent the control group and the experimental group, 1 for the experimental group and 0 for the control group.</p></li>
+<li><p><strong>alternative</strong> (<em>str</em><em>, </em><em>optional</em>) – ‘two-sided’: the default value, two-sided test.
+‘greater’: one-tailed test in the positive direction.
+‘less’: one-tailed test in the negative direction.</p></li>
+<li><p><strong>continuous_correction</strong> (<em>bool</em><em>, </em><em>optional</em>) – bool, default 1, whether to apply continuity correction.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple with two elements:</p>
+</dd>
+</dl>
+<p>U-statistic: Float64.
+p-value: Float64.</p>
+<section id="id5">
+<h3>Example:<a class="headerlink" href="#id5" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">mann_whitney_utest</span><span class="p">(</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">[2380940.0, 0.0]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">mann_whitney_utest</span><span class="p">(</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">[2380940.0, 0.0]</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.matrix_multiplication">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">matrix_multiplication</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">col</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">std</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">invert</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#matrix_multiplication"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.matrix_multiplication" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>col</strong> (<em>int</em><em>, </em><em>float</em><em> or </em><em>decimal</em><em>, </em><em>required</em>) – columns to apply function to.</p></li>
+<li><p><strong>std</strong> (<em>bool</em><em>, </em><em>required</em>) – whether to return standard deviation.</p></li>
+<li><p><strong>invert</strong> (<em>bool</em><em>, </em><em>required</em>) – whether to invert the matrix.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list of calculated statistics.</p>
+</dd>
+</dl>
+<section id="id6">
+<h3>Example<a class="headerlink" href="#id6" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+<span class="n">df</span><span class="o">.</span><span class="n">matrix_multiplication</span><span class="p">(</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;x2&#39;</span><span class="p">,</span> <span class="n">std</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">invert</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">matrix_multiplication</span><span class="p">(</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;x2&#39;</span><span class="p">,</span> <span class="n">std</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">invert</span> <span class="o">=</span> <span class="kc">False</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">matrix_multiplication</span><span class="p">(</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;x2&#39;</span><span class="p">,</span> <span class="n">std</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">invert</span> <span class="o">=</span> <span class="kc">True</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.mean_z_test">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">mean_z_test</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sample_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">population_variance_x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">population_variance_y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">confidence_level</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#mean_z_test"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.mean_z_test" title="Permalink to this definition"></a></dt>
+<dd><p>This function is used to calculate the z-test for the mean of two independent samples of scores. It returns the calculated z-statistic and the two-tailed p-value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sample_data</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the numerator of the metric, can use sql expression, the column must be numeric</p></li>
+<li><p><strong>sample_index</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the index to represent the control group and the experimental group, 1 for the experimental group and 0 for the control group</p></li>
+<li><p><strong>population_variance_x</strong> (<em>Float</em><em>, </em><em>required</em>) – Variance for control group.</p></li>
+<li><p><strong>population_variance_y</strong> (<em>Float</em><em>, </em><em>required</em>) – Variance for experimental group.</p></li>
+<li><p><strong>confidence_level</strong> (<em>Float</em><em>, </em><em>required</em>) – Confidence level in order to calculate confidence intervals.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p></p>
+</dd>
+</dl>
+<section id="id7">
+<h3>Example<a class="headerlink" href="#id7" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+<span class="n">df</span><span class="o">.</span><span class="n">mean_z_test</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">mean_z_test</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.permutation">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">permutation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">permutation_num</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mde</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'0'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mde_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'1'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#permutation"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.permutation" title="Permalink to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>func</strong> (<em>str</em><em>, </em><em>required</em>) – function to apply.</p></li>
+<li><p><strong>permutation_num</strong> (<em>int</em><em>, </em><em>required</em>) – number of permutations.</p></li>
+<li><p><strong>col</strong> (<em>int</em><em>, </em><em>float</em><em> or </em><em>decimal</em><em>, </em><em>required</em>) – columns to apply function to.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>list of calculated statistics.</p>
+</dd>
+</dl>
+<section id="id8">
+<h3>Example<a class="headerlink" href="#id8" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+<span class="n">df</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="s1">&#39;mannWhitneyUTest&#39;</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;x1&#39;</span><span class="p">)</span>
+<span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="s1">&#39;mannWhitneyUTest&#39;</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="s1">&#39;x1&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.srm">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">srm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">groupby</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ratio</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'[1,1]'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#srm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.srm" title="Permalink to this definition"></a></dt>
+<dd><p>perform srm test</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the numerator of the metric, can use SQL expression, the column must be numeric.
+If you are concerned about whether the sum of x1 meets expectations, you should fill in x1, then it will calculate sum(x1);
+If you are concerned about whether the sample size meets expectations, you should fill in 1, then it will calculate sum(1).</p></li>
+<li><p><strong>groupby</strong> (<em>str</em><em>, </em><em>required</em>) – column name, representing the field for aggregation grouping, can support Integer/String.</p></li>
+<li><p><strong>ratio</strong> (<em>list</em><em>, </em><em>required</em>) – list. The expected traffic ratio, needs to be filled in according to the order of the groupby field. Each value must be &gt;0. For example, [1,1,2] represents the expected ratio is 1:1:2.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame contains the following columns:</p>
+</dd>
+</dl>
+<p>groupname: the name of the group.
+f_obs: the observed traffic.
+ratio: the expected traffic ratio.
+chisquare: the calculated chi-square.
+p-value: the calculated p-value.</p>
+<section id="id9">
+<h3>Example:<a class="headerlink" href="#id9" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">srm</span><span class="p">(</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="s1">&#39;[1,2]&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">        groupname   f_obs       ratio       chisquare   p-value</span>
+<span class="go">0           23058.627723 1.000000    48571.698643 0.000000</span>
+<span class="go">1           1.0054e+05  1.000000</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">srm</span><span class="p">(</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="s1">&#39;[1,2]&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">        groupname   f_obs       ratio       chisquare   p-value</span>
+<span class="go">0           23058.627723 1.000000    48571.698643 0.000000</span>
+<span class="go">1           1.0054e+05  1.000000</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.student_ttest">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">student_ttest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sample_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_index</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#student_ttest"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.student_ttest" title="Permalink to this definition"></a></dt>
+<dd><p>This function is used to calculate the t-test for the mean of one group of scores. It returns the calculated t-statistic and the two-tailed p-value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sample_data</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the numerator of the metric, can use sql expression, the column must be numeric</p></li>
+<li><p><strong>sample_index</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the index to represent the control group and the experimental group, 1 for the experimental group and 0 for the control group</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple with two elements:</p>
+</dd>
+</dl>
+<p>calculated statistic: Float64.
+calculated p-value: Float64.</p>
+<section id="id10">
+<h3>Example<a class="headerlink" href="#id10" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">student_ttest</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">[-72.8602591880598, 0.0]</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">student_ttest</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">[-72.8602591880598, 0.0]</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.ttest_1samp">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">ttest_1samp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternative</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'two-sided'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mu</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#ttest_1samp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.ttest_1samp" title="Permalink to this definition"></a></dt>
+<dd><p>This function is used to calculate the t-test for the mean of one group of scores. It returns the calculated t-statistic and the two-tailed p-value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Y</strong> (<em>str</em><em>, </em><em>required</em>) – str, form like f (avg(x1), avg(x2), …), f is the complex function expression, x1 and x2 are column names, the columns involved here must be numeric.</p></li>
+<li><p><strong>alternative</strong> (<em>str</em><em>, </em><em>optional</em>) – str, use ‘two-sided’ for two-tailed test, ‘greater’ for one-tailed test in the positive direction, and ‘less’ for one-tailed test in the negative direction.</p></li>
+<li><p><strong>mu</strong> (<em>float</em><em>, </em><em>optional</em>) – the mean of the null hypothesis.</p></li>
+<li><p><strong>X</strong> (<em>str</em><em>, </em><em>optional</em>) – str, an expression used as continuous covariates for CUPED variance reduction. It follows the regression approach and can be a simple form like ‘avg(x1)/avg(x2)’,’avg(x3)’,’avg(x1)/avg(x2)+avg(x3)’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame contains the following columns:</p>
+</dd>
+</dl>
+<p>estimate: the mean value of the statistic to be tested.
+stderr: the standard error of the statistic to be tested.
+t-statistic: the calculated t-statistic.
+p-value: the calculated p-value.
+lower: the lower bound of the confidence interval.
+upper: the upper bound of the confidence interval.</p>
+<section id="id11">
+<h3>Example:<a class="headerlink" href="#id11" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s1">&#39;x_cat1&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">ttest_1samp</span><span class="p">(</span><span class="s1">&#39;avg(numerator)/avg(denominator)&#39;</span><span class="p">,</span> <span class="n">alternative</span> <span class="o">=</span> <span class="s1">&#39;two-sided&#39;</span><span class="p">,</span> <span class="n">mu</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s1">&#39;x_cat1&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">ttest_1samp</span><span class="p">(</span><span class="s1">&#39;avg(numerator)&#39;</span><span class="p">,</span> <span class="n">alternative</span> <span class="o">=</span> <span class="s1">&#39;two-sided&#39;</span><span class="p">,</span> <span class="n">mu</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">X</span> <span class="o">=</span> <span class="s1">&#39;avg(numerator_pre)/avg(denominator_pre)&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">x_cat1  estimate    stderr t-statistic   p-value     lower     upper</span>
+<span class="go">0      B  1.455223  0.041401   35.149887  0.000000  1.374029  1.536417</span>
+<span class="go">1      E  1.753613  0.042083   41.670491  0.000000  1.671082  1.836143</span>
+<span class="go">2      D  1.752348  0.043173   40.589377  0.000000  1.667680  1.837016</span>
+<span class="go">3      C  1.804776  0.046642   38.694122  0.000000  1.713303  1.896249</span>
+<span class="go">4      A  2.108937  0.042558   49.554601  0.000000  2.025477  2.192398</span>
+<span class="go">x_cat1   estimate    stderr t-statistic   p-value      lower      upper</span>
+<span class="go">0      B  10.220695  0.261317   39.112304  0.000000   9.708205  10.733185</span>
+<span class="go">1      E  12.407975  0.267176   46.441156  0.000000  11.884002  12.931947</span>
+<span class="go">2      D  11.924641  0.258935   46.052716  0.000000  11.416831  12.432451</span>
+<span class="go">3      C  12.274732  0.281095   43.667495  0.000000  11.723457  12.826006</span>
+<span class="go">4      A  14.824860  0.241133   61.480129  0.000000  14.351972  15.297748</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.ttest_2samp">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">ttest_2samp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alternative</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'two-sided'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pse</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#ttest_2samp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.ttest_2samp" title="Permalink to this definition"></a></dt>
+<dd><p>This function is used to calculate the t-test for the means of two independent samples of scores. It returns the calculated t-statistic and the two-tailed p-value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>Y</strong> (<em>str</em><em>, </em><em>required</em>) – str, form like f (avg(x1), avg(x2), …), f is the complex function expression, x1 and x2 are column names, the columns involved here must be numeric.</p></li>
+<li><p><strong>index</strong> (<em>str</em><em>, </em><em>required</em>) – str, the treatment variable.</p></li>
+<li><p><strong>alternative</strong> (<em>str</em><em>, </em><em>optional</em>) – str, use ‘two-sided’ for two-tailed test, ‘greater’ for one-tailed test in the positive direction, and ‘less’ for one-tailed test in the negative direction.</p></li>
+<li><p><strong>X</strong> (<em>str</em><em>, </em><em>optional</em>) – str, an expression used as continuous covariates for CUPED variance reduction. It follows the regression approach and can be a simple form like ‘avg(x1)/avg(x2)’,’avg(x3)’,’avg(x1)/avg(x2)+avg(x3)’.</p></li>
+<li><p><strong>pse</strong> (<em>str</em><em>, </em><em>optional</em>) – str, an expression used as discrete covariates for post-stratification variance reduction. It involves grouping by a covariate, calculating variances separately, and then weighting them. It can be any complex function form, such as ‘x_cat1’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame contains the following columns:</p>
+</dd>
+</dl>
+<p>estimate: the mean value of the statistic to be tested.
+stderr: the standard error of the statistic to be tested.
+t-statistic: the calculated t-statistic.
+p-value: the calculated p-value.
+lower: the lower bound of the confidence interval.
+upper: the upper bound of the confidence interval.</p>
+<section id="id12">
+<h3>Example:<a class="headerlink" href="#id12" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">ttest_2samp</span><span class="p">(</span><span class="s1">&#39;avg(numerator)/avg(denominator)&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="n">alternative</span> <span class="o">=</span> <span class="s1">&#39;two-sided&#39;</span><span class="p">,</span> <span class="n">pse</span> <span class="o">=</span> <span class="s1">&#39;x_cat1&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">ttest_2samp</span><span class="p">(</span><span class="s1">&#39;avg(numerator)/avg(denominator)&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="n">alternative</span> <span class="o">=</span> <span class="s1">&#39;two-sided&#39;</span><span class="p">,</span> <span class="n">X</span> <span class="o">=</span> <span class="s1">&#39;avg(numerator_pre)/avg(denominator_pre)&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s1">&#39;x_cat1&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">ttest_2samp</span><span class="p">(</span><span class="s1">&#39;avg(numerator)&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="n">alternative</span> <span class="o">=</span> <span class="s1">&#39;two-sided&#39;</span><span class="p">,</span> <span class="n">X</span> <span class="o">=</span> <span class="s1">&#39;avg(numerator_pre)&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">groupBy</span><span class="p">(</span><span class="s1">&#39;x_cat1&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">ttest_2samp</span><span class="p">(</span><span class="s1">&#39;avg(numerator)/avg(denominator)&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="n">alternative</span> <span class="o">=</span> <span class="s1">&#39;two-sided&#39;</span><span class="p">,</span> <span class="n">X</span> <span class="o">=</span> <span class="s1">&#39;avg(numerator_pre)/avg(denominator_pre)&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>    mean0     mean1  estimate    stderr t-statistic   p-value     lower          0  0.791139  2.487152  1.696013  0.032986   51.416725  0.000000  1.631355   
+
+    upper  
+0  1.760672  
+    mean0     mean1  estimate    stderr t-statistic   p-value     lower          0  0.793732  2.486118  1.692386  0.026685   63.419925  0.000000  1.640077   
+
+    upper  
+0  1.744694  
+x_cat1     mean0      mean1   estimate    stderr t-statistic   p-value          0      B  2.481226  17.787127  15.305901  0.365716   41.851896  0.000000   
+1      E  4.324137  19.437071  15.112935  0.370127   40.831785  0.000000   
+2      D  4.582961  19.156961  14.574000  0.373465   39.023766  0.000000   
+3      C  4.579375  19.816027  15.236652  0.419183   36.348422  0.000000   
+4      A  7.518409  22.195092  14.676682  0.342147   42.895825  0.000000   
+
+    lower      upper  
+0  14.588665  16.023138  
+1  14.387062  15.838808  
+2  13.841579  15.306421  
+3  14.414564  16.058739  
+4  14.005694  15.347671  
+x_cat1     mean0     mean1  estimate    stderr t-statistic   p-value          0      B  0.409006  2.202847  1.793841  0.053917   33.270683  0.000000   
+1      E  0.714211  2.435665  1.721455  0.056144   30.661265  0.000000   
+2      D  0.781435  2.455767  1.674332  0.058940   28.407344  0.000000   
+3      C  0.778977  2.562364  1.783388  0.065652   27.164280  0.000000   
+4      A  1.242126  2.766098  1.523972  0.060686   25.112311  0.000000   
+
+    lower     upper  
+0  1.688101  1.899581  
+1  1.611348  1.831562  
+2  1.558742  1.789923  
+3  1.654633  1.912142  
+4  1.404959  1.642984  
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.welch_ttest">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">welch_ttest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sample_data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_index</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#welch_ttest"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.welch_ttest" title="Permalink to this definition"></a></dt>
+<dd><p>This function is used to calculate welch’s t-test for the mean of two independent samples of scores. It returns the calculated t-statistic and the two-tailed p-value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sample_data</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the numerator of the metric, can use sql expression, the column must be numeric</p></li>
+<li><p><strong>sample_index</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the index to represent the control group and the experimental group, 1 for the experimental group and 0 for the control group</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple with two elements:</p>
+</dd>
+</dl>
+<p>calculated statistic: Float64.
+calculated p-value: Float64.</p>
+<section id="id13">
+<h3>Example<a class="headerlink" href="#id13" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">welch_ttest</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">[-73.78492246858345, 0.0]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">welch_ttest</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">[-73.78492246858345, 0.0]</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.statistics.xexpt_ttest_2samp">
+<span class="sig-prename descclassname"><span class="pre">dataframe.statistics.</span></span><span class="sig-name descname"><span class="pre">xexpt_ttest_2samp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">numerator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">denominator</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">uin</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'avg'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">group_buckets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'[1,1]'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">MDE</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.005</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">power</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/statistics.html#xexpt_ttest_2samp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.statistics.xexpt_ttest_2samp" title="Permalink to this definition"></a></dt>
+<dd><p>This function is used to calculate the t-test for the means of two independent samples of scores. It returns the calculated t-statistic and the two-tailed p-value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>numerator</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the numerator of the metric, can use sql expression, the column must be numeric.</p></li>
+<li><p><strong>denominator</strong> (<em>str</em><em>, </em><em>required</em>) – column name, the denominator of the metric, can use sql expression, the column must be numeric.</p></li>
+<li><p><strong>index</strong> (<em>str</em><em>, </em><em>required</em>) – column name, used to represent the control group and the experimental group.</p></li>
+<li><p><strong>uin</strong> (<em>str</em><em>, </em><em>required</em>) – column name, used to bucket samples, can use sql expression, int64 type.</p></li>
+<li><p><strong>metric_type</strong> (<em>str</em><em>, </em><em>optional</em>) – avg: used to test the mean indicator, avg(num)/avg(demo), default is avg.
+sum: used to test the sum indicator, at this time the denominator can be omitted or 1, otherwise the user is prompted.</p></li>
+<li><p><strong>group_buckets</strong> (<em>list</em><em>, </em><em>optional</em>) – the number of traffic buckets for each group, only effective when metric_type=’sum’. The default is [1,1], the number of elements is equal to the number of groups, only the correct ratio is required.</p></li>
+<li><p><strong>alpha</strong> (<em>float</em><em>, </em><em>optional</em>) – numeric, significance level, default 0.05.</p></li>
+<li><p><strong>MDE</strong> (<em>float</em><em>, </em><em>optional</em>) – numeric, minimum test difference, default 0.005.</p></li>
+<li><p><strong>power</strong> (<em>float</em><em>, </em><em>optional</em>) – numeric, statistical power, default 0.8.</p></li>
+<li><p><strong>X</strong> (<em>str</em><em>, </em><em>optional</em>) – str, an expression used as continuous covariates for CUPED variance reduction. It follows the regression approach and can be a simple form like ‘avg(x1)/avg(x2)’,’avg(x3)’,’avg(x1)/avg(x2)+avg(x3)’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>DataFrame contains the following columns:</p>
+</dd>
+</dl>
+<p>groupname: the name of the group.
+numerator: the mean of the numerator.
+denominator: the mean of the denominator (only when metric_type=avg).
+numerator_pre: the mean of numerator before the experiment (only when metric_type=avg).
+denominator_pre: the mean of denominator before the experiment (only when metric_type=avg).
+mean: the mean of the metric (only when metric_type=avg).
+std_samp: the standard deviation of the metric (only when metric_type=avg).
+ratio: group_buckets (only when metric_type=sum).
+diff_relative: the relative difference between the two groups.
+95%_relative_CI: the 95% confidence interval of the relative difference.
+p-value: the calculated p-value.
+t-statistic: the calculated t-statistic.
+power: the calculated power.
+recommend_samples: the recommended sample size.</p>
+<section id="id14">
+<h3>Example:<a class="headerlink" href="#id14" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.statistics</span> <span class="k">as</span> <span class="nn">S</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">xexpt_ttest_2samp</span><span class="p">(</span><span class="s1">&#39;numerator&#39;</span><span class="p">,</span> <span class="s1">&#39;denominator&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="n">uin</span> <span class="o">=</span> <span class="s1">&#39;rand()&#39;</span><span class="p">,</span> <span class="n">metric_type</span> <span class="o">=</span> <span class="s1">&#39;sum&#39;</span><span class="p">,</span> <span class="n">group_buckets</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">groupname   numerator     ratio</span>
+<span class="go">0           23058.627723  1</span>
+<span class="go">1           100540.303112 1</span>
+<span class="go">diff_relative 95%_relative_CI           p-value     t-statistic power       recommend_samples</span>
+<span class="go">336.020323%   [320.514511%,351.526135%] 0.000000    42.478747   0.050458    24404575</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">xexpt_ttest_2samp</span><span class="p">(</span><span class="s1">&#39;numerator&#39;</span><span class="p">,</span> <span class="s1">&#39;denominator&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="n">uin</span> <span class="o">=</span> <span class="s1">&#39;rand()&#39;</span><span class="p">,</span> <span class="n">metric_type</span> <span class="o">=</span> <span class="s1">&#39;sum&#39;</span><span class="p">,</span> <span class="n">group_buckets</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span> <span class="n">X</span> <span class="o">=</span> <span class="s1">&#39;avg(numerator_pre)/avg(denominator_pre)&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">groupname   numerator     ratio       numerator_pre</span>
+<span class="go">0           23058.627723  1           21903.112431</span>
+<span class="go">1           100540.303112 1           23096.875608</span>
+<span class="go">diff_relative 95%_relative_CI           p-value     t-statistic power       recommend_samples</span>
+<span class="go">310.412514%   [299.416469%,321.408558%] 0.000000    55.335445   0.050911    12696830</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">xexpt_ttest_2samp</span><span class="p">(</span><span class="s1">&#39;numerator&#39;</span><span class="p">,</span> <span class="s1">&#39;denominator&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="n">uin</span> <span class="o">=</span> <span class="s1">&#39;rand()&#39;</span><span class="p">,</span> <span class="n">metric_type</span> <span class="o">=</span> <span class="s1">&#39;avg&#39;</span><span class="p">,</span> <span class="n">X</span> <span class="o">=</span> <span class="s1">&#39;avg(numerator_pre)/avg(denominator_pre)&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">groupname   numerator     denominator  numerator_pre denominator_pre mean        std_samp</span>
+<span class="go">0           23058.627723  29023.233157 21903.112431  29131.831739    0.793678    1.253257</span>
+<span class="go">1           100540.303112 40452.337656 23096.875608  30776.559777    2.486168    5.123161</span>
+<span class="go">diff_relative 95%_relative_CI           p-value     t-statistic diff        95%_CI              power       recommend_samples</span>
+<span class="go">213.246344%   [206.698202%,219.794486%] 0.000000    63.835777   1.692490    [1.640519,1.744461] 0.052570    14172490</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">xexpt_ttest_2samp</span><span class="p">(</span><span class="s1">&#39;numerator&#39;</span><span class="p">,</span> <span class="s1">&#39;denominator&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="n">uin</span> <span class="o">=</span> <span class="s1">&#39;rand()&#39;</span><span class="p">,</span> <span class="n">metric_type</span> <span class="o">=</span> <span class="s1">&#39;avg&#39;</span><span class="p">,</span> <span class="n">alpha</span> <span class="o">=</span> <span class="mf">0.05</span><span class="p">,</span> <span class="n">MDE</span> <span class="o">=</span> <span class="mf">0.005</span><span class="p">,</span> <span class="n">power</span> <span class="o">=</span> <span class="mf">0.8</span><span class="p">,</span> <span class="n">X</span> <span class="o">=</span> <span class="s1">&#39;avg(numerator_pre)+avg(x1)&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">groupname   numerator     denominator  numerator_pre denominator_pre mean        std_samp</span>
+<span class="go">0           23058.627723  29023.233157 21903.112431  -62.102593      1.057338    2.341991</span>
+<span class="go">1           100540.303112 40452.337656 23096.875608  -122.234609     2.732950    5.918014</span>
+<span class="go">diff_relative 95%_relative_CI           p-value     t-statistic diff        95%_CI              power       recommend_samples</span>
+<span class="go">158.474659%   [152.453710%,164.495607%] 0.000000    51.593567   1.675612    [1.611950,1.739274] 0.053041    11982290</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+</section>
+<section id="regression">
+<h2>Regression<a class="headerlink" href="#regression" title="Permalink to this heading"></a></h2>
+<span class="target" id="module-dataframe.regression"><span id="reg-api"></span></span><dl class="py class">
+<dt class="sig sig-object py" id="dataframe.regression.DID">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dataframe.regression.</span></span><span class="sig-name descname"><span class="pre">DID</span></span><a class="reference internal" href="_modules/dataframe/regression.html#DID"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.regression.DID" title="Permalink to this definition"></a></dt>
+<dd><section id="parameters">
+<h3>Parameters<a class="headerlink" href="#parameters" title="Permalink to this heading"></a></h3>
+<blockquote>
+<div><dl class="field-list simple">
+<dt class="field-odd">Y<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Column name, refers to the outcome of interest, a numerical variable.</p>
+</dd>
+<dt class="field-even">treatment<span class="colon">:</span></dt>
+<dd class="field-even"><p>Column name, a Boolean variable, can only take values 0 or 1, where 1 represents the experimental group.</p>
+</dd>
+<dt class="field-odd">time<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Column name, a Boolean variable, represents the time factor. time = 0 represents before the strategy takes effect, time = 1 represents after the strategy takes effect.</p>
+</dd>
+<dt class="field-even">(Optional parameter) X<span class="colon">:</span></dt>
+<dd class="field-even"><p>Some covariates before the experiment, which can be used to reduce variance. Written in the form of [‘x1’, ‘x2’, ‘x3’] they must be numerical variables.</p>
+</dd>
+</dl>
+</div></blockquote>
+</section>
+<section id="id15">
+<h3>Example<a class="headerlink" href="#id15" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.regression</span> <span class="k">as</span> <span class="nn">Regression</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Regression</span><span class="o">.</span><span class="n">DID</span><span class="p">()</span>
+<span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="o">=</span><span class="n">df</span><span class="p">,</span><span class="n">Y</span><span class="o">=</span><span class="s1">&#39;y&#39;</span><span class="p">,</span><span class="n">treatment</span><span class="o">=</span><span class="s1">&#39;treatment&#39;</span><span class="p">,</span><span class="n">time</span><span class="o">=</span><span class="s1">&#39;t_ob&#39;</span><span class="p">,</span><span class="n">X</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span><span class="s1">&#39;x2&#39;</span><span class="p">])</span>
+<span class="n">model</span><span class="o">.</span><span class="n">summary</span><span class="p">()</span>
+<span class="c1"># Call:</span>
+<span class="c1"># lm( formula = y ~ treatment + t_ob + treatment*t_ob + x1 + x2 )</span>
+
+<span class="c1"># Coefficients:</span>
+<span class="c1"># .               Estimate    Std. Error  t value     Pr(&gt;|t|)</span>
+<span class="c1"># (Intercept)     4.461905    0.213302    20.918288   0.000000</span>
+<span class="c1"># treatment       13.902920   0.291365    47.716586   0.000000</span>
+<span class="c1"># t_ob            0.416831    0.280176    1.487748    0.136849</span>
+<span class="c1"># treatment*t_ob  1.812698    0.376476    4.814905    0.000001</span>
+<span class="c1"># x1              1.769065    0.100727    17.562939   0.000000</span>
+<span class="c1"># x2              2.020569    0.047162    42.842817   0.000000</span>
+
+<span class="c1"># Residual standard error: 9.222100 on 9994 degrees of freedom</span>
+<span class="c1"># Multiple R-squared: 0.478329, Adjusted R-squared: 0.478068</span>
+<span class="c1"># F-statistic: 1832.730042 on 5 and 9994 DF,  p-value: 0.000000</span>
+
+<span class="c1"># other ways</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.regression</span> <span class="k">as</span> <span class="nn">Regression</span>
+<span class="n">df</span><span class="o">.</span><span class="n">did</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="s1">&#39;t_ob&#39;</span><span class="p">,[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span><span class="s1">&#39;x2&#39;</span><span class="p">,</span><span class="s1">&#39;x3&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">Regression</span><span class="o">.</span><span class="n">did</span><span class="p">(</span><span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="s1">&#39;t_ob&#39;</span><span class="p">,[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span><span class="s1">&#39;x2&#39;</span><span class="p">,</span><span class="s1">&#39;x3&#39;</span><span class="p">]))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="dataframe.regression.IV">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dataframe.regression.</span></span><span class="sig-name descname"><span class="pre">IV</span></span><a class="reference internal" href="_modules/dataframe/regression.html#IV"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.regression.IV" title="Permalink to this definition"></a></dt>
+<dd><p>Instrumental Variable (IV) estimator class.
+Instrumental variables (IV) is a method used in statistics, econometrics, epidemiology, and related disciplines to estimate causal relationships when controlled experiments are not feasible or when a treatment is not successfully delivered to every unit in a randomized experiment.
+The idea behind IV is to use a variable, known as an instrument, that is correlated with the endogenous explanatory variables (the variables that are correlated with the error term), but uncorrelated with the error term itself. This allows us to isolate the variation in the explanatory variable that is purely due to the instrument and thus uncorrelated with the error term, which can then be used to estimate the causal effect of the explanatory variable on the dependent variable.</p>
+<p>Here is an example:</p>
+<div class="math notranslate nohighlight">
+\[t_{ob} = treatment + X_1 + X_2\]</div>
+<div class="math notranslate nohighlight">
+\[Y = \hat{t}_{ob} + X_1 + X_2\]</div>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(X_1\)</span> and <span class="math notranslate nohighlight">\(X_2\)</span> are independent variables or predictors.</p></li>
+<li><p><span class="math notranslate nohighlight">\(t_{ob}\)</span> is the dependent variable that you are trying to explain or predict.</p></li>
+<li><p><span class="math notranslate nohighlight">\(treatment\)</span> is an independent variable representing some intervention or condition that you believe affects <span class="math notranslate nohighlight">\(t_{ob}\)</span>.</p></li>
+<li><p><span class="math notranslate nohighlight">\(Y\)</span> is the dependent variable that you are trying to explain or predict.</p></li>
+<li><p><span class="math notranslate nohighlight">\(\hat{t}_{ob}\)</span> is the predicted value of <span class="math notranslate nohighlight">\(t_{ob}\)</span> from the first equation.</p></li>
+</ul>
+<p>We first regress <span class="math notranslate nohighlight">\(X_3\)</span> on the treatment and the other exogenous variables <span class="math notranslate nohighlight">\(X_1\)</span> and <span class="math notranslate nohighlight">\(X_2\)</span> to get the predicted values <span class="math notranslate nohighlight">\(\hat{t}_{ob}\)</span>. Then, we replace <span class="math notranslate nohighlight">\(t_{ob}\)</span> with <span class="math notranslate nohighlight">\(\hat{t}_{ob}\)</span> in the second equation and estimate the parameters. This gives us the causal effect of <span class="math notranslate nohighlight">\(t_{ob}\)</span> on <span class="math notranslate nohighlight">\(Y\)</span>, purged of the endogeneity problem.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Methods<span class="colon">:</span></dt>
+<dd class="field-odd"><p></p></dd>
+</dl>
+<ul class="simple">
+<li><p>fit: Fits the model with the given formula.</p></li>
+<li><p>summary: Displays the summary of the model fit.</p></li>
+</ul>
+<section id="id16">
+<h3>Example<a class="headerlink" href="#id16" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.regression</span> <span class="k">as</span> <span class="nn">Regression</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Regression</span><span class="o">.</span><span class="n">IV</span><span class="p">()</span>
+<span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">,</span><span class="n">formula</span><span class="o">=</span><span class="s1">&#39;y~(t_ob~treatment)+x1+x2&#39;</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">summary</span><span class="p">()</span>
+
+<span class="n">df</span><span class="o">.</span><span class="n">iv_regression</span><span class="p">(</span><span class="s1">&#39;y~(t_ob~treatment)+x1+x2&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="n">df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">Regression</span><span class="o">.</span><span class="n">iv_regression</span><span class="p">(</span><span class="s1">&#39;y~(t_ob~treatment)+x1+x2&#39;</span><span class="p">))</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="dataframe.regression.IV.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">formula</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/regression.html#IV.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.regression.IV.fit" title="Permalink to this definition"></a></dt>
+<dd><p>Fits the model with the given formula.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>formula</strong> (<em>str</em><em>, </em><em>required</em>) – str, the formula to fit the model.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dataframe.regression.IV.summary">
+<span class="sig-name descname"><span class="pre">summary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/regression.html#IV.summary"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.regression.IV.summary" title="Permalink to this definition"></a></dt>
+<dd><p>Displays the summary of the model fit.</p>
+</dd></dl>
+
+</section>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="dataframe.regression.Logistic">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dataframe.regression.</span></span><span class="sig-name descname"><span class="pre">Logistic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">iter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">500</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/regression.html#Logistic"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.regression.Logistic" title="Permalink to this definition"></a></dt>
+<dd><p>This class implements a Logistic Regression model.</p>
+<section id="id17">
+<h3>Parameters<a class="headerlink" href="#id17" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>tol<span class="classifier">float</span></dt><dd><p>The tolerance for stopping criteria.</p>
+</dd>
+<dt>iter<span class="classifier">int</span></dt><dd><p>The maximum number of iterations.</p>
+</dd>
+</dl>
+</section>
+<section id="id18">
+<h3>Example<a class="headerlink" href="#id18" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.regression</span> <span class="kn">import</span> <span class="n">Logistic</span>
+<span class="n">table</span> <span class="o">=</span> <span class="s1">&#39;test_data_small&#39;</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+<span class="n">X</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;x2&#39;</span><span class="p">,</span> <span class="s1">&#39;x3&#39;</span><span class="p">,</span> <span class="s1">&#39;x4&#39;</span><span class="p">,</span> <span class="s1">&#39;x5&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail1&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail2&#39;</span><span class="p">]</span>
+<span class="n">Y</span> <span class="o">=</span> <span class="s1">&#39;t_ob&#39;</span>
+
+<span class="n">logit</span> <span class="o">=</span> <span class="n">Logistic</span><span class="p">(</span><span class="n">tol</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span> <span class="nb">iter</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span>
+<span class="n">logit</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+<span class="n">logit</span><span class="o">.</span><span class="n">summary</span><span class="p">()</span>
+<span class="c1"># Output:</span>
+<span class="c1">#                  x      beta</span>
+<span class="c1">#     0     intercept  0.083472</span>
+<span class="c1">#     1            x1  0.957999</span>
+<span class="c1">#     2            x2  0.217600</span>
+<span class="c1">#     3            x3  0.534323</span>
+<span class="c1">#     4            x4 -0.006258</span>
+<span class="c1">#     5            x5 -0.020528</span>
+<span class="c1">#     6  x_long_tail1 -0.036267</span>
+<span class="c1">#     7  x_long_tail2  0.000232</span>
+
+<span class="c1"># predict</span>
+<span class="n">df_predict</span> <span class="o">=</span> <span class="n">logit</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+<span class="n">df_predict</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="s1">&#39;prob&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="c1">#                             prob</span>
+<span class="c1"># 0      0.549151214991665</span>
+<span class="c1"># 1     0.8876947633647565</span>
+<span class="c1"># 2    0.10790926234343089</span>
+<span class="c1"># 3      0.791206731095578</span>
+<span class="c1"># 4     0.7341882818925854</span>
+<span class="c1"># ..                   ...</span>
+<span class="c1"># 195  0.21966953201618872</span>
+<span class="c1"># 196   0.5813872122369445</span>
+<span class="c1"># 197   0.5766490178541132</span>
+<span class="c1"># 198   0.5210472623083635</span>
+<span class="c1"># 199  0.35841097345616885</span>
+
+<span class="n">logit</span><span class="o">.</span><span class="n">get_auc</span><span class="p">(</span><span class="n">df</span><span class="o">=</span><span class="n">df_predict</span><span class="p">,</span><span class="n">Y</span><span class="o">=</span><span class="n">Y</span><span class="p">,</span><span class="n">prob_col</span><span class="o">=</span><span class="s2">&quot;prob&quot;</span><span class="p">)</span>
+<span class="c1"># 0.7587271750805586</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="dataframe.regression.Ols">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dataframe.regression.</span></span><span class="sig-name descname"><span class="pre">Ols</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">use_bias</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/regression.html#Ols"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.regression.Ols" title="Permalink to this definition"></a></dt>
+<dd><p>This function is for an Ordinary Least Squares (OLS) model calculated using Stochastic Gradient Descent. The fit method is used to train the model using a specified regression formula and dataset. The effect method is used to make predictions based on the trained model, the regression formula, and a new dataset. The predicted results are stored in a column with a specified name in the DataFrame.</p>
+<p>Parameters:
+use_bias: bool, default=True, whether to use an intercept</p>
+<dl>
+<dt>Methods:</dt><dd><dl class="simple">
+<dt>fit(expr, df): Train the model</dt><dd><p>expr : str, regression formula
+df : DataFrame, dataset</p>
+</dd>
+<dt>effect(expr, df, effect_name): Predict</dt><dd><p>expr : str, regression formula
+df : DataFrame, dataset
+effect_name : str, column name for the prediction result, default is ‘effect’</p>
+</dd>
+</dl>
+<p>summary(): Display the summary of the model</p>
+</dd>
+</dl>
+<section id="id19">
+<h3>Example<a class="headerlink" href="#id19" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.regression</span> <span class="k">as</span> <span class="nn">Regression</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Regression</span><span class="o">.</span><span class="n">Ols</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="s1">&#39;y~x1+x2+x3&#39;</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+<span class="n">effect_df</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">effect</span><span class="p">(</span><span class="s1">&#39;x1+x2+x3&#39;</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+<span class="n">effect_df</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="dataframe.regression.StochasticLinearRegression">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dataframe.regression.</span></span><span class="sig-name descname"><span class="pre">StochasticLinearRegression</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">learning_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l1</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'SGD'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/regression.html#StochasticLinearRegression"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.regression.StochasticLinearRegression" title="Permalink to this definition"></a></dt>
+<dd><p>This function is for a Stochastic Linear Regression model. The fit method is used to train the model using a specified regression formula and a dataset. The effect method is used to make predictions based on the trained model, the regression formula, and a new dataset. The predicted results are stored in a column with a specified name in the DataFrame. The learning_rate, l1, batch_size, and method parameters are used to control the learning rate, L1 regularization coefficient, batch size, and optimization method respectively.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><p>learning_rate : float, default=0.00001, learning rate
+l1 : float, default=0.1, L1 regularization coefficient
+batch_size : int, default=15, batch size
+method : str, default=’SGD’, optimization method</p>
+</dd>
+<dt>Methods:</dt><dd><dl class="simple">
+<dt>fit(expr, df): Train the model</dt><dd><p>expr : str, regression formula
+df : DataFrame, dataset</p>
+</dd>
+<dt>effect(expr, df, effect_name): Predict</dt><dd><p>expr : str, regression formula
+df : DataFrame, dataset
+effect_name : str, column name for the prediction result, default is ‘effect’</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<section id="id20">
+<h3>Example<a class="headerlink" href="#id20" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.regression</span> <span class="k">as</span> <span class="nn">Regression</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Regression</span><span class="o">.</span><span class="n">StochasticLinearRegression</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">,</span> <span class="n">l1</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;SGD&#39;</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="s1">&#39;y~x1+x2+x3&#39;</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+<span class="n">effect_df</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">effect</span><span class="p">(</span><span class="s1">&#39;x1+x2+x3&#39;</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+<span class="n">effect_df</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="dataframe.regression.StochasticLogisticRegression">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dataframe.regression.</span></span><span class="sig-name descname"><span class="pre">StochasticLogisticRegression</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">learning_rate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">l1</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'SGD'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/regression.html#StochasticLogisticRegression"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.regression.StochasticLogisticRegression" title="Permalink to this definition"></a></dt>
+<dd><p>This function is for a Stochastic Logistic Regression model. The fit method is used to train the model using a specified regression formula and a dataset. The effect method is used to make predictions based on the trained model, the regression formula, and a new dataset. The predicted results are stored in a column with a specified name in the DataFrame. The learning_rate, l1, batch_size, and method parameters are used to control the learning rate, L1 regularization coefficient, batch size, and optimization method respectively.</p>
+<dl class="simple">
+<dt>Parameters:</dt><dd><p>learning_rate : float, default=0.00001, learning rate
+l1 : float, default=0.1, L1 regularization coefficient
+batch_size : int, default=15, batch size
+method : str, default=’SGD’, optimization method</p>
+</dd>
+<dt>Methods:</dt><dd><dl class="simple">
+<dt>fit(expr, df): Train the model</dt><dd><p>expr : str, regression formula
+df : DataFrame, dataset</p>
+</dd>
+<dt>effect(expr, df, effect_name): Predict</dt><dd><p>expr : str, regression formula
+df : DataFrame, dataset
+effect_name : str, column name for the prediction result, default is ‘effect’</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<section id="id21">
+<h3>Example<a class="headerlink" href="#id21" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.regression</span> <span class="k">as</span> <span class="nn">Regression</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Regression</span><span class="o">.</span><span class="n">StochasticLogisticRegression</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">,</span> <span class="n">l1</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s1">&#39;SGD&#39;</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="s1">&#39;y~x1+x2+x3&#39;</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+<span class="n">effect_df</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">effect</span><span class="p">(</span><span class="s1">&#39;x1+x2+x3&#39;</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+<span class="n">effect_df</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="dataframe.regression.Wls">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dataframe.regression.</span></span><span class="sig-name descname"><span class="pre">Wls</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'1'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_bias</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/regression.html#Wls"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.regression.Wls" title="Permalink to this definition"></a></dt>
+<dd><p>This function is for a Weighted Least Squares (WLS) model. The fit method is used to train the model using a specified regression formula and dataset. The effect method is used to make predictions based on the trained model, the regression formula, and a new dataset. The predicted results are stored in a column with a specified name in the DataFrame. The weight parameter specifies the column name for weights in the DataFrame.</p>
+<dl>
+<dt>Parameters:</dt><dd><p>weight : str, column name for weights
+use_bias : bool, default=True, whether to use an intercept</p>
+</dd>
+<dt>Methods:</dt><dd><dl class="simple">
+<dt>fit(expr, df): Train the model</dt><dd><p>expr : str, regression formula
+df : DataFrame, dataset</p>
+</dd>
+<dt>effect(expr, df, effect_name): Predict</dt><dd><p>expr : str, regression formula
+df : DataFrame, dataset
+effect_name : str, column name for the prediction result, default is ‘effect’</p>
+</dd>
+</dl>
+<p>summary(): Display the summary of the model</p>
+</dd>
+</dl>
+<section id="id22">
+<h3>Example<a class="headerlink" href="#id22" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.regression</span> <span class="k">as</span> <span class="nn">Regression</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Regression</span><span class="o">.</span><span class="n">Wls</span><span class="p">(</span><span class="n">weight</span><span class="o">=</span><span class="s1">&#39;1&#39;</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="s1">&#39;y~x1+x2+x3&#39;</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+<span class="n">effect_df</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">effect</span><span class="p">(</span><span class="s1">&#39;x1+x2+x3&#39;</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+<span class="n">effect_df</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+</section>
+<section id="uplift">
+<h2>Uplift<a class="headerlink" href="#uplift" title="Permalink to this heading"></a></h2>
+<span class="target" id="module-dataframe.uplift"><span id="uplift-api"></span></span><dl class="py class">
+<dt class="sig sig-object py" id="dataframe.uplift.CausalForest">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dataframe.uplift.</span></span><span class="sig-name descname"><span class="pre">CausalForest</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_node_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mtry</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_trees</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample_fraction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">honesty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">honesty_fraction</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quantile_num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/uplift.html#CausalForest"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.uplift.CausalForest" title="Permalink to this definition"></a></dt>
+<dd><p>This class implements the Causal Forest method for causal inference.</p>
+<section id="id23">
+<h3>Parameters<a class="headerlink" href="#id23" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>depth<span class="classifier">int, default=7</span></dt><dd><p>The maximum depth of the tree.</p>
+</dd>
+<dt>min_node_size<span class="classifier">int, default=-1</span></dt><dd><p>The minimum node size.</p>
+</dd>
+<dt>mtry<span class="classifier">int, default=3</span></dt><dd><p>The number of variables randomly sampled as candidates at each split.</p>
+</dd>
+<dt>num_trees<span class="classifier">int, default=10</span></dt><dd><p>The number of trees to grow in the forest.</p>
+</dd>
+<dt>sample_fraction<span class="classifier">float, default=0.7</span></dt><dd><p>The fraction of observations to consider when fitting the forest.</p>
+</dd>
+<dt>weight_index<span class="classifier">str, default=’’</span></dt><dd><p>The weight index.</p>
+</dd>
+<dt>honesty<span class="classifier">bool, default=False</span></dt><dd><p>Whether to use honesty when fitting the forest.</p>
+</dd>
+<dt>honesty_fraction<span class="classifier">float, default=0.5</span></dt><dd><p>The fraction of observations to use for determining splits if honesty is used.</p>
+</dd>
+<dt>quantile_num<span class="classifier">int, default=50</span></dt><dd><p>The number of quantiles.</p>
+</dd>
+</dl>
+</section>
+<section id="methods">
+<h3>Methods<a class="headerlink" href="#methods" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>fit(Y, T, X, df):</dt><dd><p>Fit the Causal Forest model to the input data.</p>
+</dd>
+<dt>effect(input_df=None, X=[]):</dt><dd><p>Estimate the causal effect using the fitted model.</p>
+</dd>
+</dl>
+</section>
+<section id="id24">
+<h3>Example<a class="headerlink" href="#id24" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.uplift</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="n">Y</span><span class="o">=</span><span class="s1">&#39;y&#39;</span>
+<span class="n">T</span><span class="o">=</span><span class="s1">&#39;treatment&#39;</span>
+<span class="n">table</span> <span class="o">=</span> <span class="s1">&#39;test_data_small&#39;</span>
+<span class="n">X</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;x2&#39;</span><span class="p">,</span> <span class="s1">&#39;x3&#39;</span><span class="p">,</span> <span class="s1">&#39;x4&#39;</span><span class="p">,</span> <span class="s1">&#39;x5&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail1&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail2&#39;</span><span class="p">]</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+<span class="n">df_train</span><span class="p">,</span> <span class="n">df_test</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.uplift</span> <span class="kn">import</span> <span class="n">CausalForest</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">CausalForest</span><span class="p">(</span><span class="n">depth</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span> <span class="n">min_node_size</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">mtry</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">num_trees</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">sample_fraction</span><span class="o">=</span><span class="mf">0.7</span><span class="p">)</span>
+<span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">df_train</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="dataframe.uplift.CausalForest.effect">
+<span class="sig-name descname"><span class="pre">effect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/uplift.html#CausalForest.effect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.uplift.CausalForest.effect" title="Permalink to this definition"></a></dt>
+<dd><p>Estimate the causal effect using the fitted model.</p>
+<section id="id25">
+<h4>Parameters<a class="headerlink" href="#id25" title="Permalink to this heading"></a></h4>
+<dl class="simple">
+<dt>df<span class="classifier">DataFrame, default=None</span></dt><dd><p>The input dataframe for which to estimate the causal effect. If None, use the dataframe from the fit method.</p>
+</dd>
+<dt>X<span class="classifier">list, default=[]</span></dt><dd><p>The covariates to use when estimating the causal effect. [‘x1’, ‘x2’, ‘x3’, ‘x4’, ‘x5’, ‘x_long_tail1’, ‘x_long_tail2’]</p>
+</dd>
+</dl>
+</section>
+<section id="returns">
+<h4>Returns<a class="headerlink" href="#returns" title="Permalink to this heading"></a></h4>
+<dl class="simple">
+<dt>DataFrame</dt><dd><p>The output dataframe with the estimated causal effect.</p>
+</dd>
+</dl>
+</section>
+<section id="id26">
+<h4>Example<a class="headerlink" href="#id26" title="Permalink to this heading"></a></h4>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">df_test_effect_cf</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">effect</span><span class="p">(</span><span class="n">df</span><span class="o">=</span><span class="n">df_test</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;x2&#39;</span><span class="p">,</span> <span class="s1">&#39;x3&#39;</span><span class="p">,</span> <span class="s1">&#39;x4&#39;</span><span class="p">,</span> <span class="s1">&#39;x5&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail1&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail2&#39;</span><span class="p">])</span>
+<span class="n">df_train_effect_cf</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">effect</span><span class="p">(</span><span class="n">df</span><span class="o">=</span><span class="n">df_train</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;x2&#39;</span><span class="p">,</span> <span class="s1">&#39;x3&#39;</span><span class="p">,</span> <span class="s1">&#39;x4&#39;</span><span class="p">,</span> <span class="s1">&#39;x5&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail1&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail2&#39;</span><span class="p">])</span>
+<span class="n">lift_train</span> <span class="o">=</span> <span class="n">get_lift_gain</span><span class="p">(</span><span class="s2">&quot;effect&quot;</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">df_test_effect_cf</span><span class="p">,</span><span class="n">discrete_treatment</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">K</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<span class="n">lift_test</span> <span class="o">=</span> <span class="n">get_lift_gain</span><span class="p">(</span><span class="s2">&quot;effect&quot;</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">df_train_effect_cf</span><span class="p">,</span><span class="n">discrete_treatment</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">K</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">lift_train</span><span class="p">,</span><span class="n">lift_test</span><span class="p">)</span>
+<span class="n">hte_plot</span><span class="p">([</span><span class="n">lift_train</span><span class="p">,</span><span class="n">lift_test</span><span class="p">],</span><span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;train&#39;</span><span class="p">,</span><span class="s1">&#39;test&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="dataframe.uplift.CausalForest.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">X</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/uplift.html#CausalForest.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.uplift.CausalForest.fit" title="Permalink to this definition"></a></dt>
+<dd><p>Fit the Causal Forest model to the input data.</p>
+<section id="id27">
+<h4>Parameters<a class="headerlink" href="#id27" title="Permalink to this heading"></a></h4>
+<dl class="simple">
+<dt>Y<span class="classifier">str</span></dt><dd><p>The outcome variable.</p>
+</dd>
+<dt>T<span class="classifier">str</span></dt><dd><p>The treatment variable.</p>
+</dd>
+<dt>X<span class="classifier">list</span></dt><dd><p>The numeric covariates. Strings are not supported. [‘x1’, ‘x2’, ‘x3’, ‘x4’, ‘x5’, ‘x_long_tail1’, ‘x_long_tail2’]</p>
+</dd>
+<dt>df<span class="classifier">DataFrame</span></dt><dd><p>The input dataframe.</p>
+</dd>
+</dl>
+</section>
+<section id="id28">
+<h4>Returns<a class="headerlink" href="#id28" title="Permalink to this heading"></a></h4>
+<p>None</p>
+</section>
+</dd></dl>
+
+</section>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="dataframe.uplift.CausalTree">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dataframe.uplift.</span></span><span class="sig-name descname"><span class="pre">CausalTree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_sample_ratio_leaf</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bin_num</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/uplift.html#CausalTree"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.uplift.CausalTree" title="Permalink to this definition"></a></dt>
+<dd><p>This class implements a Causal Tree for uplift/HTE analysis.</p>
+<section id="id29">
+<h3>Parameters<a class="headerlink" href="#id29" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>depth<span class="classifier">int</span></dt><dd><p>The maximum depth of the tree.</p>
+</dd>
+<dt>threshold<span class="classifier">float</span></dt><dd><p>The minimum sample ratio for a leaf.</p>
+</dd>
+<dt>bin_num<span class="classifier">int</span></dt><dd><p>The number of bins for the need_cut_X to cut.</p>
+</dd>
+</dl>
+</section>
+<section id="id30">
+<h3>Example<a class="headerlink" href="#id30" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.uplift</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="n">Y</span><span class="o">=</span><span class="s1">&#39;y&#39;</span>
+<span class="n">T</span><span class="o">=</span><span class="s1">&#39;treatment&#39;</span>
+<span class="n">table</span> <span class="o">=</span> <span class="s1">&#39;test_data_small&#39;</span>
+<span class="n">X</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;x2&#39;</span><span class="p">,</span> <span class="s1">&#39;x3&#39;</span><span class="p">,</span> <span class="s1">&#39;x4&#39;</span><span class="p">,</span> <span class="s1">&#39;x5&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail1&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail2&#39;</span><span class="p">]</span>
+<span class="n">needcut_X</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span> <span class="s1">&#39;x2&#39;</span><span class="p">,</span> <span class="s1">&#39;x3&#39;</span><span class="p">,</span> <span class="s1">&#39;x4&#39;</span><span class="p">,</span> <span class="s1">&#39;x5&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail1&#39;</span><span class="p">,</span> <span class="s1">&#39;x_long_tail2&#39;</span><span class="p">]</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+<span class="n">df_train</span><span class="p">,</span> <span class="n">df_test</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="n">hte</span> <span class="o">=</span> <span class="n">CausalTree</span><span class="p">(</span><span class="n">depth</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span><span class="n">min_sample_ratio_leaf</span><span class="o">=</span><span class="mf">0.001</span><span class="p">)</span>
+<span class="n">hte</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span><span class="n">T</span><span class="p">,</span><span class="n">X</span><span class="p">,</span><span class="n">needcut_X</span><span class="p">,</span><span class="n">df_train</span><span class="p">)</span>
+<span class="n">treeplot</span> <span class="o">=</span> <span class="n">hte</span><span class="o">.</span><span class="n">treeplot</span><span class="p">()</span> <span class="c1"># causal tree plot</span>
+<span class="n">treeplot</span><span class="o">.</span><span class="n">render</span><span class="p">(</span><span class="s1">&#39;digraph.gv&#39;</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="c1"># 可以在digraph.gv.pdf文件里查看tree的完整图片并下载</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">hte</span><span class="o">.</span><span class="n">feature_importance</span><span class="p">)</span>
+<span class="c1"># Output:</span>
+<span class="c1">#                    featName    importance</span>
+<span class="c1">#     1            x2_buckets  1.015128e+06</span>
+<span class="c1">#     0            x1_buckets  2.181346e+05</span>
+<span class="c1">#     3            x4_buckets  1.023273e+05</span>
+<span class="c1">#     5  x_long_tail1_buckets  5.677131e+04</span>
+<span class="c1">#     2            x3_buckets  2.537835e+04</span>
+<span class="c1">#     6  x_long_tail2_buckets  2.536951e+04</span>
+<span class="c1">#     4            x5_buckets  7.259992e+03</span>
+
+<span class="n">df_train_pred</span> <span class="o">=</span> <span class="n">hte</span><span class="o">.</span><span class="n">effect</span><span class="p">(</span><span class="n">df</span><span class="o">=</span><span class="n">df_train</span><span class="p">,</span><span class="n">keep_col</span><span class="o">=</span><span class="s1">&#39;*&#39;</span><span class="p">)</span>
+<span class="n">df_test_pred</span> <span class="o">=</span> <span class="n">hte</span><span class="o">.</span><span class="n">effect</span><span class="p">(</span><span class="n">df</span><span class="o">=</span><span class="n">df_test</span><span class="p">,</span><span class="n">keep_col</span><span class="o">=</span><span class="s1">&#39;*&#39;</span><span class="p">)</span>
+<span class="n">lift_train</span> <span class="o">=</span> <span class="n">get_lift_gain</span><span class="p">(</span><span class="s2">&quot;effect&quot;</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">df_train_pred</span><span class="p">,</span><span class="n">discrete_treatment</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">K</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<span class="n">lift_test</span> <span class="o">=</span> <span class="n">get_lift_gain</span><span class="p">(</span><span class="s2">&quot;effect&quot;</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">df_test_pred</span><span class="p">,</span><span class="n">discrete_treatment</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">K</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">lift_train</span><span class="p">,</span><span class="n">lift_test</span><span class="p">)</span>
+<span class="n">hte_plot</span><span class="p">([</span><span class="n">lift_train</span><span class="p">,</span><span class="n">lift_test</span><span class="p">],</span><span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;train&#39;</span><span class="p">,</span><span class="s1">&#39;test&#39;</span><span class="p">])</span>
+<span class="c1"># auuc: 0.6624369283393814</span>
+<span class="c1"># auuc: 0.6532554148698826</span>
+<span class="c1">#        ratio      lift      gain  ate  ramdom_gain</span>
+<span class="c1"># 0   0.009990  2.164241  0.021621  1.0     0.009990</span>
+<span class="c1"># 1   0.019980  2.131245  0.042582  1.0     0.019980</span>
+<span class="c1"># 2   0.029970  2.056440  0.061632  1.0     0.029970</span>
+<span class="c1"># 3   0.039960  2.177768  0.087024  1.0     0.039960</span>
+<span class="c1"># 4   0.049950  2.175329  0.108658  1.0     0.049950</span>
+<span class="c1"># ..       ...       ...       ...  ...          ...</span>
+<span class="c1"># 95  0.959241  1.015223  0.973843  1.0     0.959241</span>
+<span class="c1"># 96  0.969431  1.010023  0.979147  1.0     0.969431</span>
+<span class="c1"># 97  0.979620  1.006843  0.986324  1.0     0.979620</span>
+<span class="c1"># 98  0.989810  1.003508  0.993283  1.0     0.989810</span>
+<span class="c1"># 99  1.000000  1.000000  1.000000  1.0     1.000000</span>
+
+<span class="c1"># [100 rows x 5 columns]        ratio      lift      gain  ate  ramdom_gain</span>
+<span class="c1"># 0   0.009810  1.948220  0.019112  1.0     0.009810</span>
+<span class="c1"># 1   0.019620  2.221654  0.043588  1.0     0.019620</span>
+<span class="c1"># 2   0.029429  2.419752  0.071212  1.0     0.029429</span>
+<span class="c1"># 3   0.039239  2.288460  0.089797  1.0     0.039239</span>
+<span class="c1"># 4   0.049049  2.343432  0.114943  1.0     0.049049</span>
+<span class="c1"># ..       ...       ...       ...  ...          ...</span>
+<span class="c1"># 95  0.959960  1.014897  0.974260  1.0     0.959960</span>
+<span class="c1"># 96  0.969970  1.011624  0.981245  1.0     0.969970</span>
+<span class="c1"># 97  0.979980  1.009358  0.989150  1.0     0.979980</span>
+<span class="c1"># 98  0.989990  1.006340  0.996267  1.0     0.989990</span>
+<span class="c1"># 99  1.000000  1.000000  1.000000  1.0     1.000000</span>
+
+<span class="c1"># [100 rows x 5 columns]</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="dataframe.uplift.CausalTree.effect">
+<span class="sig-name descname"><span class="pre">effect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keep_col</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'*'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/uplift.html#CausalTree.effect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.uplift.CausalTree.effect" title="Permalink to this definition"></a></dt>
+<dd><p>Calculate the individual treatment effect.</p>
+<section id="id31">
+<h4>Parameters<a class="headerlink" href="#id31" title="Permalink to this heading"></a></h4>
+<dl class="simple">
+<dt>df<span class="classifier">DataFrame</span></dt><dd><p>The input data.</p>
+</dd>
+<dt>keep_col<span class="classifier">str, optional</span></dt><dd><p>The columns to keep. Defaults to ‘*’.</p>
+</dd>
+</dl>
+</section>
+<section id="id32">
+<h4>Returns<a class="headerlink" href="#id32" title="Permalink to this heading"></a></h4>
+<dl class="simple">
+<dt>DataFrame</dt><dd><p>The result data.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.uplift.get_lift_gain">
+<span class="sig-prename descclassname"><span class="pre">dataframe.uplift.</span></span><span class="sig-name descname"><span class="pre">get_lift_gain</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ITE</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">normalize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">K</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">discrete_treatment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/uplift.html#get_lift_gain"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.uplift.get_lift_gain" title="Permalink to this definition"></a></dt>
+<dd><p>Calculate the uplift &amp; gain.</p>
+<section id="id33">
+<h3>Parameters<a class="headerlink" href="#id33" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>ITE<span class="classifier">str</span></dt><dd><p>The Individual Treatment Effect column.</p>
+</dd>
+<dt>Y<span class="classifier">str</span></dt><dd><p>The outcome variable column.</p>
+</dd>
+<dt>T<span class="classifier">str</span></dt><dd><p>The treatment variable column.</p>
+</dd>
+<dt>df<span class="classifier">DataFrame</span></dt><dd><p>The input data.</p>
+</dd>
+<dt>normalize<span class="classifier">bool, optional</span></dt><dd><p>Whether to normalize the result, default is True.</p>
+</dd>
+<dt>K<span class="classifier">int, optional</span></dt><dd><p>The number of bins for discretization, default is 1000.</p>
+</dd>
+<dt>discrete_treatment<span class="classifier">bool, optional</span></dt><dd><p>Whether the treatment is discrete, default is True.</p>
+</dd>
+</dl>
+</section>
+<section id="id34">
+<h3>Returns<a class="headerlink" href="#id34" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>LiftGainCurveResult</dt><dd><p>An object containing the result of the uplift &amp; gain calculation.</p>
+</dd>
+</dl>
+</section>
+<section id="id35">
+<h3>Example<a class="headerlink" href="#id35" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.uplift</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="n">Y</span><span class="o">=</span><span class="s1">&#39;y&#39;</span>
+<span class="n">T</span><span class="o">=</span><span class="s1">&#39;treatment&#39;</span>
+<span class="n">table</span> <span class="o">=</span> <span class="s1">&#39;test_data_small&#39;</span>
+<span class="n">X</span> <span class="o">=</span> <span class="s1">&#39;x1+x2+x3+x4+x5+x_long_tail1+x_long_tail2&#39;</span>
+<span class="n">needcut_X</span> <span class="o">=</span> <span class="s1">&#39;x1+x2+x3+x4+x5+x_long_tail1+x_long_tail2&#39;</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">readClickHouse</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+<span class="n">df_train</span><span class="p">,</span> <span class="n">df_test</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="n">hte</span> <span class="o">=</span> <span class="n">CausalTree</span><span class="p">(</span><span class="n">depth</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span><span class="n">min_sample_ratio_leaf</span><span class="o">=</span><span class="mf">0.001</span><span class="p">)</span>
+<span class="n">hte</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span><span class="n">T</span><span class="p">,</span><span class="n">X</span><span class="p">,</span><span class="n">needcut_X</span><span class="p">,</span><span class="n">df_train</span><span class="p">)</span>
+
+<span class="n">df_train_pred</span> <span class="o">=</span> <span class="n">hte</span><span class="o">.</span><span class="n">effect</span><span class="p">(</span><span class="n">df</span><span class="o">=</span><span class="n">df_train</span><span class="p">,</span><span class="n">keep_col</span><span class="o">=</span><span class="s1">&#39;*&#39;</span><span class="p">)</span>
+<span class="n">df_test_pred</span> <span class="o">=</span> <span class="n">hte</span><span class="o">.</span><span class="n">effect</span><span class="p">(</span><span class="n">df</span><span class="o">=</span><span class="n">df_test</span><span class="p">,</span><span class="n">keep_col</span><span class="o">=</span><span class="s1">&#39;*&#39;</span><span class="p">)</span>
+<span class="n">lift_train</span> <span class="o">=</span> <span class="n">get_lift_gain</span><span class="p">(</span><span class="s2">&quot;effect&quot;</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">df_train_pred</span><span class="p">,</span><span class="n">discrete_treatment</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">K</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<span class="n">lift_test</span> <span class="o">=</span> <span class="n">get_lift_gain</span><span class="p">(</span><span class="s2">&quot;effect&quot;</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">df_test_pred</span><span class="p">,</span><span class="n">discrete_treatment</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">K</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">lift_train</span><span class="p">,</span><span class="n">lift_test</span><span class="p">)</span>
+<span class="n">hte_plot</span><span class="p">([</span><span class="n">lift_train</span><span class="p">,</span><span class="n">lift_test</span><span class="p">],</span><span class="n">labels</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;train&#39;</span><span class="p">,</span><span class="s1">&#39;test&#39;</span><span class="p">])</span>
+<span class="c1"># auuc: 0.6624369283393814</span>
+<span class="c1"># auuc: 0.6532554148698826</span>
+<span class="c1">#        ratio      lift      gain  ate  ramdom_gain</span>
+<span class="c1"># 0   0.009990  2.164241  0.021621  1.0     0.009990</span>
+<span class="c1"># 1   0.019980  2.131245  0.042582  1.0     0.019980</span>
+<span class="c1"># 2   0.029970  2.056440  0.061632  1.0     0.029970</span>
+<span class="c1"># 3   0.039960  2.177768  0.087024  1.0     0.039960</span>
+<span class="c1"># 4   0.049950  2.175329  0.108658  1.0     0.049950</span>
+<span class="c1"># ..       ...       ...       ...  ...          ...</span>
+<span class="c1"># 95  0.959241  1.015223  0.973843  1.0     0.959241</span>
+<span class="c1"># 96  0.969431  1.010023  0.979147  1.0     0.969431</span>
+<span class="c1"># 97  0.979620  1.006843  0.986324  1.0     0.979620</span>
+<span class="c1"># 98  0.989810  1.003508  0.993283  1.0     0.989810</span>
+<span class="c1"># 99  1.000000  1.000000  1.000000  1.0     1.000000</span>
+
+<span class="c1"># [100 rows x 5 columns]        ratio      lift      gain  ate  ramdom_gain</span>
+<span class="c1"># 0   0.009810  1.948220  0.019112  1.0     0.009810</span>
+<span class="c1"># 1   0.019620  2.221654  0.043588  1.0     0.019620</span>
+<span class="c1"># 2   0.029429  2.419752  0.071212  1.0     0.029429</span>
+<span class="c1"># 3   0.039239  2.288460  0.089797  1.0     0.039239</span>
+<span class="c1"># 4   0.049049  2.343432  0.114943  1.0     0.049049</span>
+<span class="c1"># ..       ...       ...       ...  ...          ...</span>
+<span class="c1"># 95  0.959960  1.014897  0.974260  1.0     0.959960</span>
+<span class="c1"># 96  0.969970  1.011624  0.981245  1.0     0.969970</span>
+<span class="c1"># 97  0.979980  1.009358  0.989150  1.0     0.979980</span>
+<span class="c1"># 98  0.989990  1.006340  0.996267  1.0     0.989990</span>
+<span class="c1"># 99  1.000000  1.000000  1.000000  1.0     1.000000</span>
+
+<span class="c1"># [100 rows x 5 columns]</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.uplift.hte_plot">
+<span class="sig-prename descclassname"><span class="pre">dataframe.uplift.</span></span><span class="sig-name descname"><span class="pre">hte_plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">results</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">labels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/uplift.html#hte_plot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.uplift.hte_plot" title="Permalink to this definition"></a></dt>
+<dd><p>Plot the uplift &amp; gain.</p>
+<section id="id36">
+<h3>Parameters<a class="headerlink" href="#id36" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>results<span class="classifier">list</span></dt><dd><p>A list of LiftGainCurveResult objects to be plotted.</p>
+</dd>
+<dt>labels<span class="classifier">list, optional</span></dt><dd><p>A list of labels for the results, default is an empty list.</p>
+</dd>
+</dl>
+</section>
+<section id="id37">
+<h3>Returns<a class="headerlink" href="#id37" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>None</dt><dd><p>This function will display a plot.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+</section>
+<section id="match">
+<h2>Match<a class="headerlink" href="#match" title="Permalink to this heading"></a></h2>
+<span class="target" id="module-dataframe.match"><span id="match-api"></span></span><dl class="py class">
+<dt class="sig sig-object py" id="dataframe.match.CaliperMatching">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">dataframe.match.</span></span><span class="sig-name descname"><span class="pre">CaliperMatching</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">caliper</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.2</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/match.html#CaliperMatching"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.match.CaliperMatching" title="Permalink to this definition"></a></dt>
+<dd><p>This class implements the Caliper Matching method for causal inference.</p>
+<section id="id38">
+<h3>Parameters<a class="headerlink" href="#id38" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>caliper<span class="classifier">float, default=0.2</span></dt><dd><p>The caliper width for matching. Units are in terms of the standard deviation of the logit of the propensity score.</p>
+</dd>
+</dl>
+</section>
+<section id="id39">
+<h3>Methods<a class="headerlink" href="#id39" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>fit(dataframe, treatment, score, exacts=[], alias = ‘matching_index’):</dt><dd><p>Apply the Caliper Matching method to the input dataframe.</p>
+</dd>
+</dl>
+</section>
+<section id="id40">
+<h3>Example<a class="headerlink" href="#id40" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.match</span> <span class="k">as</span> <span class="nn">Match</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">readClickHouse</span><span class="p">(</span><span class="s1">&#39;test_data_small&#39;</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">Match</span><span class="o">.</span><span class="n">CaliperMatching</span><span class="p">(</span><span class="mf">0.5</span><span class="p">)</span>
+<span class="n">tmp</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">treatment</span><span class="o">=</span><span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="n">score</span><span class="o">=</span><span class="s1">&#39;weight&#39;</span><span class="p">,</span> <span class="n">exacts</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;x_cat1&#39;</span><span class="p">])</span>
+<span class="n">match_df</span> <span class="o">=</span> <span class="n">tmp</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="s2">&quot;matching_index!=0&quot;</span><span class="p">)</span> <span class="c1"># filter out the unmatched records</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s1">&#39;sample size Before match: &#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">df</span><span class="o">.</span><span class="n">count</span><span class="p">()</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s1">&#39;sample size After match: &#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">match_df</span><span class="o">.</span><span class="n">count</span><span class="p">()</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<span class="go">sample size Before match:</span>
+<span class="go">10000</span>
+<span class="go">sample size After match:</span>
+<span class="go">9652</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.match</span> <span class="k">as</span> <span class="nn">Match</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d1</span> <span class="o">=</span> <span class="n">Match</span><span class="o">.</span><span class="n">smd</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span><span class="s1">&#39;x2&#39;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">d1</span><span class="p">)</span>
+<span class="go">     Control  Treatment       SMD</span>
+<span class="go">x1 -0.012658  -0.023996 -0.011482</span>
+<span class="go">x2  0.005631   0.037718  0.016156</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.match</span> <span class="k">as</span> <span class="nn">Match</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d2</span> <span class="o">=</span> <span class="n">Match</span><span class="o">.</span><span class="n">smd</span><span class="p">(</span><span class="n">match_df</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span><span class="s1">&#39;x2&#39;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">d2</span><span class="p">)</span>
+<span class="go">     Control  Treatment       SMD</span>
+<span class="go">x1 -0.015521  -0.025225 -0.009821</span>
+<span class="go">x2  0.004834   0.039698  0.017551</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">Match</span><span class="o">.</span><span class="n">matching_plot</span><span class="p">(</span><span class="n">df_score</span><span class="p">,</span><span class="s1">&#39;treatment&#39;</span><span class="p">,</span><span class="s1">&#39;prob&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">Match</span><span class="o">.</span><span class="n">matching_plot</span><span class="p">(</span><span class="n">match_df</span><span class="p">,</span><span class="s1">&#39;treatment&#39;</span><span class="p">,</span><span class="s1">&#39;prob&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="dataframe.match.CaliperMatching.fit">
+<span class="sig-name descname"><span class="pre">fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataframe</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">treatment</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">score</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exacts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alias</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'matching_index'</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/match.html#CaliperMatching.fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.match.CaliperMatching.fit" title="Permalink to this definition"></a></dt>
+<dd><p>Apply the Caliper Matching method to the input dataframe.</p>
+<section id="id41">
+<h4>Parameters<a class="headerlink" href="#id41" title="Permalink to this heading"></a></h4>
+<dl class="simple">
+<dt>dataframe<span class="classifier">DataFrame</span></dt><dd><p>The input dataframe.</p>
+</dd>
+<dt>treatment<span class="classifier">str</span></dt><dd><p>The treatment column name.</p>
+</dd>
+<dt>score<span class="classifier">str</span></dt><dd><p>The propensity score column name.</p>
+</dd>
+<dt>exacts<span class="classifier">list, default=’’</span></dt><dd><p>The column names for exact matching, [‘x_cat1’].</p>
+</dd>
+<dt>alias<span class="classifier">str, default=’matching_index’</span></dt><dd><p>The alias for the matching index column in the output dataframe.</p>
+</dd>
+</dl>
+</section>
+<section id="id42">
+<h4>Returns<a class="headerlink" href="#id42" title="Permalink to this heading"></a></h4>
+<dl class="simple">
+<dt>DataFrame</dt><dd><p>The output dataframe with an additional column for the matching index.</p>
+</dd>
+</dl>
+</section>
+</dd></dl>
+
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.match.matching_plot">
+<span class="sig-prename descclassname"><span class="pre">dataframe.match.</span></span><span class="sig-name descname"><span class="pre">matching_plot</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">col</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xlim</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(0,</span> <span class="pre">1)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figsize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">(8,</span> <span class="pre">8)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xlabel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ylabel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'density'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">legend</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['Control',</span> <span class="pre">'Treatment']</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/match.html#matching_plot"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.match.matching_plot" title="Permalink to this definition"></a></dt>
+<dd><p>This function plots the overlaid distribution of col in df over
+treat and control group.</p>
+<section id="id43">
+<h3>Parameters<a class="headerlink" href="#id43" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>table: str</dt><dd><p>The name of the table to query from.</p>
+</dd>
+<dt>T<span class="classifier">str</span></dt><dd><p>The name of the treatment indicator column in the table.</p>
+</dd>
+<dt>col<span class="classifier">str</span></dt><dd><p>The name of the column that corresponds to the variable to plot.</p>
+</dd>
+<dt>xlim<span class="classifier">tuple, optional</span></dt><dd><p>The tuple of xlim of the plot. (0,1) by default.</p>
+</dd>
+<dt>figsize<span class="classifier">tuple, optional</span></dt><dd><p>The size of the histogram; (8,8) by default.</p>
+</dd>
+<dt>xlabel<span class="classifier">str, optional</span></dt><dd><p>The name of xlabel; col by default.</p>
+</dd>
+<dt>ylabel<span class="classifier">str, optional</span></dt><dd><p>The name of ylabel; <cite>density</cite> by default.</p>
+</dd>
+<dt>legend<span class="classifier">iterable, optional</span></dt><dd><p>The legend; <cite>Control</cite> and  <cite>Treatment</cite> by default.</p>
+</dd>
+</dl>
+</section>
+<section id="yields">
+<h3>Yields<a class="headerlink" href="#yields" title="Permalink to this heading"></a></h3>
+<p>An overlaied histogram</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.match</span> <span class="k">as</span> <span class="nn">Match</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">Match</span><span class="o">.</span><span class="n">matching_plot</span><span class="p">(</span><span class="n">df</span><span class="p">,</span><span class="s1">&#39;treatment&#39;</span><span class="p">,</span><span class="s1">&#39;x1&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="dataframe.match.smd">
+<span class="sig-prename descclassname"><span class="pre">dataframe.match.</span></span><span class="sig-name descname"><span class="pre">smd</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">T</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cols</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/dataframe/match.html#smd"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#dataframe.match.smd" title="Permalink to this definition"></a></dt>
+<dd><p>Calculate the Standardized Mean Difference (SMD) for the input dataframe.</p>
+<section id="id44">
+<h3>Parameters<a class="headerlink" href="#id44" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>df<span class="classifier">DataFrame</span></dt><dd><p>The input dataframe.</p>
+</dd>
+<dt>T<span class="classifier">str</span></dt><dd><p>The treatment column name.</p>
+</dd>
+<dt>cols<span class="classifier">str</span></dt><dd><p>The column names to calculate the SMD, separated by ‘+’.</p>
+</dd>
+</dl>
+</section>
+<section id="id45">
+<h3>Returns<a class="headerlink" href="#id45" title="Permalink to this heading"></a></h3>
+<dl class="simple">
+<dt>DataFrame</dt><dd><p>The output dataframe with the SMD results.</p>
+</dd>
+</dl>
+</section>
+<section id="id46">
+<h3>Example<a class="headerlink" href="#id46" title="Permalink to this heading"></a></h3>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">fast_causal_inference.dataframe.match</span> <span class="k">as</span> <span class="nn">Match</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">d2</span> <span class="o">=</span> <span class="n">Match</span><span class="o">.</span><span class="n">smd</span><span class="p">(</span><span class="n">match_df</span><span class="p">,</span> <span class="s1">&#39;treatment&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;x1&#39;</span><span class="p">,</span><span class="s1">&#39;x2&#39;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">d2</span><span class="p">)</span>
+<span class="go">     Control  Treatment       SMD</span>
+<span class="go">x1 -0.015521  -0.025225 -0.009821</span>
+<span class="go">x2  0.004834   0.039698  0.017551</span>
+</pre></div>
+</div>
+</section>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="dataframe.html" class="btn btn-neutral float-left" title="Dataframe Operations" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Tencent.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

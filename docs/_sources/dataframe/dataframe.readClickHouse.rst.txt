@@ -1,0 +1,6 @@
+﻿dataframe.readClickHouse
+========================
+
+.. currentmodule:: dataframe
+
+.. autofunction:: readClickHouse

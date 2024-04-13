@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dataframe.regression &mdash; Fast-Causal-Inference  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Fast-Causal-Inference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../input-output.html">Input/output</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../dataframe.html">Dataframe Operations</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../inference.html">Causal Inference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Fast-Causal-Inference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">dataframe.regression</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for dataframe.regression</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">scipy</span>
+<span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">roc_auc_score</span>
+
+<span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.functions</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">register_fn</span><span class="p">,</span>
+    <span class="n">define_args</span><span class="p">,</span>
+    <span class="n">FnArg</span><span class="p">,</span>
+    <span class="n">DfFunction</span><span class="p">,</span>
+    <span class="n">aggregrate</span><span class="p">,</span>
+    <span class="n">OlapEngineType</span><span class="p">,</span>
+    <span class="n">DfContext</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.df_base</span> <span class="kn">import</span> <span class="n">df_2_table</span><span class="p">,</span> <span class="n">table_2_df</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">scipy</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.lib.causaltree</span> <span class="kn">import</span> <span class="n">check_table</span><span class="p">,</span> <span class="n">check_columns</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.util</span> <span class="kn">import</span> <span class="n">SqlGateWayConn</span><span class="p">,</span> <span class="n">ClickHouseUtils</span>
+
+
+<span class="k">def</span> <span class="nf">dot</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">beta</span><span class="p">):</span>
+    <span class="n">sql</span> <span class="o">=</span> <span class="s2">&quot;+&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">}</span><span class="s2">*(</span><span class="si">{</span><span class="n">beta</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">))])</span>
+    <span class="k">return</span> <span class="n">sql</span>
+
+
+<span class="k">def</span> <span class="nf">auc</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">table</span><span class="p">,</span> <span class="n">prob_col</span><span class="o">=</span><span class="s2">&quot;prob&quot;</span><span class="p">):</span>
+    <span class="n">sql_instance</span> <span class="o">=</span> <span class="n">SqlGateWayConn</span><span class="o">.</span><span class="n">create_default_conn</span><span class="p">()</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;select </span><span class="si">{</span><span class="n">Y</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="n">prob_col</span><span class="si">}</span><span class="s2"> from (select *,rand()/pow(2,32) as rand from  </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2">) where rand&lt;0.2 limit 2000&quot;</span>
+    <span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
+    <span class="n">auc</span> <span class="o">=</span> <span class="n">roc_auc_score</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">Y</span><span class="p">],</span> <span class="n">data</span><span class="p">[</span><span class="n">prob_col</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">auc</span>
+
+
+<div class="viewcode-block" id="Logistic"><a class="viewcode-back" href="../../inference.html#dataframe.regression.Logistic">[docs]</a><span class="k">class</span> <span class="nc">Logistic</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This class implements a Logistic Regression model.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    tol : float</span>
+<span class="sd">        The tolerance for stopping criteria.</span>
+<span class="sd">    iter : int</span>
+<span class="sd">        The maximum number of iterations.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        from fast_causal_inference.dataframe.regression import Logistic</span>
+<span class="sd">        table = &#39;test_data_small&#39;</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(table)</span>
+<span class="sd">        X = [&#39;x1&#39;, &#39;x2&#39;, &#39;x3&#39;, &#39;x4&#39;, &#39;x5&#39;, &#39;x_long_tail1&#39;, &#39;x_long_tail2&#39;]</span>
+<span class="sd">        Y = &#39;t_ob&#39;</span>
+
+<span class="sd">        logit = Logistic(tol=1e-6, iter=500)</span>
+<span class="sd">        logit.fit(Y, X, df)</span>
+<span class="sd">        logit.summary()</span>
+<span class="sd">        # Output:</span>
+<span class="sd">        #                  x      beta</span>
+<span class="sd">        #     0     intercept  0.083472</span>
+<span class="sd">        #     1            x1  0.957999</span>
+<span class="sd">        #     2            x2  0.217600</span>
+<span class="sd">        #     3            x3  0.534323</span>
+<span class="sd">        #     4            x4 -0.006258</span>
+<span class="sd">        #     5            x5 -0.020528</span>
+<span class="sd">        #     6  x_long_tail1 -0.036267</span>
+<span class="sd">        #     7  x_long_tail2  0.000232</span>
+
+<span class="sd">        # predict</span>
+<span class="sd">        df_predict = logit.predict(df)</span>
+<span class="sd">        df_predict.select(&#39;prob&#39;).show()</span>
+<span class="sd">        #                             prob</span>
+<span class="sd">        # 0      0.549151214991665</span>
+<span class="sd">        # 1     0.8876947633647565</span>
+<span class="sd">        # 2    0.10790926234343089</span>
+<span class="sd">        # 3      0.791206731095578</span>
+<span class="sd">        # 4     0.7341882818925854</span>
+<span class="sd">        # ..                   ...</span>
+<span class="sd">        # 195  0.21966953201618872</span>
+<span class="sd">        # 196   0.5813872122369445</span>
+<span class="sd">        # 197   0.5766490178541132</span>
+<span class="sd">        # 198   0.5210472623083635</span>
+<span class="sd">        # 199  0.35841097345616885</span>
+
+<span class="sd">        logit.get_auc(df=df_predict,Y=Y,prob_col=&quot;prob&quot;)</span>
+<span class="sd">        # 0.7587271750805586</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="mf">1e-12</span><span class="p">,</span> <span class="nb">iter</span><span class="o">=</span><span class="mi">500</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tol</span> <span class="o">=</span> <span class="n">tol</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">iter</span> <span class="o">=</span> <span class="nb">iter</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__sql_instance</span> <span class="o">=</span> <span class="n">SqlGateWayConn</span><span class="o">.</span><span class="n">create_default_conn</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">__params_input_check</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">sql_instance</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__sql_instance</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">Y</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;missing Y. You should check out the input.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;missing X. You should check out the input.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">table</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;missing table. You should check out the input.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;select </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="si">}</span><span class="s2"> from </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__table_variables_check</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">variables</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span>
+        <span class="n">check_table</span><span class="p">(</span><span class="n">table</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="p">)</span>
+        <span class="n">check_columns</span><span class="p">(</span><span class="n">table</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="p">,</span> <span class="n">cols</span><span class="o">=</span><span class="n">variables</span><span class="p">,</span> <span class="n">cols_nume</span><span class="o">=</span><span class="n">variables</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">intitial</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># 初始化</span>
+        <span class="c1"># 计算截距项，使用对数几率函数将平均响应转换为对数几率</span>
+        <span class="k">def</span> <span class="nf">avg</span><span class="p">(</span><span class="n">table</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+            <span class="n">sql_instance</span> <span class="o">=</span> <span class="n">SqlGateWayConn</span><span class="o">.</span><span class="n">create_default_conn</span><span class="p">()</span>
+            <span class="n">avg</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span>
+                <span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;select avg(</span><span class="si">{</span><span class="n">x</span><span class="si">}</span><span class="s2">) as avg from </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)[</span><span class="s2">&quot;avg&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">avg</span>
+
+        <span class="n">intercept</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">special</span><span class="o">.</span><span class="n">logit</span><span class="p">(</span><span class="n">avg</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="p">))</span>
+        <span class="c1"># 初始化 beta，第一项为截距，其余项为0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(([</span><span class="n">intercept</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">))))</span>
+
+    <span class="k">def</span> <span class="nf">IRLS_ch</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># print(self.beta)</span>
+
+        <span class="n">sql_instance</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__sql_instance</span>
+
+        <span class="n">X_</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;c&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">            SELECT </span>
+<span class="s2">                        MatrixMultiplication(false,true)(</span><span class="si">{</span><span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">X_</span><span class="p">)</span><span class="si">}</span><span class="s2">,z,s_sqrt) as XX_XY</span>
+<span class="s2">            FROM (</span>
+<span class="s2">                    select </span>
+<span class="s2">                        1 as c,</span><span class="si">{</span><span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">)</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="n">dot</span><span class="p">(</span><span class="n">X_</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">)</span><span class="si">}</span><span class="s2"> as eta,</span>
+<span class="s2">                        1 / (1 + exp(-eta)) as mu,</span>
+<span class="s2">                        mu * (1 - mu) as s,</span>
+<span class="s2">                        sqrt(abs(s)) as s_sqrt,</span>
+<span class="s2">                        eta + (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="si">}</span><span class="s2"> - mu) / s as z</span>
+<span class="s2">                    from </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="si">}</span>
+<span class="s2">            where s != 0</span>
+<span class="s2">            </span>
+<span class="s2">            SETTINGS max_parser_depth = 5000</span>
+<span class="s2">                )&quot;&quot;&quot;</span>
+        <span class="n">XX_XY</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">sql</span><span class="p">)[</span><span class="s2">&quot;XX_XY&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;[&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;]&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">XX_XY</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">XX_XY</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">X_</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="n">XX_XY</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">XX</span> <span class="o">=</span> <span class="n">XX_XY</span><span class="p">[:</span> <span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="p">:</span> <span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="n">XY</span> <span class="o">=</span> <span class="n">XX_XY</span><span class="p">[</span><span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="p">:</span> <span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">solve</span><span class="p">(</span><span class="n">XX</span><span class="p">,</span> <span class="n">XY</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">XX</span> <span class="o">=</span> <span class="n">XX</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">XY</span> <span class="o">=</span> <span class="n">XY</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">XX_XY</span> <span class="o">=</span> <span class="n">XX_XY</span>
+        <span class="c1"># print(&#39;XX_XY&#39;,&#39;*&#39;*100)</span>
+        <span class="c1"># print(XX_XY)</span>
+
+        <span class="n">sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">        SELECT </span>
+<span class="s2">            sum(logpmf) as logpmf   </span>
+
+<span class="s2">        FROM (</span>
+<span class="s2">                select </span>
+<span class="s2">                    1 as c,</span><span class="si">{</span><span class="n">dot</span><span class="p">(</span><span class="n">X_</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">)</span><span class="si">}</span><span class="s2"> as eta,</span>
+<span class="s2">                    1 / (1 + exp(eta*(-1))) as p,</span>
+<span class="s2">                    </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="si">}</span><span class="s2"> * log(p) + (1 - </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">Y</span><span class="si">}</span><span class="s2">) * log(1 - p) AS logpmf</span>
+<span class="s2">                from </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="si">}</span><span class="s2">   </span>
+<span class="s2">            )</span>
+<span class="s2">        where p&gt;0 and p &lt;1</span>
+<span class="s2">            SETTINGS max_parser_depth = 5000</span>
+<span class="s2">            &quot;&quot;&quot;</span>
+        <span class="n">logpmf</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">sql</span><span class="p">)[</span><span class="s2">&quot;logpmf&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">logpmf</span>
+
+    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">df</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">table</span> <span class="o">=</span> <span class="n">df_2_table</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="o">=</span> <span class="n">X</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">Y</span> <span class="o">=</span> <span class="n">Y</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__params_input_check</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__table_variables_check</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intitial</span><span class="p">()</span>
+        <span class="n">ll_old</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">currtol</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># 当前的容差值</span>
+        <span class="n">it</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># 迭代次数</span>
+        <span class="n">ll</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># 对数似然</span>
+
+        <span class="c1"># 当容差大于阈值且迭代次数小于最大迭代次数时，继续迭代</span>
+        <span class="k">while</span> <span class="n">currtol</span> <span class="o">/</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">ll_old</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">tol</span> <span class="ow">and</span> <span class="n">it</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">iter</span><span class="p">:</span>
+            <span class="n">it</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">ll_old</span> <span class="o">=</span> <span class="n">ll</span>  <span class="c1"># 保存上一次的对数似然值</span>
+
+            <span class="n">ll</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">IRLS_ch</span><span class="p">()</span>
+
+            <span class="c1"># 计算新旧对数似然值之间的差，作为新的容差</span>
+            <span class="n">currtol</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">ll</span> <span class="o">-</span> <span class="n">ll_old</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;iter&quot;</span><span class="p">,</span> <span class="n">it</span><span class="p">,</span> <span class="s2">&quot;log-likelihood: &quot;</span><span class="p">,</span> <span class="n">ll</span><span class="p">)</span>
+
+        <span class="c1"># 返回结果，包括 beta、迭代次数、最后的容差、最后的对数似然值和权重</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;The results have converged and the calculation has been stopped&quot;</span><span class="p">)</span>
+        <span class="n">X_</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;intercept&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">X</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">X_</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">),</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="s2">&quot;beta&quot;</span><span class="p">])</span>
+
+    <span class="k">def</span> <span class="nf">summary</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">prob_col</span><span class="o">=</span><span class="s2">&quot;prob&quot;</span><span class="p">):</span>
+        <span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.dataframe</span> <span class="kn">import</span> <span class="n">readClickHouse</span>
+
+        <span class="n">table_input</span> <span class="o">=</span> <span class="n">df_2_table</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">beta</span> <span class="o">=</span> <span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="mi">6</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">]</span>
+        
+        <span class="n">table_output</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;logsitic_tmp_</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">())</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">clickhouse_drop_view</span><span class="p">(</span><span class="n">table_output</span><span class="p">)</span>
+        <span class="n">clickhouse_drop_view</span><span class="p">(</span><span class="n">table_output</span> <span class="o">+</span> <span class="s2">&quot;_local&quot;</span><span class="p">)</span>
+        
+        <span class="n">fast_causal_inference</span><span class="o">.</span><span class="n">clickhouse_create_view</span><span class="p">(</span>
+            <span class="n">clickhouse_view_name</span><span class="o">=</span><span class="n">table_output</span><span class="p">,</span>
+            <span class="n">sql_statement</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">                 1 as c, exp(</span><span class="si">{</span><span class="n">dot</span><span class="p">([</span><span class="s1">&#39;c&#39;</span><span class="p">]</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">)</span><span class="si">}</span><span class="s2">) / (1 + exp(</span><span class="si">{</span><span class="n">dot</span><span class="p">([</span><span class="s1">&#39;c&#39;</span><span class="p">]</span><span class="o">+</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span><span class="bp">self</span><span class="o">.</span><span class="n">beta</span><span class="p">)</span><span class="si">}</span><span class="s2">)) AS </span><span class="si">{</span><span class="n">prob_col</span><span class="si">}</span><span class="s2">, *</span>
+<span class="s2">          &quot;&quot;&quot;</span><span class="p">,</span>
+            <span class="n">sql_table_name</span><span class="o">=</span><span class="n">table_input</span><span class="p">,</span>
+            <span class="n">is_force_materialize</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">readClickHouse</span><span class="p">(</span><span class="n">table_output</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">get_auc</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">prob_col</span><span class="o">=</span><span class="s2">&quot;prob&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">auc</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">df_2_table</span><span class="p">(</span><span class="n">df</span><span class="p">),</span> <span class="n">prob_col</span><span class="p">)</span></div>
+
+
+<span class="k">class</span> <span class="nc">MachineLearning</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_name</span> <span class="o">=</span> <span class="n">model_name</span>
+
+    <span class="k">def</span> <span class="nf">fit_impl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">):</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">materializedView</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">new_df</span><span class="o">.</span><span class="n">agg</span><span class="p">(</span><span class="n">func</span><span class="p">(</span><span class="n">expr</span><span class="o">=</span><span class="n">expr</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_sql</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s2">&quot;with (&quot;</span>
+            <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">getExecutedSql</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">model_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_name</span> <span class="o">+</span> <span class="s2">&quot;State&quot;</span>
+            <span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;) as machine_learning_model&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">effect_impl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">effect_name</span><span class="p">):</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;+&quot;</span><span class="p">,</span> <span class="s2">&quot;,&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_sql</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;model is not fitted yet&quot;</span><span class="p">)</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">df</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">new_df</span><span class="o">.</span><span class="n">withColumn</span><span class="p">(</span>
+            <span class="n">effect_name</span><span class="p">,</span> <span class="s2">&quot;evalMLMethod(</span><span class="si">{}</span><span class="s2">,</span><span class="si">{}</span><span class="s2">)&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s2">&quot;machine_learning_model&quot;</span><span class="p">,</span> <span class="n">expr</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">_set_cte</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_sql</span><span class="p">)</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">new_df</span><span class="o">.</span><span class="n">materializedView</span><span class="p">(</span><span class="n">is_physical_table</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_df</span>
+
+    <span class="k">def</span> <span class="nf">summary</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;ols&quot;</span><span class="p">)</span>
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;ols&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;expr&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;use_bias&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;True&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggOLSDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_default</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">expr_arg</span><span class="p">:</span> <span class="n">FnArg</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;expr&quot;</span><span class="p">]</span>
+        <span class="n">use_bias_arg</span><span class="p">:</span> <span class="n">FnArg</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;use_bias&quot;</span><span class="p">]</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">expr_arg</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">use_bias</span> <span class="o">=</span> <span class="n">use_bias_arg</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">use_bias</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Example:</span>
+<span class="sd">import fast_causal_inference.dataframe.regression as Regression</span>
+<span class="sd">df.agg(Regression.ols(&#39;y~x2+x1+x3&#39;)).show()</span>
+<span class="sd">df.ols(&#39;y~x1+x2+x3&#39;, True).show()</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">ols</span><span class="p">(</span><span class="n">expr</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span><span class="n">AggOLSDfFunction</span><span class="p">(),</span> <span class="p">{</span><span class="s2">&quot;expr&quot;</span><span class="p">:</span> <span class="n">expr</span><span class="p">,</span> <span class="s2">&quot;use_bias&quot;</span><span class="p">:</span> <span class="n">use_bias</span><span class="p">},</span> <span class="p">[])</span>
+
+
+<div class="viewcode-block" id="Ols"><a class="viewcode-back" href="../../inference.html#dataframe.regression.Ols">[docs]</a><span class="k">class</span> <span class="nc">Ols</span><span class="p">(</span><span class="n">MachineLearning</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is for an Ordinary Least Squares (OLS) model calculated using Stochastic Gradient Descent. The fit method is used to train the model using a specified regression formula and dataset. The effect method is used to make predictions based on the trained model, the regression formula, and a new dataset. The predicted results are stored in a column with a specified name in the DataFrame.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">    use_bias: bool, default=True, whether to use an intercept</span>
+
+<span class="sd">    Methods:</span>
+<span class="sd">        fit(expr, df): Train the model</span>
+<span class="sd">            expr : str, regression formula</span>
+<span class="sd">            df : DataFrame, dataset</span>
+<span class="sd">        effect(expr, df, effect_name): Predict</span>
+<span class="sd">            expr : str, regression formula</span>
+<span class="sd">            df : DataFrame, dataset</span>
+<span class="sd">            effect_name : str, column name for the prediction result, default is &#39;effect&#39;</span>
+<span class="sd">        summary(): Display the summary of the model</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference.dataframe.regression as Regression</span>
+<span class="sd">        model = Regression.Ols(False)</span>
+<span class="sd">        model.fit(&#39;y~x1+x2+x3&#39;, df)</span>
+<span class="sd">        effect_df = model.effect(&#39;x1+x2+x3&#39;, df)</span>
+<span class="sd">        effect_df.show()</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="s2">&quot;Ols&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_bias</span> <span class="o">=</span> <span class="n">use_bias</span>
+
+    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">):</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">ols</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">use_bias</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">fit_impl</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">effect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">effect_name</span><span class="o">=</span><span class="s2">&quot;effect&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">effect_impl</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">effect_name</span><span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;wls&quot;</span><span class="p">)</span>
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;wls&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;expr&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;use_bias&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;True&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;weight&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggWLSDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_default</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">expr_arg</span><span class="p">:</span> <span class="n">FnArg</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;expr&quot;</span><span class="p">]</span>
+        <span class="n">use_bias_arg</span><span class="p">:</span> <span class="n">FnArg</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;use_bias&quot;</span><span class="p">]</span>
+        <span class="n">weight_arg</span><span class="p">:</span> <span class="n">FnArg</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;weight&quot;</span><span class="p">]</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">expr_arg</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">use_bias</span> <span class="o">=</span> <span class="n">use_bias_arg</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">weight</span> <span class="o">=</span> <span class="n">weight_arg</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">weight</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">use_bias</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Parameters:</span>
+<span class="sd">    expr : str, 回归公式</span>
+<span class="sd">    weight : str, 权重列名</span>
+<span class="sd">    use_bias : bool, default=True, 是否使用截距</span>
+
+<span class="sd">Example</span>
+<span class="sd">-------</span>
+<span class="sd">.. code-block:: python</span>
+
+<span class="sd">    import fast_causal_inference.dataframe.regression as Regression</span>
+<span class="sd">    df.agg(Regression.wls(&#39;y~x2+x1+x3&#39;, use_bias=True)).debug()</span>
+<span class="sd">    df.wls(&#39;y~x1+x2+x3&#39;, weight=&#39;0.5&#39;).show()</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">wls</span><span class="p">(</span><span class="n">expr</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">weight</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">AggWLSDfFunction</span><span class="p">(),</span> <span class="p">{</span><span class="s2">&quot;expr&quot;</span><span class="p">:</span> <span class="n">expr</span><span class="p">,</span> <span class="s2">&quot;use_bias&quot;</span><span class="p">:</span> <span class="n">use_bias</span><span class="p">},</span> <span class="p">[</span><span class="n">weight</span><span class="p">]</span>
+    <span class="p">)</span>
+
+
+<div class="viewcode-block" id="Wls"><a class="viewcode-back" href="../../inference.html#dataframe.regression.Wls">[docs]</a><span class="k">class</span> <span class="nc">Wls</span><span class="p">(</span><span class="n">MachineLearning</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is for a Weighted Least Squares (WLS) model. The fit method is used to train the model using a specified regression formula and dataset. The effect method is used to make predictions based on the trained model, the regression formula, and a new dataset. The predicted results are stored in a column with a specified name in the DataFrame. The weight parameter specifies the column name for weights in the DataFrame.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">        weight : str, column name for weights</span>
+<span class="sd">        use_bias : bool, default=True, whether to use an intercept</span>
+
+<span class="sd">    Methods:</span>
+<span class="sd">        fit(expr, df): Train the model</span>
+<span class="sd">            expr : str, regression formula</span>
+<span class="sd">            df : DataFrame, dataset</span>
+<span class="sd">        effect(expr, df, effect_name): Predict</span>
+<span class="sd">            expr : str, regression formula</span>
+<span class="sd">            df : DataFrame, dataset</span>
+<span class="sd">            effect_name : str, column name for the prediction result, default is &#39;effect&#39;</span>
+<span class="sd">        summary(): Display the summary of the model</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference.dataframe.regression as Regression</span>
+<span class="sd">        model = Regression.Wls(weight=&#39;1&#39;, use_bias=False)</span>
+<span class="sd">        model.fit(&#39;y~x1+x2+x3&#39;, df)</span>
+<span class="sd">        effect_df = model.effect(&#39;x1+x2+x3&#39;, df)</span>
+<span class="sd">        effect_df.show()</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">weight</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="s2">&quot;Wls&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">weight</span> <span class="o">=</span> <span class="n">weight</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_bias</span> <span class="o">=</span> <span class="n">use_bias</span>
+
+    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">):</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">wls</span><span class="p">,</span> <span class="n">weight</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">weight</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">use_bias</span><span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">fit_impl</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">effect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">effect_name</span><span class="o">=</span><span class="s2">&quot;effect&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">effect_impl</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">effect_name</span><span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;stochasticLogisticRegression&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;learning_rate&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.1</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;batch_size&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">15</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;method&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;SGD&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;expr&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggStochasticLogisticRegressionDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_clickhouse</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">learning_rate</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;learning_rate&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">l1</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;l1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">batch_size</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;batch_size&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">method</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">arg_dict</span><span class="p">[</span><span class="s1">&#39;method&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;expr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+            <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">learning_rate</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">l1</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">batch_size</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">)(</span><span class="si">{</span><span class="n">expr</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;+&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;,&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;~&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;,&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Parameters:</span>
+<span class="sd">    expr : str, 回归公式</span>
+<span class="sd">    learning_rate : float, default=0.00001, 学习率</span>
+<span class="sd">    l1 : float, default=0.1, L1正则化系数</span>
+<span class="sd">    batch_size : int, default=15, 批量大小</span>
+<span class="sd">    method : str, default=&#39;SGD&#39;, 优化方法</span>
+
+<span class="sd">Example</span>
+<span class="sd">-------</span>
+<span class="sd">.. code-block:: python</span>
+
+<span class="sd">    import fast_causal_inference.dataframe.regression as Regression</span>
+<span class="sd">    df.stochastic_logistic_regression(&#39;y~x1+x2+x3&#39;, learning_rate=0.00001, l1=0.1, batch_size=15, method=&#39;Lasso&#39;).show()</span>
+<span class="sd">    df.agg(Regression.stochastic_logistic_regression(&#39;y~x1+x2+x3&#39;, learning_rate=0.00001, l1=0.1, batch_size=15, method=&#39;SGD&#39;)).show()</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">stochastic_logistic_regression</span><span class="p">(</span>
+    <span class="n">expr</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">,</span> <span class="n">l1</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;SGD&quot;</span>
+<span class="p">):</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">AggStochasticLogisticRegressionDfFunction</span><span class="p">(),</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;learning_rate&quot;</span><span class="p">:</span> <span class="n">learning_rate</span><span class="p">,</span>
+            <span class="s2">&quot;l1&quot;</span><span class="p">:</span> <span class="n">l1</span><span class="p">,</span>
+            <span class="s2">&quot;batch_size&quot;</span><span class="p">:</span> <span class="n">batch_size</span><span class="p">,</span>
+            <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="n">method</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">[</span><span class="n">expr</span><span class="p">],</span>
+    <span class="p">)</span>
+
+
+<div class="viewcode-block" id="StochasticLogisticRegression"><a class="viewcode-back" href="../../inference.html#dataframe.regression.StochasticLogisticRegression">[docs]</a><span class="k">class</span> <span class="nc">StochasticLogisticRegression</span><span class="p">(</span><span class="n">MachineLearning</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is for a Stochastic Logistic Regression model. The fit method is used to train the model using a specified regression formula and a dataset. The effect method is used to make predictions based on the trained model, the regression formula, and a new dataset. The predicted results are stored in a column with a specified name in the DataFrame. The learning_rate, l1, batch_size, and method parameters are used to control the learning rate, L1 regularization coefficient, batch size, and optimization method respectively.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">        learning_rate : float, default=0.00001, learning rate</span>
+<span class="sd">        l1 : float, default=0.1, L1 regularization coefficient</span>
+<span class="sd">        batch_size : int, default=15, batch size</span>
+<span class="sd">        method : str, default=&#39;SGD&#39;, optimization method</span>
+
+<span class="sd">    Methods:</span>
+<span class="sd">        fit(expr, df): Train the model</span>
+<span class="sd">            expr : str, regression formula</span>
+<span class="sd">            df : DataFrame, dataset</span>
+<span class="sd">        effect(expr, df, effect_name): Predict</span>
+<span class="sd">            expr : str, regression formula</span>
+<span class="sd">            df : DataFrame, dataset</span>
+<span class="sd">            effect_name : str, column name for the prediction result, default is &#39;effect&#39;</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference.dataframe.regression as Regression</span>
+<span class="sd">        model = Regression.StochasticLogisticRegression(learning_rate=0.00001, l1=0.1, batch_size=15, method=&#39;SGD&#39;)</span>
+<span class="sd">        model.fit(&#39;y~x1+x2+x3&#39;, df)</span>
+<span class="sd">        effect_df = model.effect(&#39;x1+x2+x3&#39;, df)</span>
+<span class="sd">        effect_df.show()</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">,</span> <span class="n">l1</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;SGD&quot;</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="s2">&quot;stochasticLogisticRegression&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">learning_rate</span> <span class="o">=</span> <span class="n">learning_rate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">l1</span> <span class="o">=</span> <span class="n">l1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="n">batch_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">method</span> <span class="o">=</span> <span class="n">method</span>
+
+    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">):</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span>
+            <span class="n">stochastic_logistic_regression</span><span class="p">,</span>
+            <span class="n">learning_rate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">,</span>
+            <span class="n">l1</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">l1</span><span class="p">,</span>
+            <span class="n">batch_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span>
+            <span class="n">method</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">method</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">fit_impl</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">effect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">effect_name</span><span class="o">=</span><span class="s2">&quot;effect&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">effect_impl</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">effect_name</span><span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;stochasticLinearRegression&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;learning_rate&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;l1&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.1</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;batch_size&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">15</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;method&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;SGD&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;expr&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggStochasticLinearRegressionDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_clickhouse</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">learning_rate</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;learning_rate&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">l1</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;l1&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">batch_size</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;batch_size&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">method</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">arg_dict</span><span class="p">[</span><span class="s1">&#39;method&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;expr&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+            <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">learning_rate</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">l1</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">batch_size</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">method</span><span class="si">}</span><span class="s2">)(</span><span class="si">{</span><span class="n">expr</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;+&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;,&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;~&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;,&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<span class="k">def</span> <span class="nf">stochastic_linear_regression</span><span class="p">(</span>
+    <span class="n">expr</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">,</span> <span class="n">l1</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;SGD&quot;</span>
+<span class="p">):</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">AggStochasticLinearRegressionDfFunction</span><span class="p">(),</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;learning_rate&quot;</span><span class="p">:</span> <span class="n">learning_rate</span><span class="p">,</span>
+            <span class="s2">&quot;l1&quot;</span><span class="p">:</span> <span class="n">l1</span><span class="p">,</span>
+            <span class="s2">&quot;batch_size&quot;</span><span class="p">:</span> <span class="n">batch_size</span><span class="p">,</span>
+            <span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="n">method</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">[</span><span class="n">expr</span><span class="p">],</span>
+    <span class="p">)</span>
+
+
+<div class="viewcode-block" id="StochasticLinearRegression"><a class="viewcode-back" href="../../inference.html#dataframe.regression.StochasticLinearRegression">[docs]</a><span class="k">class</span> <span class="nc">StochasticLinearRegression</span><span class="p">(</span><span class="n">MachineLearning</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is for a Stochastic Linear Regression model. The fit method is used to train the model using a specified regression formula and a dataset. The effect method is used to make predictions based on the trained model, the regression formula, and a new dataset. The predicted results are stored in a column with a specified name in the DataFrame. The learning_rate, l1, batch_size, and method parameters are used to control the learning rate, L1 regularization coefficient, batch size, and optimization method respectively.</span>
+
+<span class="sd">    Parameters:</span>
+<span class="sd">        learning_rate : float, default=0.00001, learning rate</span>
+<span class="sd">        l1 : float, default=0.1, L1 regularization coefficient</span>
+<span class="sd">        batch_size : int, default=15, batch size</span>
+<span class="sd">        method : str, default=&#39;SGD&#39;, optimization method</span>
+
+<span class="sd">    Methods:</span>
+<span class="sd">        fit(expr, df): Train the model</span>
+<span class="sd">            expr : str, regression formula</span>
+<span class="sd">            df : DataFrame, dataset</span>
+<span class="sd">        effect(expr, df, effect_name): Predict</span>
+<span class="sd">            expr : str, regression formula</span>
+<span class="sd">            df : DataFrame, dataset</span>
+<span class="sd">            effect_name : str, column name for the prediction result, default is &#39;effect&#39;</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference.dataframe.regression as Regression</span>
+<span class="sd">        model = Regression.StochasticLinearRegression(learning_rate=0.00001, l1=0.1, batch_size=15, method=&#39;SGD&#39;)</span>
+<span class="sd">        model.fit(&#39;y~x1+x2+x3&#39;, df)</span>
+<span class="sd">        effect_df = model.effect(&#39;x1+x2+x3&#39;, df)</span>
+<span class="sd">        effect_df.show()</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">,</span> <span class="n">l1</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;SGD&quot;</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="s2">&quot;stochasticLinearRegression&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">learning_rate</span> <span class="o">=</span> <span class="n">learning_rate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">l1</span> <span class="o">=</span> <span class="n">l1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="n">batch_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">method</span> <span class="o">=</span> <span class="n">method</span>
+
+    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">):</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span>
+            <span class="n">stochastic_linear_regression</span><span class="p">,</span>
+            <span class="n">learning_rate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">,</span>
+            <span class="n">l1</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">l1</span><span class="p">,</span>
+            <span class="n">batch_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span>
+            <span class="n">method</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">method</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">fit_impl</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">effect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">effect_name</span><span class="o">=</span><span class="s2">&quot;effect&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">effect_impl</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">effect_name</span><span class="p">)</span></div>
+
+
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.functions</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">DfFnColWrapper</span><span class="p">,</span>
+    <span class="n">register_fn</span><span class="p">,</span>
+    <span class="n">define_args</span><span class="p">,</span>
+    <span class="n">FnArg</span><span class="p">,</span>
+    <span class="n">DfFunction</span><span class="p">,</span>
+    <span class="n">aggregrate</span><span class="p">,</span>
+    <span class="n">OlapEngineType</span><span class="p">,</span>
+    <span class="n">DfContext</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;did&quot;</span><span class="p">)</span>
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;did&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Y&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;treatment&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;X&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">is_variadic</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggDIDDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_default</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">Y</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;Y&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">treatment</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;treatment&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">time</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">]</span>
+        <span class="n">X_sql</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">X</span><span class="o">.</span><span class="n">column</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+                <span class="n">X_sql</span> <span class="o">+=</span> <span class="s2">&quot;, &quot;</span> <span class="o">+</span> <span class="n">x</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">Y</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">treatment</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">time</span><span class="si">}{</span><span class="n">X_sql</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<span class="k">def</span> <span class="nf">did</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">treatment</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="o">*</span><span class="n">X</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span><span class="n">AggDIDDfFunction</span><span class="p">(),</span> <span class="p">{},</span> <span class="p">[</span><span class="n">Y</span><span class="p">,</span> <span class="n">treatment</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="o">*</span><span class="n">X</span><span class="p">])</span>
+
+
+<div class="viewcode-block" id="DID"><a class="viewcode-back" href="../../inference.html#dataframe.regression.DID">[docs]</a><span class="k">class</span> <span class="nc">DID</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">        :Y: Column name, refers to the outcome of interest, a numerical variable.</span>
+<span class="sd">        :treatment: Column name, a Boolean variable, can only take values 0 or 1, where 1 represents the experimental group.</span>
+<span class="sd">        :time: Column name, a Boolean variable, represents the time factor. time = 0 represents before the strategy takes effect, time = 1 represents after the strategy takes effect.</span>
+<span class="sd">        :(Optional parameter) X: Some covariates before the experiment, which can be used to reduce variance. Written in the form of [&#39;x1&#39;, &#39;x2&#39;, &#39;x3&#39;] they must be numerical variables.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference.dataframe.regression as Regression</span>
+<span class="sd">        model = Regression.DID()</span>
+<span class="sd">        model.fit(df=df,Y=&#39;y&#39;,treatment=&#39;treatment&#39;,time=&#39;t_ob&#39;,X=[&#39;x1&#39;,&#39;x2&#39;])</span>
+<span class="sd">        model.summary()</span>
+<span class="sd">        # Call:</span>
+<span class="sd">        # lm( formula = y ~ treatment + t_ob + treatment*t_ob + x1 + x2 )</span>
+
+<span class="sd">        # Coefficients:</span>
+<span class="sd">        # .               Estimate    Std. Error  t value     Pr(&gt;|t|)</span>
+<span class="sd">        # (Intercept)     4.461905    0.213302    20.918288   0.000000</span>
+<span class="sd">        # treatment       13.902920   0.291365    47.716586   0.000000</span>
+<span class="sd">        # t_ob            0.416831    0.280176    1.487748    0.136849</span>
+<span class="sd">        # treatment*t_ob  1.812698    0.376476    4.814905    0.000001</span>
+<span class="sd">        # x1              1.769065    0.100727    17.562939   0.000000</span>
+<span class="sd">        # x2              2.020569    0.047162    42.842817   0.000000</span>
+
+<span class="sd">        # Residual standard error: 9.222100 on 9994 degrees of freedom</span>
+<span class="sd">        # Multiple R-squared: 0.478329, Adjusted R-squared: 0.478068</span>
+<span class="sd">        # F-statistic: 1832.730042 on 5 and 9994 DF,  p-value: 0.000000</span>
+
+<span class="sd">        # other ways</span>
+<span class="sd">        import fast_causal_inference.dataframe.regression as Regression</span>
+<span class="sd">        df.did(&#39;y&#39;, &#39;treatment&#39;, &#39;t_ob&#39;,[&#39;x1&#39;,&#39;x2&#39;,&#39;x3&#39;]).show()</span>
+<span class="sd">        df.agg(Regression.did(&#39;y&#39;, &#39;treatment&#39;, &#39;t_ob&#39;,[&#39;x1&#39;,&#39;x2&#39;,&#39;x3&#39;])).show()</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">treatment</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="p">[]):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">did</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">treatment</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="n">X</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">summary</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;ivregression&quot;</span><span class="p">)</span>
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;ivregression&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span><span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;formula&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggIvregressionDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_default</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">formula</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;formula&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">formula</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">parameters：</span>
+<span class="sd">formula：回归的表达式，和R的语法类似。可以有多个内生变量的方程，但是要求IV个数需要大于内生变量个数，否则会有共线性问题。</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">iv_regression</span><span class="p">(</span><span class="n">formula</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span><span class="n">AggIvregressionDfFunction</span><span class="p">(),</span> <span class="p">{</span><span class="s2">&quot;formula&quot;</span><span class="p">:</span> <span class="n">formula</span><span class="p">},</span> <span class="p">[])</span>
+
+
+<div class="viewcode-block" id="IV"><a class="viewcode-back" href="../../inference.html#dataframe.regression.IV">[docs]</a><span class="k">class</span> <span class="nc">IV</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Instrumental Variable (IV) estimator class.</span>
+<span class="sd">    Instrumental variables (IV) is a method used in statistics, econometrics, epidemiology, and related disciplines to estimate causal relationships when controlled experiments are not feasible or when a treatment is not successfully delivered to every unit in a randomized experiment.</span>
+<span class="sd">    The idea behind IV is to use a variable, known as an instrument, that is correlated with the endogenous explanatory variables (the variables that are correlated with the error term), but uncorrelated with the error term itself. This allows us to isolate the variation in the explanatory variable that is purely due to the instrument and thus uncorrelated with the error term, which can then be used to estimate the causal effect of the explanatory variable on the dependent variable.</span>
+
+<span class="sd">    Here is an example:</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">       t_{ob} = treatment + X_1 + X_2</span>
+
+<span class="sd">    .. math::</span>
+
+<span class="sd">       Y = \hat{t}_{ob} + X_1 + X_2</span>
+
+<span class="sd">    - :math:`X_1` and :math:`X_2` are independent variables or predictors.</span>
+<span class="sd">    - :math:`t_{ob}` is the dependent variable that you are trying to explain or predict.</span>
+<span class="sd">    - :math:`treatment` is an independent variable representing some intervention or condition that you believe affects :math:`t_{ob}`.</span>
+<span class="sd">    - :math:`Y` is the dependent variable that you are trying to explain or predict.</span>
+<span class="sd">    - :math:`\hat{t}_{ob}` is the predicted value of :math:`t_{ob}` from the first equation.</span>
+
+<span class="sd">    We first regress :math:`X_3` on the treatment and the other exogenous variables :math:`X_1` and :math:`X_2` to get the predicted values :math:`\hat{t}_{ob}`. Then, we replace :math:`t_{ob}` with :math:`\hat{t}_{ob}` in the second equation and estimate the parameters. This gives us the causal effect of :math:`t_{ob}` on :math:`Y`, purged of the endogeneity problem.</span>
+
+<span class="sd">    :Methods:</span>
+<span class="sd">    - fit: Fits the model with the given formula.</span>
+<span class="sd">    - summary: Displays the summary of the model fit.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference.dataframe.regression as Regression</span>
+<span class="sd">        model = Regression.IV()</span>
+<span class="sd">        model.fit(df,formula=&#39;y~(t_ob~treatment)+x1+x2&#39;)</span>
+<span class="sd">        model.summary()</span>
+
+<span class="sd">        df.iv_regression(&#39;y~(t_ob~treatment)+x1+x2&#39;).show()</span>
+<span class="sd">        df.agg(Regression.iv_regression(&#39;y~(t_ob~treatment)+x1+x2&#39;)).show()</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize the IV estimator class.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">pass</span>
+
+<div class="viewcode-block" id="IV.fit"><a class="viewcode-back" href="../../inference.html#dataframe.regression.IV.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">,</span> <span class="n">formula</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Fits the model with the given formula.</span>
+
+<span class="sd">        :param formula: str, the formula to fit the model.</span>
+<span class="sd">        :type formula: str, required</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">iv_regression</span><span class="p">(</span><span class="n">formula</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="IV.summary"><a class="viewcode-back" href="../../inference.html#dataframe.regression.IV.summary">[docs]</a>    <span class="k">def</span> <span class="nf">summary</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Displays the summary of the model fit.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">result</span><span class="o">.</span><span class="n">show</span><span class="p">()</span></div></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Tencent.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

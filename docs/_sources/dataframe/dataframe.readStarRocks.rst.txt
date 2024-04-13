@@ -1,0 +1,6 @@
+﻿dataframe.readStarRocks
+=======================
+
+.. currentmodule:: dataframe
+
+.. autofunction:: readStarRocks

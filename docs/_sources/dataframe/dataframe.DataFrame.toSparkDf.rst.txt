@@ -1,0 +1,6 @@
+﻿dataframe.DataFrame.toSparkDf
+=============================
+
+.. currentmodule:: dataframe
+
+.. automethod:: DataFrame.toSparkDf

@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dataframe.match &mdash; Fast-Causal-Inference  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Fast-Causal-Inference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../input-output.html">Input/output</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../dataframe.html">Dataframe Operations</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../inference.html">Causal Inference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Fast-Causal-Inference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">dataframe.match</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for dataframe.match</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">fast_causal_inference.lib.tools</span> <span class="k">as</span> <span class="nn">ais_tools</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.dataframe</span> <span class="kn">import</span> <span class="n">readClickHouse</span><span class="p">,</span> <span class="n">DataFrame</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.functions</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">DfFnColWrapper</span><span class="p">,</span>
+    <span class="n">register_fn</span><span class="p">,</span>
+    <span class="n">define_args</span><span class="p">,</span>
+    <span class="n">FnArg</span><span class="p">,</span>
+    <span class="n">DfFunction</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.util</span> <span class="kn">import</span> <span class="n">ClickHouseUtils</span><span class="p">,</span> <span class="n">SqlGateWayConn</span>
+<span class="kn">import</span> <span class="nn">seaborn</span> <span class="k">as</span> <span class="nn">sns</span>
+<span class="kn">from</span> <span class="nn">matplotlib</span> <span class="kn">import</span> <span class="n">rcParams</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">clickhouse_create_view</span><span class="p">,</span>
+    <span class="n">clickhouse_drop_view</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.df_base</span> <span class="kn">import</span> <span class="n">df_2_table</span>
+
+
+<div class="viewcode-block" id="CaliperMatching"><a class="viewcode-back" href="../../inference.html#dataframe.match.CaliperMatching">[docs]</a><span class="k">class</span> <span class="nc">CaliperMatching</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This class implements the Caliper Matching method for causal inference.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    caliper : float, default=0.2</span>
+<span class="sd">        The caliper width for matching. Units are in terms of the standard deviation of the logit of the propensity score.</span>
+
+<span class="sd">    Methods</span>
+<span class="sd">    -------</span>
+<span class="sd">    fit(dataframe, treatment, score, exacts=[], alias = &#39;matching_index&#39;):</span>
+<span class="sd">        Apply the Caliper Matching method to the input dataframe.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.match as Match</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">        model = Match.CaliperMatching(0.5)</span>
+<span class="sd">        tmp = model.fit(df, treatment=&#39;treatment&#39;, score=&#39;weight&#39;, exacts=[&#39;x_cat1&#39;])</span>
+<span class="sd">        match_df = tmp.filter(&quot;matching_index!=0&quot;) # filter out the unmatched records</span>
+<span class="sd">    &gt;&gt;&gt; print(&#39;sample size Before match: &#39;)</span>
+<span class="sd">    &gt;&gt;&gt; df.count().show()</span>
+<span class="sd">    &gt;&gt;&gt; print(&#39;sample size After match: &#39;)</span>
+<span class="sd">    &gt;&gt;&gt; match_df.count().show()</span>
+<span class="sd">    sample size Before match:</span>
+<span class="sd">    10000</span>
+<span class="sd">    sample size After match:</span>
+<span class="sd">    9652</span>
+<span class="sd">    &gt;&gt;&gt; import fast_causal_inference.dataframe.match as Match</span>
+<span class="sd">    &gt;&gt;&gt; d1 = Match.smd(df, &#39;treatment&#39;, [&#39;x1&#39;,&#39;x2&#39;])</span>
+<span class="sd">    &gt;&gt;&gt; print(d1)</span>
+<span class="sd">         Control  Treatment       SMD</span>
+<span class="sd">    x1 -0.012658  -0.023996 -0.011482</span>
+<span class="sd">    x2  0.005631   0.037718  0.016156</span>
+<span class="sd">    &gt;&gt;&gt; import fast_causal_inference.dataframe.match as Match</span>
+<span class="sd">    &gt;&gt;&gt; d2 = Match.smd(match_df, &#39;treatment&#39;, [&#39;x1&#39;,&#39;x2&#39;])</span>
+<span class="sd">    &gt;&gt;&gt; print(d2)</span>
+<span class="sd">         Control  Treatment       SMD</span>
+<span class="sd">    x1 -0.015521  -0.025225 -0.009821</span>
+<span class="sd">    x2  0.004834   0.039698  0.017551</span>
+
+<span class="sd">    &gt;&gt;&gt; Match.matching_plot(df_score,&#39;treatment&#39;,&#39;prob&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; Match.matching_plot(match_df,&#39;treatment&#39;,&#39;prob&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">caliper</span><span class="o">=</span><span class="mf">0.2</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">caliper</span> <span class="o">=</span> <span class="n">caliper</span>
+
+<div class="viewcode-block" id="CaliperMatching.fit"><a class="viewcode-back" href="../../inference.html#dataframe.match.CaliperMatching.fit">[docs]</a>    <span class="k">def</span> <span class="nf">fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dataframe</span><span class="p">,</span> <span class="n">treatment</span><span class="p">,</span> <span class="n">score</span><span class="p">,</span> <span class="n">exacts</span><span class="o">=</span><span class="p">[],</span> <span class="n">alias</span><span class="o">=</span><span class="s2">&quot;matching_index&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Apply the Caliper Matching method to the input dataframe.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        dataframe : DataFrame</span>
+<span class="sd">            The input dataframe.</span>
+<span class="sd">        treatment : str</span>
+<span class="sd">            The treatment column name.</span>
+<span class="sd">        score : str</span>
+<span class="sd">            The propensity score column name.</span>
+<span class="sd">        exacts : list, default=&#39;&#39;</span>
+<span class="sd">            The column names for exact matching, [&#39;x_cat1&#39;].</span>
+<span class="sd">        alias : str, default=&#39;matching_index&#39;</span>
+<span class="sd">            The alias for the matching index column in the output dataframe.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        DataFrame</span>
+<span class="sd">            The output dataframe with an additional column for the matching index.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">new_table_name</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="o">.</span><span class="n">createTableName</span><span class="p">()</span>
+        <span class="n">view_df</span> <span class="o">=</span> <span class="n">dataframe</span><span class="o">.</span><span class="n">materializedView</span><span class="p">(</span><span class="n">is_temp</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">        select *, toInt64(0) as </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2"> from </span><span class="si">{</span><span class="n">view_df</span><span class="o">.</span><span class="n">getTableName</span><span class="p">()</span><span class="si">}</span><span class="s2"> limit 0</span>
+<span class="s2">        &quot;&quot;&quot;</span>
+        <span class="n">ClickHouseUtils</span><span class="o">.</span><span class="n">clickhouse_create_view_v2</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="o">=</span><span class="n">new_table_name</span><span class="p">,</span>
+            <span class="n">select_statement</span><span class="o">=</span><span class="n">sql</span><span class="p">,</span>
+            <span class="n">origin_table_name</span><span class="o">=</span><span class="n">view_df</span><span class="o">.</span><span class="n">getTableName</span><span class="p">(),</span>
+            <span class="n">is_physical_table</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">physical_df</span> <span class="o">=</span> <span class="n">view_df</span><span class="o">.</span><span class="n">materializedView</span><span class="p">(</span>
+            <span class="n">is_physical_table</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_distributed_create</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_temp</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span>
+        <span class="n">exacts</span> <span class="o">=</span> <span class="s1">&#39;+&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">exacts</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">exacts</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+            <span class="n">exacts</span> <span class="o">=</span> <span class="s2">&quot;,&quot;</span> <span class="o">+</span> <span class="n">exacts</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;+&quot;</span><span class="p">,</span> <span class="s2">&quot;,&quot;</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&quot;&quot; insert into </span><span class="si">{</span><span class="n">new_table_name</span><span class="si">}</span>
+<span class="s2">        with (select CaliperMatchingInfo(</span><span class="si">{</span><span class="n">treatment</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">score</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">caliper</span><span class="si">}{</span><span class="n">exacts</span><span class="si">}</span><span class="s2">) from </span><span class="si">{</span><span class="n">physical_df</span><span class="o">.</span><span class="n">getTableName</span><span class="p">()</span><span class="si">}</span><span class="s2">) as matching_info </span>
+<span class="s2">        select *, CaliperMatching(matching_info, </span><span class="si">{</span><span class="n">treatment</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">score</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">caliper</span><span class="si">}{</span><span class="n">exacts</span><span class="si">}</span><span class="s2">) as </span><span class="si">{</span><span class="n">alias</span><span class="si">}</span><span class="s2"> from </span><span class="si">{</span><span class="n">physical_df</span><span class="o">.</span><span class="n">getTableName</span><span class="p">()</span><span class="si">}</span>
+<span class="s2">        &quot;&quot;&quot;</span>
+        <span class="n">clickhouse_utils</span> <span class="o">=</span> <span class="n">ClickHouseUtils</span><span class="p">()</span>
+        <span class="n">clickhouse_utils</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">sql</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">readClickHouse</span><span class="p">(</span><span class="n">new_table_name</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="smd"><a class="viewcode-back" href="../../inference.html#dataframe.match.smd">[docs]</a><span class="k">def</span> <span class="nf">smd</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">cols</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Calculate the Standardized Mean Difference (SMD) for the input dataframe.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    df : DataFrame</span>
+<span class="sd">        The input dataframe.</span>
+<span class="sd">    T : str</span>
+<span class="sd">        The treatment column name.</span>
+<span class="sd">    cols : str</span>
+<span class="sd">        The column names to calculate the SMD, separated by &#39;+&#39;.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    DataFrame</span>
+<span class="sd">        The output dataframe with the SMD results.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+
+<span class="sd">    &gt;&gt;&gt; import fast_causal_inference.dataframe.match as Match</span>
+<span class="sd">    &gt;&gt;&gt; d2 = Match.smd(match_df, &#39;treatment&#39;, [&#39;x1&#39;,&#39;x2&#39;])</span>
+<span class="sd">    &gt;&gt;&gt; print(d2)</span>
+<span class="sd">         Control  Treatment       SMD</span>
+<span class="sd">    x1 -0.015521  -0.025225 -0.009821</span>
+<span class="sd">    x2  0.004834   0.039698  0.017551</span>
+<span class="sd">    </span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">new_df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">materializedView</span><span class="p">(</span><span class="n">is_temp</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">pandas_result</span> <span class="o">=</span> <span class="n">ais_tools</span><span class="o">.</span><span class="n">SMD</span><span class="p">(</span><span class="n">new_df</span><span class="o">.</span><span class="n">getTableName</span><span class="p">(),</span> <span class="n">T</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">pandas_result</span></div>
+
+
+<div class="viewcode-block" id="matching_plot"><a class="viewcode-back" href="../../inference.html#dataframe.match.matching_plot">[docs]</a><span class="k">def</span> <span class="nf">matching_plot</span><span class="p">(</span>
+    <span class="n">df</span><span class="p">,</span>
+    <span class="n">T</span><span class="p">,</span>
+    <span class="n">col</span><span class="p">,</span>
+    <span class="n">xlim</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span>
+    <span class="n">xlabel</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">ylabel</span><span class="o">=</span><span class="s2">&quot;density&quot;</span><span class="p">,</span>
+    <span class="n">legend</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Control&quot;</span><span class="p">,</span> <span class="s2">&quot;Treatment&quot;</span><span class="p">],</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;This function plots the overlaid distribution of col in df over</span>
+<span class="sd">    treat and control group.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    table: str</span>
+<span class="sd">        The name of the table to query from.</span>
+
+<span class="sd">    T : str</span>
+<span class="sd">        The name of the treatment indicator column in the table.</span>
+
+<span class="sd">    col : str</span>
+<span class="sd">        The name of the column that corresponds to the variable to plot.</span>
+
+<span class="sd">    xlim : tuple, optional</span>
+<span class="sd">        The tuple of xlim of the plot. (0,1) by default.</span>
+
+<span class="sd">    figsize : tuple, optional</span>
+<span class="sd">        The size of the histogram; (8,8) by default.</span>
+
+<span class="sd">    xlabel : str, optional</span>
+<span class="sd">        The name of xlabel; col by default.</span>
+
+<span class="sd">    ylabel : str, optional</span>
+<span class="sd">        The name of ylabel; `density` by default.</span>
+
+<span class="sd">    legend : iterable, optional</span>
+<span class="sd">        The legend; `Control` and  `Treatment` by default.</span>
+
+<span class="sd">    Yields</span>
+<span class="sd">    ------</span>
+<span class="sd">    An overlaied histogram</span>
+
+<span class="sd">    &gt;&gt;&gt; import fast_causal_inference.dataframe.match as Match</span>
+<span class="sd">    &gt;&gt;&gt; Match.matching_plot(df,&#39;treatment&#39;,&#39;x1&#39;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">getTableName</span><span class="p">()</span>
+    <span class="n">sql_instance</span> <span class="o">=</span> <span class="n">SqlGateWayConn</span><span class="o">.</span><span class="n">create_default_conn</span><span class="p">()</span>
+    <span class="n">x1</span> <span class="o">=</span> <span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;select </span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2"> from </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> where </span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">=1 order by rand() limit 10000&quot;</span>
+    <span class="p">)</span>
+    <span class="n">x0</span> <span class="o">=</span> <span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;select </span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2"> from </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2"> where </span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">=0 order by rand() limit 10000&quot;</span>
+    <span class="p">)</span>
+    <span class="n">rcParams</span><span class="p">[</span><span class="s2">&quot;figure.figsize&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">figsize</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">figsize</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="n">sns</span><span class="o">.</span><span class="n">distplot</span><span class="p">(</span><span class="n">x0</span><span class="p">)</span>
+    <span class="n">sns</span><span class="o">.</span><span class="n">distplot</span><span class="p">(</span><span class="n">x1</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_xlim</span><span class="p">(</span><span class="n">xlim</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">xlim</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">xlabel</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set_xlabel</span><span class="p">(</span><span class="n">xlabel</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="n">ylabel</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">legend</span><span class="p">(</span><span class="n">legend</span><span class="p">)</span>
+    <span class="k">del</span> <span class="n">x1</span><span class="p">,</span> <span class="n">x0</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Tencent.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

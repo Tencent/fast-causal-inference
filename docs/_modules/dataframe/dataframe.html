@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dataframe.dataframe &mdash; Fast-Causal-Inference  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Fast-Causal-Inference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../input-output.html">Input/output</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../dataframe.html">Dataframe Operations</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../inference.html">Causal Inference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Fast-Causal-Inference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">dataframe.dataframe</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for dataframe.dataframe</h1><div class="highlight"><pre>
+<span></span><span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;readClickHouse&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;readStarRocks&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;readTdw&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;readSparkDf&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;readCsv&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;DataFrame&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span> <span class="nn">pandas</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.format</span> <span class="kn">import</span> <span class="n">outPutFormat</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe</span> <span class="kn">import</span> <span class="n">ais_dataframe_pb2</span> <span class="k">as</span> <span class="n">DfPb</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">base64</span>
+<span class="kn">from</span> <span class="nn">google.protobuf</span> <span class="kn">import</span> <span class="n">json_format</span>
+<span class="kn">from</span> <span class="nn">google.protobuf.json_format</span> <span class="kn">import</span> <span class="n">Parse</span>
+<span class="kn">import</span> <span class="nn">copy</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.df_base</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">DfColumnNode</span><span class="p">,</span>
+    <span class="n">OlapEngineType</span><span class="p">,</span>
+    <span class="n">DfContext</span><span class="p">,</span>
+    <span class="n">DfColumnInternalNode</span><span class="p">,</span>
+    <span class="n">DfColumnLeafNode</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.functions</span> <span class="kn">import</span> <span class="n">DfFnColWrapper</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe</span> <span class="kn">import</span> <span class="n">functions</span> <span class="k">as</span> <span class="n">AisF</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.util.data_transformer</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">clickhouse_2_csv</span><span class="p">,</span>
+    <span class="n">clickhouse_2_dataframe</span><span class="p">,</span>
+    <span class="n">dataframe_2_clickhouse</span><span class="p">,</span>
+    <span class="n">dataframe_2_starrocks</span><span class="p">,</span>
+    <span class="n">csv_2_clickhouse</span><span class="p">,</span>
+    <span class="n">csv_2_starrocks</span><span class="p">,</span>
+    <span class="n">starrocks_2_dataframe</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe</span> <span class="kn">import</span> <span class="n">regression</span> <span class="k">as</span> <span class="n">AisRegressionF</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe</span> <span class="kn">import</span> <span class="n">statistics</span> <span class="k">as</span> <span class="n">AisStatisticsF</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.util</span> <span class="kn">import</span> <span class="n">get_user</span><span class="p">,</span> <span class="n">ClickHouseUtils</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.common</span> <span class="kn">import</span> <span class="n">get_context</span>
+<span class="kn">import</span> <span class="nn">fast_causal_inference.lib.tools</span> <span class="k">as</span> <span class="nn">AisTools</span>
+
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">syntax = &quot;proto3&quot;;</span>
+
+<span class="sd">enum ColumnType {</span>
+<span class="sd">  Unknown = 0;</span>
+<span class="sd">  String = 1;</span>
+<span class="sd">  Int = 2;</span>
+<span class="sd">  Float = 3;</span>
+<span class="sd">  Bool = 4;</span>
+<span class="sd">  Date = 5;</span>
+<span class="sd">  DateTime = 6;</span>
+<span class="sd">  Time = 7;</span>
+<span class="sd">  UUID = 8;</span>
+<span class="sd">  Array = 9;</span>
+<span class="sd">}</span>
+
+<span class="sd">enum TaskType {</span>
+<span class="sd">  TASK_TYPE_FILL_SCHEMA = 0;</span>
+<span class="sd">}</span>
+
+<span class="sd">message Column {</span>
+<span class="sd">  string name = 1;</span>
+<span class="sd">  string alias = 2;</span>
+<span class="sd">  ColumnType type = 3;</span>
+<span class="sd">}</span>
+
+<span class="sd">message Limit {</span>
+<span class="sd">  int64 limit = 1;</span>
+<span class="sd">  int64 offset = 2;</span>
+<span class="sd">}</span>
+
+<span class="sd">enum SourceType {</span>
+<span class="sd">  ClickHouse = 0;</span>
+<span class="sd">}</span>
+
+<span class="sd">message ClickHouseSource {</span>
+<span class="sd">  string table_name = 1;</span>
+<span class="sd">  string database = 2;</span>
+<span class="sd">}</span>
+
+<span class="sd">message Source {</span>
+<span class="sd">  SourceType type = 1;</span>
+<span class="sd">  ClickHouseSource clickhouse = 2;</span>
+<span class="sd">}</span>
+
+<span class="sd">message Order {</span>
+<span class="sd">  Column column = 1;</span>
+<span class="sd">  bool desc = 2;</span>
+<span class="sd">}</span>
+
+<span class="sd">message DataFrame {</span>
+<span class="sd">  repeated Column columns = 1;</span>
+<span class="sd">  repeated string filters = 2;</span>
+<span class="sd">  repeated Column group_by = 3;</span>
+<span class="sd">  repeated Order order_by = 4;</span>
+<span class="sd">  Limit limit = 5;</span>
+<span class="sd">  Source source = 6;</span>
+<span class="sd">};</span>
+
+<span class="sd">message DataFrameRequest {</span>
+<span class="sd">  DataFrame df = 1;</span>
+<span class="sd">  TaskType task_type = 2;</span>
+<span class="sd">  string rtx = 3;</span>
+<span class="sd">  int64 device_id = 4;</span>
+<span class="sd">}</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">getSuperName</span><span class="p">(</span><span class="n">column</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">column</span><span class="p">,</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">Column</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">column</span><span class="o">.</span><span class="n">alias</span> <span class="k">if</span> <span class="n">column</span><span class="o">.</span><span class="n">alias</span> <span class="k">else</span> <span class="n">column</span><span class="o">.</span><span class="n">name</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;type error&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="DataFrame"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame">[docs]</a><span class="k">class</span> <span class="nc">DataFrame</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This class is used to create a DataFrame object.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">olap_engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">):</span>
+        <span class="n">datasource</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="n">PROJECT_CONF</span> <span class="o">=</span> <span class="n">get_context</span><span class="p">()</span><span class="o">.</span><span class="n">project_conf</span>
+
+        <span class="k">for</span> <span class="n">cell</span> <span class="ow">in</span> <span class="n">PROJECT_CONF</span><span class="p">[</span><span class="s2">&quot;datasource&quot;</span><span class="p">]:</span>
+            <span class="n">datasource</span><span class="p">[</span><span class="n">cell</span><span class="p">[</span><span class="s2">&quot;device_id&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="n">cell</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">device_id</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">device</span> <span class="ow">in</span> <span class="n">datasource</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">datasource</span><span class="p">[</span><span class="n">device</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">olap_engine</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_database&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">device_id</span> <span class="o">=</span> <span class="n">device</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">database</span> <span class="o">=</span> <span class="n">datasource</span><span class="p">[</span><span class="n">device</span><span class="p">][</span><span class="nb">str</span><span class="p">(</span><span class="n">olap_engine</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;_database&quot;</span><span class="p">]</span>
+                <span class="k">break</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">device_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unable to get any device of engine(</span><span class="si">{</span><span class="n">olap_engine</span><span class="si">}</span><span class="s2">).&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">olap_engine</span> <span class="o">==</span> <span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">type</span> <span class="o">=</span> <span class="s2">&quot;StarRocks&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">url</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">PROJECT_CONF</span><span class="p">[</span><span class="s2">&quot;sqlgateway&quot;</span><span class="p">][</span><span class="s2">&quot;url&quot;</span><span class="p">]</span>
+            <span class="o">+</span> <span class="n">PROJECT_CONF</span><span class="p">[</span><span class="s2">&quot;sqlgateway&quot;</span><span class="p">][</span><span class="s2">&quot;dataframe_path&quot;</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">rtx</span> <span class="o">=</span> <span class="n">get_user</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span> <span class="o">=</span> <span class="n">DfContext</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">olap_engine</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_need_agg</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">serialize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">SerializeToString</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">serializeBase64</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">serialize</span><span class="p">())</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">serializeJson</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">json_format</span><span class="o">.</span><span class="n">MessageToJson</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">deserialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">ParseFromString</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DataFrame.toPandas"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.toPandas">[docs]</a>    <span class="k">def</span> <span class="nf">toPandas</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function is used to convert the result of the dataframe to pandas.DataFrame</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_finalize</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">result</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">task_type</span> <span class="o">=</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">TaskType</span><span class="o">.</span><span class="n">EXECUTE</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">outPutFormat</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="nb">eval</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">result</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">res</span></div>
+
+    <span class="k">def</span> <span class="nf">_is_column</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">column</span><span class="p">,</span> <span class="n">DfColumnNode</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">column</span><span class="o">.</span><span class="n">alias</span> <span class="o">==</span> <span class="n">name</span> <span class="ow">or</span> <span class="n">column</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="p">)</span> <span class="o">==</span> <span class="n">name</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;type(</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">column</span><span class="p">)</span><span class="si">}</span><span class="s2">) is not DfColumn&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_get_col_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">column</span><span class="p">,</span> <span class="n">DfColumnLeafNode</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">column</span><span class="o">.</span><span class="n">alias</span> <span class="k">if</span> <span class="n">column</span><span class="o">.</span><span class="n">alias</span> <span class="k">else</span> <span class="n">column</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">column</span><span class="p">,</span> <span class="n">DfColumnInternalNode</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">column</span><span class="o">.</span><span class="n">alias</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;type(</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">column</span><span class="p">)</span><span class="si">}</span><span class="s2">) is not DfColumnLeafNode|DfColumnInternalNode&quot;</span>
+        <span class="p">)</span>
+
+<div class="viewcode-block" id="DataFrame.printSchema"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.printSchema">[docs]</a>    <span class="k">def</span> <span class="nf">printSchema</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function is used to print the schema of the dataframe</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">pd</span> <span class="o">=</span> <span class="n">pandas</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">])</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">:</span>
+            <span class="n">super_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_col_name</span><span class="p">(</span><span class="n">column</span><span class="p">)</span>
+            <span class="n">column_type</span> <span class="o">=</span> <span class="n">column</span><span class="o">.</span><span class="n">type</span>
+            <span class="c1"># if columns type is empty, set Float64</span>
+            <span class="k">if</span> <span class="n">column_type</span> <span class="o">==</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">column_type</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+                <span class="n">column_type</span> <span class="o">=</span> <span class="s2">&quot;Float64&quot;</span>
+            <span class="c1"># TODO 如果 type 为空，应该先填充好</span>
+            <span class="n">pd</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">super_name</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">column_type</span><span class="p">},</span> <span class="n">ignore_index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">pd</span><span class="p">)</span></div>
+
+    <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">column</span><span class="o">.</span><span class="n">alias</span> <span class="o">==</span> <span class="n">key</span> <span class="ow">or</span> <span class="n">column</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="p">)</span> <span class="o">==</span> <span class="n">key</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">AisF</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="n">column</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;column </span><span class="si">%s</span><span class="s2"> not found&quot;</span> <span class="o">%</span> <span class="n">key</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">debug</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_finalize</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="fm">__str__</span><span class="p">())</span>
+        <span class="n">all_names</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">:</span>
+            <span class="n">all_names</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">all_names</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_finalize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">[:]</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">group_by</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">DfPb</span><span class="o">.</span><span class="n">Column</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">col</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="p">),</span> <span class="n">alias</span><span class="o">=</span><span class="n">col</span><span class="o">.</span><span class="n">alias</span><span class="p">)</span>
+            <span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_finalize</span><span class="p">()</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">toPandas</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">res</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">res</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">res</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">res</span><span class="o">.</span><span class="fm">__str__</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="fm">__str__</span><span class="p">()</span>
+
+<div class="viewcode-block" id="DataFrame.first"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.first">[docs]</a>    <span class="k">def</span> <span class="nf">first</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function is used to get the first row of the dataframe</span>
+
+<span class="sd">        &gt;&gt;&gt; df.first()</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">limit</span><span class="o">.</span><span class="n">limit</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+<div class="viewcode-block" id="DataFrame.head"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.head">[docs]</a>    <span class="k">def</span> <span class="nf">head</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function is used to get the first n rows of the dataframe</span>
+
+<span class="sd">        &gt;&gt;&gt; df.head(3)</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">limit</span><span class="o">.</span><span class="n">limit</span> <span class="o">=</span> <span class="n">n</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+<div class="viewcode-block" id="DataFrame.take"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.take">[docs]</a>    <span class="k">def</span> <span class="nf">take</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function is used to get the first n rows of the dataframe</span>
+
+<span class="sd">        &gt;&gt;&gt; df.head(3)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">limit</span><span class="o">.</span><span class="n">limit</span> <span class="o">=</span> <span class="n">n</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+<div class="viewcode-block" id="DataFrame.show"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.show">[docs]</a>    <span class="k">def</span> <span class="nf">show</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Prints the DataFrame, equivalent to print(dataframe).</span>
+
+<span class="sd">        &gt;&gt;&gt; df.head(3).show()</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="fm">__str__</span><span class="p">())</span></div>
+
+    <span class="c1"># 增加检验逻辑</span>
+    <span class="c1"># 这里用的是 alias 的名字，需要替换回来, 下面的 groupBy, orderBy 也是一样</span>
+<div class="viewcode-block" id="DataFrame.where"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.where">[docs]</a>    <span class="k">def</span> <span class="nf">where</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">filter</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Filters rows using the given condition.</span>
+
+<span class="sd">        &gt;&gt;&gt; df.where(&quot;column1 &gt; 1&quot;).show()</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^[a-zA-Z_][a-zA-Z0-9_]*$&quot;</span><span class="p">,</span> <span class="nb">filter</span><span class="p">)</span> <span class="o">!=</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">check_exist</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">:</span>
+                <span class="n">super_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_col_name</span><span class="p">(</span><span class="n">column</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">super_name</span> <span class="ow">in</span> <span class="nb">filter</span><span class="p">:</span>
+                    <span class="n">check_exist</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">check_exist</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;the column of filter is not exist&quot;</span> <span class="o">%</span> <span class="nb">filter</span><span class="p">)</span>
+
+        <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">filter</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+<div class="viewcode-block" id="DataFrame.filter"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.filter">[docs]</a>    <span class="k">def</span> <span class="nf">filter</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">filter</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Alias for the &#39;where&#39; function. Filters rows using the given condition.</span>
+
+<span class="sd">        &gt;&gt;&gt; df.filter(&quot;column1 &gt; 1&quot;).show()</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="nb">filter</span><span class="p">)</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_expand_args</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="n">expand_args</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">expand_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="k">for</span> <span class="n">sub_arg</span> <span class="ow">in</span> <span class="n">arg</span><span class="p">:</span>
+                    <span class="n">expand_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">sub_arg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">expand_args</span>
+
+<div class="viewcode-block" id="DataFrame.select"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.select">[docs]</a>    <span class="k">def</span> <span class="nf">select</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Selects specified columns from the DataFrame and returns a new DataFrame.</span>
+<span class="sd">        &gt;&gt;&gt; new_df = df.select(&#39;column1&#39;, &#39;column2&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; new_df = df.select([&#39;column1&#39;, &#39;column2&#39;])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="o">.</span><span class="n">_expand_args</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">checkColumn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="n">new_select_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+            <span class="n">new_select_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_df</span><span class="o">.</span><span class="n">_expand_expr</span><span class="p">(</span><span class="n">arg</span><span class="p">))</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span> <span class="o">=</span> <span class="n">new_select_list</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+<div class="viewcode-block" id="DataFrame.drop"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.drop">[docs]</a>    <span class="k">def</span> <span class="nf">drop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Drops specified columns from the DataFrame and returns a new DataFrame.</span>
+
+<span class="sd">        &gt;&gt;&gt; new_df = df.drop(&#39;column1&#39;, &#39;column2&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; new_df = df.drop([&#39;column1&#39;, &#39;column2&#39;])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="o">.</span><span class="n">_expand_args</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">checkColumn</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_col_name</span><span class="p">(</span><span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">is_exist</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="n">arg</span><span class="p">:</span>
+                    <span class="n">is_exist</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="n">is_exist</span><span class="p">:</span>
+                <span class="k">del</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+<div class="viewcode-block" id="DataFrame.withColumn"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.withColumn">[docs]</a>    <span class="k">def</span> <span class="nf">withColumn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">new_column</span><span class="p">,</span> <span class="n">func</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function adds a new column to the DataFrame.</span>
+
+<span class="sd">        Example</span>
+<span class="sd">        --------</span>
+<span class="sd">        .. code-block:: python</span>
+
+<span class="sd">            import fast_causal_inference.dataframe.functions as Fn</span>
+<span class="sd">            import fast_causal_inference.dataframe.statistics as S</span>
+
+<span class="sd">            df1 = df.select(&#39;x1&#39;,&#39;x2&#39;,&#39;x3&#39;, &#39;numerator&#39;)</span>
+
+<span class="sd">            # Method 1: Select columns through df&#39;s index: df[&#39;col&#39;]</span>
+<span class="sd">            df1 = df1.withColumn(&#39;new_col&#39;, Fn.sqrt(df1[&#39;numerator&#39;]))</span>
+<span class="sd">            df1.show()</span>
+
+<span class="sd">            # Method 2: Select columns directly through string: Fn.col(&#39;new_col&#39;)</span>
+<span class="sd">            df1 = df1.withColumn(&#39;new_col2&#39;, Fn.pow(&#39;new_col&#39;, 2))</span>
+<span class="sd">            df1.show()</span>
+
+<span class="sd">            df1 = df1.withColumn(&#39;new_col3&#39;, Fn.col(&#39;new_col&#39;) * Fn.col(&#39;new_col&#39;))</span>
+<span class="sd">            df1.show()</span>
+
+<span class="sd">            # Add constant</span>
+<span class="sd">            df2 = df1.withColumn(&#39;c1&#39;, Fn.lit(1))</span>
+<span class="sd">            df2 = df2.withColumn(&#39;c2&#39;, Fn.lit(&#39;1&#39;))</span>
+<span class="sd">            df2.show()</span>
+
+<span class="sd">            # Nesting</span>
+<span class="sd">            df2 = df1.withColumn(&#39;c1&#39;, Fn.pow(Fn.sqrt(Fn.sqrt(Fn.col(&#39;x1&#39;))), 2))</span>
+<span class="sd">            df2.show()</span>
+
+<span class="sd">            # +-*/% operations</span>
+<span class="sd">            df2 = df1.withColumn(&#39;c1&#39;, 22 + df1[&#39;x1&#39;] / 2 + 2 / df1[&#39;x2&#39;] * df1[&#39;x3&#39;] % 2 - (df1[&#39;x2&#39;]))</span>
+<span class="sd">            df2.show()</span>
+<span class="sd">            df2 = df1.withColumn(&#39;c1&#39;, Fn.col(&#39;x1 + x2 * x3 + x3&#39;))</span>
+<span class="sd">            df2.show()</span>
+
+<span class="sd">            # if</span>
+<span class="sd">            df2 = df1.withColumn(&#39;cc1&#39;, &#39;if(x1 &gt; 0, 1, -1)&#39;)</span>
+<span class="sd">            df2.show()</span>
+<span class="sd">            df2 = df1.withColumn(&#39;cc1&#39;, Fn.If(&#39;x1 &gt; 0&#39;,1,-1))</span>
+<span class="sd">            df2.show()</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">func</span> <span class="o">=</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_add_space</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">alias</span> <span class="ow">in</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">alias</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">alias</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">func</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
+                    <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">alias</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span><span class="p">,</span>
+                    <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">alias</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">new_df</span><span class="o">.</span><span class="n">_ctx</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="n">func</span> <span class="o">=</span> <span class="n">func</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">DfColumnLeafNode</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">new_column</span><span class="p">))</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">new_column</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span>
+                <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">new_df</span><span class="o">.</span><span class="n">_ctx</span><span class="p">)</span>
+            <span class="p">]</span> <span class="o">=</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">DfFnColWrapper</span><span class="p">):</span>
+            <span class="n">new_df</span> <span class="o">=</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="n">new_column</span><span class="p">),</span> <span class="n">keep_old_cols</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span> <span class="nf">_add_space</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;,&quot;</span><span class="p">,</span> <span class="s2">&quot;+&quot;</span><span class="p">,</span> <span class="s2">&quot;-&quot;</span><span class="p">,</span> <span class="s2">&quot;*&quot;</span><span class="p">,</span> <span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="s2">&quot;)&quot;</span><span class="p">,</span> <span class="s2">&quot;(&quot;</span><span class="p">,</span> <span class="s2">&quot;=&quot;</span><span class="p">,</span> <span class="s2">&quot;&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;&quot;</span><span class="p">,</span> <span class="s2">&quot;!&quot;</span><span class="p">]:</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">ch</span><span class="p">,</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">ch</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">text</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span>
+
+    <span class="k">def</span> <span class="nf">_expand_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Logical Error: expr(`</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">`) is expected to be str.&quot;</span><span class="p">)</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_add_space</span><span class="p">(</span><span class="n">expr</span><span class="p">)</span>
+        <span class="n">origin_expr</span> <span class="o">=</span> <span class="n">expr</span>
+        <span class="k">for</span> <span class="n">alias</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">alias</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">alias</span> <span class="o">==</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">expr</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span>
+                <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="n">alias</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot; &quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">alias</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span>
+            <span class="p">)</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">origin_expr</span> <span class="o">=</span> <span class="n">origin_expr</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">alias</span> <span class="o">=</span> <span class="n">origin_expr</span> <span class="k">if</span> <span class="n">origin_expr</span> <span class="o">!=</span> <span class="n">expr</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">origin_expr</span><span class="p">]</span> <span class="o">=</span> <span class="n">DfColumnLeafNode</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="n">alias</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">expr</span><span class="p">]</span> <span class="o">=</span> <span class="n">DfColumnLeafNode</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="n">alias</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">DfColumnLeafNode</span><span class="p">(</span><span class="n">expr</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="n">alias</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DataFrame.withColumnRenamed"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.withColumnRenamed">[docs]</a>    <span class="k">def</span> <span class="nf">withColumnRenamed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">old_name</span><span class="p">,</span> <span class="n">new_name</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns a new DataFrame by renaming an existing column.</span>
+
+<span class="sd">        &gt;&gt;&gt; df.withColumnRenamed(&quot;column1&quot;, &quot;new_column1&quot;).show()</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">checkColumn</span><span class="p">(</span><span class="n">old_name</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">column</span><span class="o">.</span><span class="n">alias</span> <span class="o">==</span> <span class="n">old_name</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_col_name</span><span class="p">(</span><span class="n">column</span><span class="p">)</span> <span class="o">==</span> <span class="n">old_name</span><span class="p">:</span>
+                <span class="n">column</span><span class="o">.</span><span class="n">alias</span> <span class="o">=</span> <span class="n">new_name</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+<div class="viewcode-block" id="DataFrame.describe"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.describe">[docs]</a>    <span class="k">def</span> <span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cols</span><span class="o">=</span><span class="s2">&quot;*&quot;</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the summary statistics for the columns in the DataFrame.</span>
+
+<span class="sd">        &gt;&gt;&gt; df.describe()</span>
+<span class="sd">        &gt;&gt;&gt; df.describe([&#39;x1&#39;,&#39;x2&#39;])</span>
+<span class="sd">        #       count       avg       std       min  quantile_0.25  quantile_0.5  quantile_0.75  quantile_0.90  quantile_0.99      max</span>
+<span class="sd">        # x1  10000.0 -0.018434  0.987606 -3.740101       -0.68929     -0.028665       0.654210       1.274144       2.321097  3.80166</span>
+<span class="sd">        # x2  10000.0  0.021976  1.986209 -8.893264       -1.28461      0.015400       1.357618       2.583523       4.725829  7.19662</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">materializedView</span><span class="p">()</span>
+        <span class="n">table_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getTableName</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">AisTools</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">table_name</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DataFrame.sample"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.sample">[docs]</a>    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fraction</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function samples a fraction of rows without replacement from the DataFrame.</span>
+
+<span class="sd">        &gt;&gt;&gt; df1 = df.sample(1000)</span>
+<span class="sd">        &gt;&gt;&gt; df1.count().show()</span>
+
+<span class="sd">        &gt;&gt;&gt; df2 = df.sample(0.5)</span>
+<span class="sd">        &gt;&gt;&gt; df2.count().show()</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">materializedView</span><span class="p">(</span><span class="n">is_temp</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">is_physical_table</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">row_num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">new_df</span><span class="o">.</span><span class="n">count</span><span class="p">()</span><span class="o">.</span><span class="fm">__str__</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">fraction</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">fraction</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">pass</span>
+        <span class="k">elif</span> <span class="n">fraction</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">fraction</span> <span class="o">&gt;</span> <span class="n">row_num</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;fraction should be less than row number&quot;</span><span class="p">)</span>
+            <span class="n">fraction</span> <span class="o">=</span> <span class="n">fraction</span> <span class="o">/</span> <span class="n">row_num</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;fraction should be in [0, 1] or &gt; 1&quot;</span><span class="p">)</span>
+
+        <span class="n">new_df_name</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="o">.</span><span class="n">createTableName</span><span class="p">()</span>
+
+        <span class="n">temp_df</span> <span class="o">=</span> <span class="n">new_df</span>
+        <span class="n">temp_df</span> <span class="o">=</span> <span class="n">temp_df</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;rand() / pow(2, 32) &lt; </span><span class="si">{</span><span class="n">fraction</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">temp_df</span><span class="o">.</span><span class="n">materializedView</span><span class="p">(</span><span class="n">is_physical_table</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DataFrame.split"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.split">[docs]</a>    <span class="k">def</span> <span class="nf">split</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">test_size</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function splits the DataFrame into two DataFrames.</span>
+
+<span class="sd">        &gt;&gt;&gt; df_train, df_test = df.split(0.5)</span>
+<span class="sd">        &gt;&gt;&gt; print(df_train.count())</span>
+<span class="sd">        &gt;&gt;&gt; print(df_test.count())</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">materializedView</span><span class="p">(</span><span class="n">is_temp</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">new_table_name</span> <span class="o">=</span> <span class="n">AisTools</span><span class="o">.</span><span class="n">data_split</span><span class="p">(</span><span class="n">new_df</span><span class="o">.</span><span class="n">getTableName</span><span class="p">(),</span> <span class="n">test_size</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">readClickHouse</span><span class="p">(</span><span class="n">new_table_name</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="n">readClickHouse</span><span class="p">(</span><span class="n">new_table_name</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="DataFrame.orderBy"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.orderBy">[docs]</a>    <span class="k">def</span> <span class="nf">orderBy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Orders the DataFrame by the specified columns and returns a new DataFrame.</span>
+
+<span class="sd">        &gt;&gt;&gt; import fast_causal_inference.dataframe.functions as Fn</span>
+<span class="sd">        &gt;&gt;&gt; new_df = df.orderBy(&#39;column1&#39;, Fn.desc(&#39;column2&#39;))</span>
+<span class="sd">        &gt;&gt;&gt; new_df = df.orderBy([&#39;column1&#39;, &#39;column2&#39;])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="o">.</span><span class="n">_expand_args</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="c1"># clear self.data.order_by</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="k">del</span> <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">order_by</span><span class="p">[:]</span>
+        <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">order</span> <span class="o">=</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">Order</span><span class="p">()</span>
+                <span class="n">order</span><span class="o">.</span><span class="n">column</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">arg</span>
+                <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">order_by</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">order</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">Order</span><span class="p">):</span>
+                <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">order_by</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+<div class="viewcode-block" id="DataFrame.groupBy"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.groupBy">[docs]</a>    <span class="k">def</span> <span class="nf">groupBy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Groups the DataFrame by the specified columns and returns a new DataFrame.Exception: If the DataFrame is already in `need_agg` state.</span>
+
+<span class="sd">        &gt;&gt;&gt; new_df = df.groupBy(&#39;column1&#39;, &#39;column2&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; new_df = df.groupBy([&#39;column1&#39;, &#39;column2&#39;])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="o">.</span><span class="n">_expand_args</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_need_agg</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span>
+                <span class="s2">&quot;Dataframe is already in `need_agg` state, cannot apply group by.&quot;</span>
+            <span class="p">)</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_transform_to_nested</span><span class="p">()</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">_need_agg</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">arg</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unable to find column named `</span><span class="si">{</span><span class="n">arg</span><span class="si">}</span><span class="s2">`.&quot;</span><span class="p">)</span>
+            <span class="n">column</span> <span class="o">=</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">Column</span><span class="p">()</span>
+            <span class="n">column</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">arg</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">group_by</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">column</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+    <span class="k">def</span> <span class="nf">agg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
+        <span class="c1"># 支持如下两种语法</span>
+        <span class="c1"># df.agg(avg(&quot;A&quot;), sum(&quot;B&quot;).alias).show()</span>
+        <span class="c1"># df.agg({&quot;A&quot;: &quot;avg&quot;, &quot;B&quot;: &quot;sum&quot;}).show()</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Nothing to agg.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">key</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">AisF</span><span class="p">,</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">key</span><span class="p">])(</span><span class="n">key</span><span class="p">),</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">arg</span><span class="p">:</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arg</span><span class="p">,</span> <span class="n">DfFnColWrapper</span><span class="p">),</span> <span class="n">args</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">args</span><span class="si">}</span><span class="s2"> is not List[DfFnColWrapper].&quot;</span><span class="p">)</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_df</span>
+
+        <span class="c1"># aggregate functions</span>
+
+    <span class="k">def</span> <span class="nf">sum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">avg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">avg</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">count</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">expr</span><span class="o">=</span><span class="s2">&quot;*&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="n">expr</span><span class="o">=</span><span class="n">expr</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">max</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">min</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">any</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">stddevPop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">stddevPop</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">stddevSamp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">stddevSamp</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">varPop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">varPop</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">varSamp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">varSamp</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">corr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">corr</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">covarPop</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">covarPop</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">covarSamp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">covarSamp</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">anyLast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">anyLast</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">anyMin</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">anyMin</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">anyMax</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">anyMax</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">kolmogorov_smirnov_test</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">kolmogorov_smirnov_test</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">student_ttest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">student_ttest</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">welch_ttest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">welch_ttest</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">mean_z_test</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">sample_data</span><span class="p">,</span>
+        <span class="n">sample_index</span><span class="p">,</span>
+        <span class="n">population_variance_x</span><span class="p">,</span>
+        <span class="n">population_variance_y</span><span class="p">,</span>
+        <span class="n">confidence_level</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span>
+            <span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">mean_z_test</span><span class="p">(</span>
+                <span class="n">sample_data</span><span class="p">,</span>
+                <span class="n">sample_index</span><span class="p">,</span>
+                <span class="n">population_variance_x</span><span class="p">,</span>
+                <span class="n">population_variance_y</span><span class="p">,</span>
+                <span class="n">confidence_level</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">quantile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">level</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;param `level` is not set&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisF</span><span class="o">.</span><span class="n">quantile</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">level</span><span class="o">=</span><span class="n">level</span><span class="p">))</span>
+
+    <span class="c1"># all in sql functions</span>
+    <span class="k">def</span> <span class="nf">delta_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="s2">&quot;True&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">delta_method</span><span class="p">(</span><span class="n">expr</span><span class="o">=</span><span class="n">column</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="n">std</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">ttest_1samp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">alternative</span><span class="o">=</span><span class="s2">&quot;two-sided&quot;</span><span class="p">,</span> <span class="n">mu</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">ttest_1samp</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">alternative</span><span class="p">,</span> <span class="n">mu</span><span class="p">,</span> <span class="n">X</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">ttest_2samp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">alternative</span><span class="o">=</span><span class="s2">&quot;two-sided&quot;</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span><span class="n">pse</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span>
+            <span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">ttest_2samp</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">alternative</span><span class="o">=</span><span class="n">alternative</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="n">X</span><span class="p">,</span><span class="n">pse</span><span class="o">=</span><span class="n">pse</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">xexpt_ttest_2samp</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">numerator</span><span class="p">,</span>
+        <span class="n">denominator</span><span class="p">,</span>
+        <span class="n">index</span><span class="p">,</span>
+        <span class="n">uin</span><span class="p">,</span>
+        <span class="n">metric_type</span><span class="o">=</span><span class="s2">&quot;avg&quot;</span><span class="p">,</span>
+        <span class="n">group_buckets</span><span class="o">=</span><span class="s2">&quot;[1:1]&quot;</span><span class="p">,</span>
+        <span class="n">alpha</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+        <span class="n">MDE</span><span class="o">=</span><span class="mf">0.005</span><span class="p">,</span>
+        <span class="n">power</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+        <span class="n">X</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span>
+            <span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">xexpt_ttest_2samp</span><span class="p">(</span>
+                <span class="n">numerator</span><span class="p">,</span>
+                <span class="n">denominator</span><span class="p">,</span>
+                <span class="n">index</span><span class="p">,</span>
+                <span class="n">uin</span><span class="p">,</span>
+                <span class="n">metric_type</span><span class="p">,</span>
+                <span class="n">group_buckets</span><span class="p">,</span>
+                <span class="n">alpha</span><span class="p">,</span>
+                <span class="n">MDE</span><span class="p">,</span>
+                <span class="n">power</span><span class="p">,</span>
+                <span class="n">X</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">mann_whitney_utest</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">sample_data</span><span class="p">,</span>
+        <span class="n">sample_index</span><span class="p">,</span>
+        <span class="n">alternative</span><span class="o">=</span><span class="s2">&quot;two-sided&quot;</span><span class="p">,</span>
+        <span class="n">continuity_correction</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span>
+            <span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">mann_whitney_utest</span><span class="p">(</span>
+                <span class="n">sample_data</span><span class="p">,</span> <span class="n">sample_index</span><span class="p">,</span> <span class="n">alternative</span><span class="p">,</span> <span class="n">continuity_correction</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">srm</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">groupby</span><span class="p">,</span> <span class="n">ratio</span><span class="o">=</span><span class="s2">&quot;[1,1]&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">srm</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">groupby</span><span class="p">,</span> <span class="n">ratio</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">ols</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisRegressionF</span><span class="o">.</span><span class="n">ols</span><span class="p">(</span><span class="n">column</span><span class="p">,</span> <span class="n">use_bias</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">wls</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">column</span><span class="p">,</span> <span class="n">weight</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisRegressionF</span><span class="o">.</span><span class="n">wls</span><span class="p">(</span><span class="n">column</span><span class="p">,</span> <span class="n">weight</span><span class="p">,</span> <span class="n">use_bias</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">stochastic_linear_regression</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">,</span> <span class="n">l1</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;SGD&quot;</span>
+    <span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span>
+            <span class="n">AisRegressionF</span><span class="o">.</span><span class="n">stochastic_linear_regression</span><span class="p">(</span>
+                <span class="n">expr</span><span class="p">,</span> <span class="n">learning_rate</span><span class="p">,</span> <span class="n">l1</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">method</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">stochastic_logistic_regression</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">expr</span><span class="p">,</span> <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.00001</span><span class="p">,</span> <span class="n">l1</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;SGD&quot;</span>
+    <span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span>
+            <span class="n">AisRegressionF</span><span class="o">.</span><span class="n">stochastic_logistic_regression</span><span class="p">(</span>
+                <span class="n">expr</span><span class="p">,</span> <span class="n">learning_rate</span><span class="p">,</span> <span class="n">l1</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">method</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">matrix_multiplication</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">invert</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span>
+            <span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">matrix_multiplication</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="n">std</span><span class="p">,</span> <span class="n">invert</span><span class="o">=</span><span class="n">invert</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">did</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">treatment</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="o">*</span><span class="n">X</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisRegressionF</span><span class="o">.</span><span class="n">did</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">treatment</span><span class="p">,</span> <span class="n">time</span><span class="p">,</span> <span class="o">*</span><span class="n">X</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">iv_regression</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">formula</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisRegressionF</span><span class="o">.</span><span class="n">iv_regression</span><span class="p">(</span><span class="n">formula</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">boot_strap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">sample_num</span><span class="p">,</span> <span class="n">bs_num</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">boot_strap</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">sample_num</span><span class="p">,</span> <span class="n">bs_num</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">permutation</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">permutation_num</span><span class="p">,</span> <span class="o">*</span><span class="n">col</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_apply_func</span><span class="p">(</span><span class="n">AisStatisticsF</span><span class="o">.</span><span class="n">permutation</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">permutation_num</span><span class="p">,</span> <span class="o">*</span><span class="n">col</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">checkColumn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">throw_exception</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">arg</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">throw_exception</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;column </span><span class="si">%s</span><span class="s2"> not found&quot;</span> <span class="o">%</span> <span class="n">arg</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span>
+
+    <span class="c1"># 优先提取 alias</span>
+    <span class="k">def</span> <span class="nf">getAliasOrName</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">alias_or_name</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">:</span>
+            <span class="n">alias_or_name</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_col_name</span><span class="p">(</span><span class="n">column</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">alias_or_name</span>
+
+    <span class="k">def</span> <span class="nf">_find_column</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># print(f&quot;find column `{name}`: {self._name_dict.get(name).sql(self._ctx)}&quot;)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">:</span>
+            <span class="n">col</span> <span class="o">=</span> <span class="n">column</span><span class="o">.</span><span class="n">find_column</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">col</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># print(f&quot;find column `{name}`: {col.sql(self._ctx)}&quot;)</span>
+                <span class="k">return</span> <span class="n">col</span>
+        <span class="c1"># print(f&quot;cannot find column `{name}`, using self.&quot;)</span>
+        <span class="k">return</span> <span class="n">DfColumnLeafNode</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_unwrap</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_wrapper</span><span class="p">:</span> <span class="n">DfFnColWrapper</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fn_wrapper</span><span class="p">,</span> <span class="n">DfFnColWrapper</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;func(</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">DfFnColWrapper</span><span class="p">)</span><span class="si">}</span><span class="s2">) should be DfFnColWrapper!&quot;</span><span class="p">)</span>
+        <span class="n">fn</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">cols</span> <span class="o">=</span> <span class="n">fn_wrapper</span><span class="o">.</span><span class="n">fn</span><span class="p">,</span> <span class="n">fn_wrapper</span><span class="o">.</span><span class="n">params</span><span class="p">,</span> <span class="n">fn_wrapper</span><span class="o">.</span><span class="n">columns</span>
+        <span class="n">alias</span> <span class="o">=</span> <span class="n">fn</span><span class="o">.</span><span class="n">alias</span>
+        <span class="n">columns</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">cols</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+                <span class="n">from_col</span> <span class="o">=</span> <span class="n">DfColumnLeafNode</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">col</span><span class="p">))</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">from_col</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_find_column</span><span class="p">(</span><span class="n">col</span><span class="p">))</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">col</span><span class="p">]</span> <span class="o">=</span> <span class="n">from_col</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col</span><span class="p">,</span> <span class="n">DfColumnNode</span><span class="p">):</span>
+                <span class="n">from_col</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">col</span><span class="o">.</span><span class="n">alias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">col</span><span class="o">.</span><span class="n">alias</span><span class="p">]</span> <span class="o">=</span> <span class="n">from_col</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col</span><span class="p">,</span> <span class="n">DfFnColWrapper</span><span class="p">):</span>
+                <span class="n">from_col</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">(</span><span class="n">col</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">from_col</span><span class="o">.</span><span class="n">alias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">from_col</span><span class="o">.</span><span class="n">alias</span><span class="p">]</span> <span class="o">=</span> <span class="n">from_col</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;type of col(</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">col</span><span class="p">)</span><span class="si">}</span><span class="s2">) is neither str nor DfColumn.&quot;</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">from_col</span><span class="p">,</span> <span class="n">DfColumnNode</span><span class="p">):</span>
+                <span class="c1"># we can only apply function on DfColumn but no others</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Logical Error: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">from_col</span><span class="p">)</span><span class="si">}</span><span class="s2"> is not DfColumn.&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">from_col</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="p">)]</span> <span class="o">=</span> <span class="n">from_col</span>
+            <span class="n">columns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">from_col</span><span class="p">)</span>
+        <span class="n">new_col</span> <span class="o">=</span> <span class="n">DfColumnInternalNode</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">columns</span><span class="p">,</span> <span class="n">alias</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">alias</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">alias</span><span class="p">]</span> <span class="o">=</span> <span class="n">new_col</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">new_col</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="p">)]</span> <span class="o">=</span> <span class="n">new_col</span>
+        <span class="k">return</span> <span class="n">new_col</span>
+
+    <span class="k">def</span> <span class="nf">_apply_func</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">fn_wrappers</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">DfFnColWrapper</span><span class="p">],</span> <span class="n">keep_old_cols</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">fn_wrapper</span><span class="p">:</span> <span class="n">fn_wrapper</span><span class="o">.</span><span class="n">has_agg_func</span><span class="p">(),</span> <span class="n">fn_wrappers</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_need_agg</span><span class="p">:</span>
+                <span class="n">new_df</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_transform_to_nested</span><span class="p">()</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">_need_agg</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">keep_old_cols</span><span class="p">:</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">fn_wrapper</span> <span class="ow">in</span> <span class="n">fn_wrappers</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fn_wrapper</span><span class="p">,</span> <span class="n">DfFnColWrapper</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;fn_wrapper should be a DfFnColWrapper object!&quot;</span><span class="p">)</span>
+            <span class="n">new_col</span><span class="p">:</span> <span class="n">DfColumnNode</span> <span class="o">=</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">(</span><span class="n">fn_wrapper</span><span class="p">)</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_col</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_df</span>
+
+    <span class="k">def</span> <span class="nf">_set_cte</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cte</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">cte</span> <span class="o">=</span> <span class="n">cte</span>
+
+    <span class="k">def</span> <span class="nf">_transform_to_nested</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">subquery</span> <span class="o">=</span> <span class="n">new_df</span><span class="o">.</span><span class="n">getExecutedSql</span><span class="p">()</span>
+        <span class="k">del</span> <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">columns</span><span class="p">[:]</span>
+        <span class="k">del</span> <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">filters</span><span class="p">[:]</span>
+        <span class="k">del</span> <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">group_by</span><span class="p">[:]</span>
+        <span class="k">del</span> <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">order_by</span><span class="p">[:]</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">limit</span><span class="o">.</span><span class="n">limit</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">del</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[:]</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">cte</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="k">for</span> <span class="n">col_name</span> <span class="ow">in</span> <span class="n">new_df</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">:</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">col_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">DfColumnLeafNode</span><span class="p">(</span><span class="n">col_name</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">SourceType</span><span class="o">.</span><span class="n">ClickHouse</span><span class="p">:</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">clickhouse</span><span class="o">.</span><span class="n">table_name</span> <span class="o">=</span> <span class="n">subquery</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">clickhouse</span><span class="o">.</span><span class="n">database</span> <span class="o">=</span> <span class="s2">&quot;Nested&quot;</span>
+        <span class="k">elif</span> <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">SourceType</span><span class="o">.</span><span class="n">StarRocks</span><span class="p">:</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">starrocks</span><span class="o">.</span><span class="n">table_name</span> <span class="o">=</span> <span class="n">subquery</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">starrocks</span><span class="o">.</span><span class="n">database</span> <span class="o">=</span> <span class="s2">&quot;Nested&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;not support source type&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_df</span>
+
+<div class="viewcode-block" id="DataFrame.union"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.union">[docs]</a>    <span class="k">def</span> <span class="nf">union</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This function is used to union two DataFrames.</span>
+<span class="sd">        The two DataFrames must have the same number of columns, and the columns must have the same names and order.</span>
+<span class="sd">        &gt;&gt;&gt; df1 = df1.union(df2)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;the length of select list not match&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">alias</span> <span class="o">!=</span> <span class="n">df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">alias</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;the column name of select list not match&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">alias</span> <span class="o">==</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span>
+            <span class="p">)</span> <span class="o">!=</span> <span class="n">df</span><span class="o">.</span><span class="n">_select_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">df</span><span class="o">.</span><span class="n">_ctx</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;the column name of select list not match&quot;</span><span class="p">)</span>
+
+        <span class="n">new_df</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">subquery1</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getExecutedSql</span><span class="p">()</span>
+        <span class="n">subquery2</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">getExecutedSql</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">SourceType</span><span class="o">.</span><span class="n">ClickHouse</span><span class="p">:</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">clickhouse</span><span class="o">.</span><span class="n">table_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">subquery1</span><span class="si">}</span><span class="s2">) union all (</span><span class="si">{</span><span class="n">subquery2</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">clickhouse</span><span class="o">.</span><span class="n">database</span> <span class="o">=</span> <span class="s2">&quot;Nested&quot;</span>
+        <span class="k">elif</span> <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">SourceType</span><span class="o">.</span><span class="n">StarRocks</span><span class="p">:</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">starrocks</span><span class="o">.</span><span class="n">table_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">subquery1</span><span class="si">}</span><span class="s2">) union all (</span><span class="si">{</span><span class="n">subquery2</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">starrocks</span><span class="o">.</span><span class="n">database</span> <span class="o">=</span> <span class="s2">&quot;Nested&quot;</span>
+        <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">:</span>
+            <span class="n">new_df</span><span class="o">.</span><span class="n">_select_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_df</span><span class="o">.</span><span class="n">_expand_expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_get_col_name</span><span class="p">(</span><span class="n">col</span><span class="p">)))</span>
+        <span class="k">return</span> <span class="n">new_df</span></div>
+
+    <span class="c1"># parse executed sql, remove limit</span>
+    <span class="k">def</span> <span class="nf">getExecutedSql</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="fm">__str__</span><span class="p">()</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">execute_sql</span>
+        <span class="c1"># print(sql)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;limit\s+\d+\s*$&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">sql</span><span class="p">,</span> <span class="n">flags</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+    <span class="c1"># is_temp = True: 每天凌晨 2 点自动删除</span>
+    <span class="k">def</span> <span class="nf">materializedView</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">is_physical_table</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">is_distributed_create</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">is_temp</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">table_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">materialized_sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getExecutedSql</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">table_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">new_df_name</span> <span class="o">=</span> <span class="n">table_name</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">new_df_name</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="o">.</span><span class="n">createTableName</span><span class="p">(</span><span class="n">is_temp</span><span class="p">)</span>
+        <span class="n">ClickHouseUtils</span><span class="o">.</span><span class="n">clickhouse_create_view_v2</span><span class="p">(</span>
+            <span class="n">table_name</span><span class="o">=</span><span class="n">new_df_name</span><span class="p">,</span>
+            <span class="n">select_statement</span><span class="o">=</span><span class="n">materialized_sql</span><span class="p">,</span>
+            <span class="n">origin_table_name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">getTableName</span><span class="p">(),</span>
+            <span class="n">is_physical_table</span><span class="o">=</span><span class="n">is_physical_table</span><span class="p">,</span>
+            <span class="n">is_distributed_create</span><span class="o">=</span><span class="n">is_distributed_create</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">readClickHouse</span><span class="p">(</span><span class="n">new_df_name</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">createDfRequest</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">df_req</span> <span class="o">=</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">DataFrameRequest</span><span class="p">()</span>
+        <span class="n">df_req</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">CopyFrom</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">df_req</span><span class="o">.</span><span class="n">task_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">task_type</span>
+        <span class="n">df_req</span><span class="o">.</span><span class="n">rtx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rtx</span>
+        <span class="n">df_req</span><span class="o">.</span><span class="n">device_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">device_id</span>
+        <span class="n">df_req</span><span class="o">.</span><span class="n">database</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">database</span>
+        <span class="k">return</span> <span class="n">df_req</span>
+
+    <span class="k">def</span> <span class="nf">createDataFrameRequestBase64</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">df_req</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">createDfRequest</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">df_req</span><span class="o">.</span><span class="n">SerializeToString</span><span class="p">())</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">createDfRequestJson</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">df_req</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">createDfRequest</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">json_format</span><span class="o">.</span><span class="n">MessageToJson</span><span class="p">(</span><span class="n">df_req</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">createCurlRequest</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="s1">&#39;curl  -H &quot;Content-Type: application/json&quot; -X POST -d </span><span class="se">\&#39;</span><span class="s1">&#39;</span>
+            <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">createDfRequestJson</span><span class="p">()</span>
+            <span class="o">+</span> <span class="s2">&quot;&#39; &quot;</span>
+            <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">url</span>
+            <span class="o">+</span> <span class="s2">&quot;/json&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">retry_times</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">logger</span> <span class="o">=</span> <span class="n">get_context</span><span class="p">()</span><span class="o">.</span><span class="n">logger</span>
+        <span class="k">while</span> <span class="n">retry_times</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">json_body</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">createDfRequestJson</span><span class="p">()</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;url= &quot;</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">url</span> <span class="o">+</span> <span class="s2">&quot;,data= &quot;</span> <span class="o">+</span> <span class="n">json_body</span><span class="p">)</span>
+                <span class="n">resp</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">post</span><span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">url</span><span class="p">,</span>
+                    <span class="n">data</span><span class="o">=</span><span class="n">json_body</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">),</span>
+                    <span class="n">headers</span><span class="o">=</span><span class="p">{</span>
+                        <span class="s2">&quot;Content-Type&quot;</span><span class="p">:</span> <span class="s2">&quot;application/json&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;Accept&quot;</span><span class="p">:</span> <span class="s2">&quot;application/json&quot;</span><span class="p">,</span>
+                    <span class="p">},</span>
+                <span class="p">)</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;response=&quot;</span> <span class="o">+</span> <span class="n">resp</span><span class="o">.</span><span class="n">text</span><span class="p">)</span>
+                <span class="n">df_resp</span> <span class="o">=</span> <span class="n">Parse</span><span class="p">(</span><span class="n">resp</span><span class="o">.</span><span class="n">text</span><span class="p">,</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">DataFrameResponse</span><span class="p">())</span>
+                <span class="k">if</span> <span class="n">df_resp</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">RetStatus</span><span class="o">.</span><span class="n">FAIL</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Error: &quot;</span><span class="p">)</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="n">df_resp</span><span class="o">.</span><span class="n">msg</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">df_resp</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">RetStatus</span><span class="o">.</span><span class="n">SUCC</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">data</span> <span class="o">=</span> <span class="n">df_resp</span><span class="o">.</span><span class="n">df</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span> <span class="o">=</span> <span class="p">[</span>
+                            <span class="n">DfColumnLeafNode</span><span class="p">(</span>
+                                <span class="n">column_name</span><span class="o">=</span><span class="n">col</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">alias</span><span class="o">=</span><span class="n">col</span><span class="o">.</span><span class="n">alias</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">col</span><span class="o">.</span><span class="n">type</span>
+                            <span class="p">)</span>
+                            <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">df_resp</span><span class="o">.</span><span class="n">df</span><span class="o">.</span><span class="n">columns</span>
+                        <span class="p">]</span>
+                        <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_select_list</span><span class="p">:</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">_name_dict</span><span class="p">[</span><span class="n">col</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="p">)]</span> <span class="o">=</span> <span class="n">col</span>
+                <span class="k">return</span>
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="n">retry_times</span> <span class="o">-=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">retry_times</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">e</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">createTableName</span><span class="p">(</span><span class="n">is_temp</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="n">table_name</span> <span class="o">=</span> <span class="s2">&quot;df_table_&quot;</span>
+        <span class="k">if</span> <span class="n">is_temp</span><span class="p">:</span>
+            <span class="n">table_name</span> <span class="o">+=</span> <span class="s2">&quot;temp_&quot;</span>
+        <span class="n">table_name</span> <span class="o">+=</span> <span class="n">time</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y%m</span><span class="si">%d</span><span class="s2">%H%M%S&quot;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">localtime</span><span class="p">())</span> <span class="o">+</span> <span class="s2">&quot;_&quot;</span>
+        <span class="n">table_name</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">100000</span><span class="p">,</span> <span class="mi">999999</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">table_name</span>
+
+    <span class="k">def</span> <span class="nf">fill_column_info</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">task_type</span> <span class="o">=</span> <span class="n">DfPb</span><span class="o">.</span><span class="n">TaskType</span><span class="o">.</span><span class="n">FILL_SCHEMA</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">execute</span><span class="p">()</span>
+
+    <span class="c1"># 如果有嵌套子查询，获取最内层的表名</span>
+    <span class="k">def</span> <span class="nf">getTableName</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">clickhouse</span><span class="o">.</span><span class="n">table_name</span>
+
+<div class="viewcode-block" id="DataFrame.toCsv"><a class="viewcode-back" href="../../dataframe/dataframe.DataFrame.toCsv.html#dataframe.dataframe.DataFrame.toCsv">[docs]</a>    <span class="k">def</span> <span class="nf">toCsv</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">csv_file_abs_path</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Convert the data from ClickHouse table to a CSV file.</span>
+
+<span class="sd">        &gt;&gt;&gt; df.toCsv(&quot;/path/to/output.csv&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">clickhouse_table_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">clickhouse</span><span class="o">.</span><span class="n">table_name</span>
+        <span class="n">clickhouse_2_csv</span><span class="p">(</span><span class="n">clickhouse_table_name</span><span class="p">,</span> <span class="n">csv_file_abs_path</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DataFrame.toTdw"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.toTdw">[docs]</a>    <span class="k">def</span> <span class="nf">toTdw</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">tdw_database</span><span class="p">,</span>
+        <span class="n">tdw_table</span><span class="p">,</span>
+        <span class="n">tdw_user</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">tdw_passward</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">group</span><span class="o">=</span><span class="s2">&quot;tl&quot;</span><span class="p">,</span>
+        <span class="n">is_drop_table</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">priPart</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        ClickHouse table &gt;&gt; TDW-thive table.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">            :tdw_database (str): The name of the TDW database.</span>
+<span class="sd">            :tdw_table (str): The name of the TDW table.</span>
+<span class="sd">            :tdw_user (str, optional): The username for TDW. Default is None.</span>
+<span class="sd">            :tdw_passward (str, optional): The password for TDW. Default is None.</span>
+<span class="sd">            :group (str, optional): The group for TDW. Default is &#39;tl&#39;.</span>
+<span class="sd">            :is_drop_table (bool, optional): Whether to drop the existing TDW table. Default is False.</span>
+<span class="sd">            :overwrite (bool, optional): Whether to overwrite the existing data in the TDW table. Default is True.</span>
+<span class="sd">            :priPart (str, optional): The primary partition for the TDW table. Default is None.</span>
+
+<span class="sd">        Example</span>
+<span class="sd">        ----------</span>
+<span class="sd">        &gt;&gt;&gt; df.toTdw(&quot;tdw_database&quot;, &quot;tdw_table&quot;, group=&#39;tl&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; df.toTdw(&quot;tdw_database&quot;, &quot;tdw_table&quot;, group=&#39;tl&#39;,priPart=[&#39;p_20220222&#39;])</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">materializedView</span><span class="p">()</span>
+        <span class="kn">from</span> <span class="nn">fast_causal_inference.util.clickhouse_utils</span> <span class="kn">import</span> <span class="n">ClickHouseUtils</span>
+
+        <span class="n">ClickHouseUtils</span><span class="o">.</span><span class="n">clickhouse_2_tdw_v2</span><span class="p">(</span>
+            <span class="n">view</span><span class="o">.</span><span class="n">getTableName</span><span class="p">(),</span>
+            <span class="n">tdw_database</span><span class="p">,</span>
+            <span class="n">tdw_table</span><span class="p">,</span>
+            <span class="n">tdw_user</span><span class="p">,</span>
+            <span class="n">tdw_passward</span><span class="p">,</span>
+            <span class="n">group</span><span class="p">,</span>
+            <span class="n">is_drop_table</span><span class="p">,</span>
+            <span class="n">overwrite</span><span class="p">,</span>
+            <span class="n">priPart</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="DataFrame.toSparkDf"><a class="viewcode-back" href="../../dataframe/dataframe.DataFrame.toSparkDf.html#dataframe.dataframe.DataFrame.toSparkDf">[docs]</a>    <span class="k">def</span> <span class="nf">toSparkDf</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        ClickHouse table &gt;&gt; spark dataframe.</span>
+
+<span class="sd">        Example</span>
+<span class="sd">        ----------</span>
+<span class="sd">        &gt;&gt;&gt; import fast_causal_inference</span>
+<span class="sd">        &gt;&gt;&gt; fast_causal_inference.set_default(tenant_id=&quot;&quot;,tenant_secret_key=&quot;&quot;)</span>
+<span class="sd">        &gt;&gt;&gt; spark = fast_causal_inference.set_spark_session(group_id=&#39;&#39;, gaia_id=&#39;&#39;) # group_id,gaia_id 参考 notebook上默认文件！Spark 资源池.html</span>
+<span class="sd">        &gt;&gt;&gt; df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">        &gt;&gt;&gt; spark_df = df.toSparkDf()</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">session</span> <span class="o">=</span> <span class="n">getSparkSession</span><span class="p">()</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="o">.</span><span class="n">engine</span><span class="p">()</span> <span class="o">==</span> <span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">clickhouse_2_dataframe</span><span class="p">(</span>
+                <span class="n">session</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">clickhouse</span><span class="o">.</span><span class="n">table_name</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="o">.</span><span class="n">engine</span><span class="p">()</span> <span class="o">==</span> <span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">starrocks_2_dataframe</span><span class="p">(</span><span class="n">session</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">starrocks</span><span class="o">.</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Olap engine `</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_ctx</span><span class="o">.</span><span class="n">engine</span><span class="p">()</span><span class="si">}</span><span class="s2">` not supported.&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DataFrame.toClickHouse"><a class="viewcode-back" href="../../dataframe.html#dataframe.dataframe.DataFrame.toClickHouse">[docs]</a>    <span class="k">def</span> <span class="nf">toClickHouse</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">clickhouse_table_name</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        ClickHouse table &gt;&gt; ClickHouse table.</span>
+
+<span class="sd">        Example</span>
+<span class="sd">        ----------</span>
+<span class="sd">        &gt;&gt;&gt; df.toClickHouse(&quot;new_table&quot;)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">clickhouse_table_name</span> <span class="o">=</span> <span class="n">clickhouse_table_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">materializedView</span><span class="p">(</span><span class="n">is_physical_table</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">table_name</span><span class="o">=</span><span class="n">clickhouse_table_name</span><span class="p">)</span></div></div>
+
+
+<span class="k">def</span> <span class="nf">getSparkSession</span><span class="p">():</span>
+    <span class="kn">from</span> <span class="nn">fast_causal_inference</span> <span class="kn">import</span> <span class="n">get_context</span>
+
+    <span class="k">if</span> <span class="n">get_context</span><span class="p">()</span><span class="o">.</span><span class="n">spark_session</span> <span class="o">==</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Spark Session is None, pless init&quot;</span><span class="p">)</span>
+        <span class="k">return</span>
+    <span class="k">return</span> <span class="n">get_context</span><span class="p">()</span><span class="o">.</span><span class="n">spark_session</span>
+
+
+<span class="c1"># 出入仓</span>
+<div class="viewcode-block" id="readClickHouse"><a class="viewcode-back" href="../../dataframe/dataframe.readClickHouse.html#dataframe.dataframe.readClickHouse">[docs]</a><span class="k">def</span> <span class="nf">readClickHouse</span><span class="p">(</span><span class="n">table_name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read data from a ClickHouse table into a DataFrame.</span>
+
+<span class="sd">    &gt;&gt;&gt; import fast_causal_inference</span>
+<span class="sd">    &gt;&gt;&gt; df = fast_causal_inference.readClickHouse(&quot;test_data_small&quot;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="p">()</span>
+    <span class="n">df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">clickhouse</span><span class="o">.</span><span class="n">table_name</span> <span class="o">=</span> <span class="n">table_name</span>
+    <span class="n">df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">clickhouse</span><span class="o">.</span><span class="n">database</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">database</span>
+    <span class="n">df</span><span class="o">.</span><span class="n">fill_column_info</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">df</span></div>
+
+
+<div class="viewcode-block" id="readStarRocks"><a class="viewcode-back" href="../../dataframe/dataframe.readStarRocks.html#dataframe.dataframe.readStarRocks">[docs]</a><span class="k">def</span> <span class="nf">readStarRocks</span><span class="p">(</span><span class="n">table_name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read data from a StarRocks table into a DataFrame.</span>
+
+<span class="sd">    &gt;&gt;&gt; import fast_causal_inference</span>
+<span class="sd">    &gt;&gt;&gt; df = fast_causal_inference.readStarRocks(&quot;test_data_small&quot;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="p">(</span><span class="n">olap_engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">)</span>
+    <span class="n">df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">starrocks</span><span class="o">.</span><span class="n">table_name</span> <span class="o">=</span> <span class="n">table_name</span>
+    <span class="n">df</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">starrocks</span><span class="o">.</span><span class="n">database</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">database</span>
+    <span class="n">df</span><span class="o">.</span><span class="n">fill_column_info</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">df</span></div>
+
+
+<span class="k">def</span> <span class="nf">readTdw</span><span class="p">(</span>
+    <span class="n">db</span><span class="p">,</span>
+    <span class="n">table</span><span class="p">,</span>
+    <span class="n">group</span><span class="o">=</span><span class="s2">&quot;tl&quot;</span><span class="p">,</span>
+    <span class="n">tdw_user</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">tdw_passward</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">priParts</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">str_replace</span><span class="o">=</span><span class="s2">&quot;-1&quot;</span><span class="p">,</span>
+    <span class="n">numeric_replace</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">olap</span><span class="o">=</span><span class="s2">&quot;clickhouse&quot;</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read data from a TDW-thive table into a DataFrame.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    :param db: The name of the TDW database.</span>
+<span class="sd">    :param table: The name of the TDW table.</span>
+<span class="sd">    :param group: The group for TDW. Default is &#39;tl&#39;.</span>
+<span class="sd">    :param user: The username for TDW. Default is None.</span>
+<span class="sd">    :param passwd: The password for TDW. Default is None.</span>
+<span class="sd">    :param str_replace: The replacement for string NA values. Default is &quot;-1&quot;.</span>
+<span class="sd">    :param numeric_replace: The replacement for numeric NA values. Default is 0.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    -------</span>
+
+<span class="sd">    ::</span>
+
+<span class="sd">        # thive-第一种方式 tdw thive &gt; clickhouse</span>
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        fast_causal_inference.set_default(tenant_id=&quot;&quot;,tenant_secret_key=&quot;&quot;)</span>
+<span class="sd">        spark = fast_causal_inference.set_spark_session(group_id=&#39;&#39;, gaia_id=&#39;&#39;) # group_id,gaia_id 参考 notebook上默认文件！Spark 资源池.html</span>
+<span class="sd">        df = fast_causal_inference.readTdw(&quot;db_name&quot;, &quot;table_name&quot;,  group=&quot;tl&quot;) # 读普通表</span>
+<span class="sd">        df = fast_causal_inference.readTdw(&quot;db_name&quot;, &quot;table_name&quot;,  group=&quot;tl&quot;, priPart=[&#39;p_20220222&#39;]) # 读分区表</span>
+
+<span class="sd">        # thive-第二种方式 tdw thive &gt; spark &gt; clickhouse</span>
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        fast_causal_inference.set_default(tenant_id=&quot;&quot;,tenant_secret_key=&quot;&quot;)</span>
+<span class="sd">        spark = fast_causal_inference.set_spark_session(group_id=&#39;&#39;, gaia_id=&#39;&#39;) # group_id,gaia_id 参考 notebook上默认文件！Spark 资源池.html</span>
+<span class="sd">        from pytoolkit import TDWSQLProvider</span>
+<span class="sd">        tdw = TDWSQLProvider(spark, group=&quot;tl&quot;,db=&quot;db_name&quot;)</span>
+<span class="sd">        spark_df = tdw.table(tblName=&quot;allinsql_test_data_small&quot;)# 读普通表</span>
+<span class="sd">        spark_df = tdw.table(tblName=&quot;allinsql_test_data_small&quot;, priPart=[&#39;p_20220222&#39;])# 读分区表</span>
+<span class="sd">        spark_df.count()</span>
+<span class="sd">        df_ch = fast_causal_inference.readSparkDf(spark_df)</span>
+<span class="sd">        </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">session</span> <span class="o">=</span> <span class="n">get_context</span><span class="p">()</span><span class="o">.</span><span class="n">spark_session</span>
+    <span class="kn">from</span> <span class="nn">pytoolkit</span> <span class="kn">import</span> <span class="n">TDWSQLProvider</span>
+
+    <span class="n">tdw</span> <span class="o">=</span> <span class="n">TDWSQLProvider</span><span class="p">(</span>
+        <span class="n">session</span><span class="p">,</span> <span class="n">group</span><span class="o">=</span><span class="n">group</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="n">db</span><span class="p">,</span> <span class="n">user</span><span class="o">=</span><span class="n">tdw_user</span><span class="p">,</span> <span class="n">passwd</span><span class="o">=</span><span class="n">tdw_passward</span>
+    <span class="p">)</span>
+    <span class="n">df_new</span> <span class="o">=</span> <span class="n">tdw</span><span class="o">.</span><span class="n">table</span><span class="p">(</span><span class="n">tblName</span><span class="o">=</span><span class="n">table</span><span class="p">,</span> <span class="n">priParts</span><span class="o">=</span><span class="n">priParts</span><span class="p">)</span>
+    <span class="n">df_new</span> <span class="o">=</span> <span class="n">AisTools</span><span class="o">.</span><span class="n">preprocess_na</span><span class="p">(</span><span class="n">df_new</span><span class="p">,</span> <span class="n">str_replace</span><span class="p">,</span> <span class="n">numeric_replace</span><span class="p">)</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="p">()</span>
+    <span class="n">table_name</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="o">.</span><span class="n">createTableName</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">olap</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;clickhouse&quot;</span><span class="p">:</span>
+        <span class="n">dataframe_2_clickhouse</span><span class="p">(</span><span class="n">dataframe</span><span class="o">=</span><span class="n">df_new</span><span class="p">,</span> <span class="n">clickhouse_table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">readClickHouse</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">olap</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;starrocks&quot;</span><span class="p">:</span>
+        <span class="n">dataframe_2_starrocks</span><span class="p">(</span><span class="n">dataframe</span><span class="o">=</span><span class="n">df_new</span><span class="p">,</span> <span class="n">starrocks_table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">readStarRocks</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Olap engine `</span><span class="si">{</span><span class="n">olap</span><span class="si">}</span><span class="s2">` not supported.&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="readSparkDf"><a class="viewcode-back" href="../../dataframe/dataframe.readSparkDf.html#dataframe.dataframe.readSparkDf">[docs]</a><span class="k">def</span> <span class="nf">readSparkDf</span><span class="p">(</span><span class="n">dataframe</span><span class="p">,</span> <span class="n">olap</span><span class="o">=</span><span class="s2">&quot;clickhouse&quot;</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read data from a Spark DataFrame into a DataFrame.</span>
+
+<span class="sd">    &gt;&gt;&gt; import fast_causal_inference</span>
+<span class="sd">    &gt;&gt;&gt; fast_causal_inference.set_default(tenant_id=&quot;&quot;,tenant_secret_key=&quot;&quot;)</span>
+<span class="sd">    &gt;&gt;&gt; spark = fast_causal_inference.set_spark_session(group_id=&#39;&#39;, gaia_id=&#39;&#39;) # group_id,gaia_id 参考 notebook上默认文件！Spark 资源池.html</span>
+<span class="sd">    &gt;&gt;&gt; df = fast_causal_inference.readSparkDf(spark_df)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="p">()</span>
+    <span class="n">table_name</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="o">.</span><span class="n">createTableName</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">olap</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;clickhouse&quot;</span><span class="p">:</span>
+        <span class="n">dataframe_2_clickhouse</span><span class="p">(</span><span class="n">dataframe</span><span class="o">=</span><span class="n">dataframe</span><span class="p">,</span> <span class="n">clickhouse_table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">readClickHouse</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">olap</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;starrocks&quot;</span><span class="p">:</span>
+        <span class="n">dataframe_2_starrocks</span><span class="p">(</span><span class="n">dataframe</span><span class="o">=</span><span class="n">dataframe</span><span class="p">,</span> <span class="n">starrocks_table_name</span><span class="o">=</span><span class="n">table_name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">readStarRocks</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Olap engine `</span><span class="si">{</span><span class="n">olap</span><span class="si">}</span><span class="s2">` not supported.&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="readCsv"><a class="viewcode-back" href="../../dataframe/dataframe.readCsv.html#dataframe.dataframe.readCsv">[docs]</a><span class="k">def</span> <span class="nf">readCsv</span><span class="p">(</span><span class="n">csv_file_abs_path</span><span class="p">,</span> <span class="n">olap</span><span class="o">=</span><span class="s2">&quot;clickhouse&quot;</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Read data from a CSV file into a DataFrame.</span>
+
+<span class="sd">    &gt;&gt;&gt; import fast_causal_inference</span>
+<span class="sd">    &gt;&gt;&gt; df = fast_causal_inference.readCsv(&quot;/path/to/file.csv&quot;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="p">()</span>
+    <span class="n">table_name</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="o">.</span><span class="n">createTableName</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">olap</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;clickhouse&quot;</span><span class="p">:</span>
+        <span class="n">csv_2_clickhouse</span><span class="p">(</span>
+            <span class="n">csv_file_abs_path</span><span class="o">=</span><span class="n">csv_file_abs_path</span><span class="p">,</span> <span class="n">clickhouse_table_name</span><span class="o">=</span><span class="n">table_name</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">readClickHouse</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">olap</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;starrocks&quot;</span><span class="p">:</span>
+        <span class="n">csv_2_starrocks</span><span class="p">(</span>
+            <span class="n">csv_file_abs_path</span><span class="o">=</span><span class="n">csv_file_abs_path</span><span class="p">,</span> <span class="n">starrocks_table_name</span><span class="o">=</span><span class="n">table_name</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">readStarRocks</span><span class="p">(</span><span class="n">table_name</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Olap engine `</span><span class="si">{</span><span class="n">olap</span><span class="si">}</span><span class="s2">` not supported.&quot;</span><span class="p">)</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Tencent.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

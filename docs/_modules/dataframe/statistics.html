@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>dataframe.statistics &mdash; Fast-Causal-Inference  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Fast-Causal-Inference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../input-output.html">Input/output</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../dataframe.html">Dataframe Operations</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../inference.html">Causal Inference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Fast-Causal-Inference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">dataframe.statistics</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for dataframe.statistics</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.regression</span> <span class="kn">import</span> <span class="n">df_2_table</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.functions</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">DfFnColWrapper</span><span class="p">,</span>
+    <span class="n">register_fn</span><span class="p">,</span>
+    <span class="n">define_args</span><span class="p">,</span>
+    <span class="n">FnArg</span><span class="p">,</span>
+    <span class="n">DfFunction</span><span class="p">,</span>
+    <span class="n">aggregrate</span><span class="p">,</span>
+    <span class="n">OlapEngineType</span><span class="p">,</span>
+    <span class="n">DfContext</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.dataframe.df_base</span> <span class="kn">import</span> <span class="p">(</span>
+    <span class="n">df_2_table</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span> <span class="nn">fast_causal_inference.util</span> <span class="kn">import</span> <span class="n">create_sql_instance</span>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;DeltaMethod&quot;</span><span class="p">)</span>
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;DeltaMethod&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;expr&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span> <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;std&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;True&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggDeltaMethodDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="c1"># @classmethod</span>
+    <span class="c1"># def _extract_cols_from_expr(cls, expr):</span>
+    <span class="c1">#     matches = re.findall(r&#39;avg\((.*?)\)&#39;, expr)</span>
+    <span class="c1">#     unique_matches = list(set(matches))</span>
+    <span class="c1">#     encoded_matches = [(match, f&#39;X{i + 1}&#39;) for i, match in enumerate(unique_matches)]</span>
+    <span class="c1">#     result = expr</span>
+    <span class="c1">#     for key, value in encoded_matches:</span>
+    <span class="c1">#         result = result.replace(f&#39;avg({key})&#39;, f&#39;avg({value})&#39;)</span>
+    <span class="c1">#     return result, tuple(col for col, _ in encoded_matches)</span>
+
+    <span class="k">def</span> <span class="nf">sql_impl_default</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">expr_arg</span><span class="p">:</span> <span class="n">FnArg</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;expr&quot;</span><span class="p">]</span>
+        <span class="n">std_arg</span><span class="p">:</span> <span class="n">FnArg</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;std&quot;</span><span class="p">]</span>
+        <span class="n">expr</span> <span class="o">=</span> <span class="n">expr_arg</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">std</span> <span class="o">=</span> <span class="n">std_arg</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">expr</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">std</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<div class="viewcode-block" id="delta_method"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.delta_method">[docs]</a><span class="k">def</span> <span class="nf">delta_method</span><span class="p">(</span><span class="n">expr</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute the delta method on the given expression.</span>
+
+<span class="sd">    :param expr: Form like f (avg(x1), avg(x2), ...) , f is the complex function expression, x1 and x2 are column names, the columns involved here must be numeric.</span>
+<span class="sd">    :type expr: str, optional</span>
+<span class="sd">    :param std: Whether to return standard deviation, default is True.</span>
+<span class="sd">    :type std: bool, optional</span>
+
+<span class="sd">    :return: DataFrame contains the following columns: var or std computed by delta_method.</span>
+<span class="sd">    :rtype: DataFrame</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">        df.groupBy(&#39;treatment&#39;).delta_method(&#39;avg(x1)&#39;, False).show()</span>
+<span class="sd">        df.groupBy(&#39;treatment&#39;).agg(S.delta_method(&#39;avg(x1)&#39;)).show()</span>
+
+<span class="sd">    This will output:</span>
+
+<span class="sd">    .. code-block:: text</span>
+
+<span class="sd">        treatment             std</span>
+<span class="sd">        0         0         1.934587277675054E-4</span>
+<span class="sd">        1         1        1.9646284055862068E-4</span>
+<span class="sd">        treatment             var</span>
+<span class="sd">        0         0        0.013908944164367954</span>
+<span class="sd">        1         1        0.014016520272828797</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span><span class="n">AggDeltaMethodDfFunction</span><span class="p">(),</span> <span class="p">{</span><span class="s2">&quot;expr&quot;</span><span class="p">:</span> <span class="n">expr</span><span class="p">,</span> <span class="s2">&quot;std&quot;</span><span class="p">:</span> <span class="n">std</span><span class="p">},</span> <span class="p">[])</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;ttest_1samp&quot;</span><span class="p">)</span>
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;ttest_1samp&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Y&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;alternative&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;two-sided&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;mu&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;0&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;X&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggTTest1SampDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_default</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">Y</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;Y&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">alternative</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;alternative&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">mu</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;mu&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">x_str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">X</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;, </span><span class="si">{</span><span class="n">X</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">Y</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">alternative</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">mu</span><span class="si">}{</span><span class="n">x_str</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<div class="viewcode-block" id="ttest_1samp"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.ttest_1samp">[docs]</a><span class="k">def</span> <span class="nf">ttest_1samp</span><span class="p">(</span>
+    <span class="n">Y</span><span class="p">,</span>
+    <span class="n">alternative</span><span class="o">=</span><span class="s2">&quot;two-sided&quot;</span><span class="p">,</span>
+    <span class="n">mu</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+    <span class="n">X</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is used to calculate the t-test for the mean of one group of scores. It returns the calculated t-statistic and the two-tailed p-value.</span>
+
+<span class="sd">    :param Y: str, form like f (avg(x1), avg(x2), ...), f is the complex function expression, x1 and x2 are column names, the columns involved here must be numeric.</span>
+<span class="sd">    :type Y: str, required</span>
+<span class="sd">    :param alternative: str, use &#39;two-sided&#39; for two-tailed test, &#39;greater&#39; for one-tailed test in the positive direction, and &#39;less&#39; for one-tailed test in the negative direction.</span>
+<span class="sd">    :type alternative: str, optional</span>
+<span class="sd">    :param mu: the mean of the null hypothesis.</span>
+<span class="sd">    :type mu: float, optional</span>
+<span class="sd">    :param X: str, an expression used as continuous covariates for CUPED variance reduction. It follows the regression approach and can be a simple form like &#39;avg(x1)/avg(x2)&#39;,&#39;avg(x3)&#39;,&#39;avg(x1)/avg(x2)+avg(x3)&#39;.</span>
+<span class="sd">    :type X: str, optional</span>
+
+<span class="sd">    :return: DataFrame contains the following columns:</span>
+<span class="sd">    estimate: the mean value of the statistic to be tested.</span>
+<span class="sd">    stderr: the standard error of the statistic to be tested.</span>
+<span class="sd">    t-statistic: the calculated t-statistic.</span>
+<span class="sd">    p-value: the calculated p-value.</span>
+<span class="sd">    lower: the lower bound of the confidence interval.</span>
+<span class="sd">    upper: the upper bound of the confidence interval.</span>
+
+
+<span class="sd">    Example:</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; df.groupBy(&#39;x_cat1&#39;).ttest_1samp(&#39;avg(numerator)/avg(denominator)&#39;, alternative = &#39;two-sided&#39;, mu = 0).show()</span>
+<span class="sd">    &gt;&gt;&gt; df.groupBy(&#39;x_cat1&#39;).agg(S.ttest_1samp(&#39;avg(numerator)&#39;, alternative = &#39;two-sided&#39;, mu = 0, X = &#39;avg(numerator_pre)/avg(denominator_pre)&#39;)).show()</span>
+<span class="sd">    x_cat1  estimate    stderr t-statistic   p-value     lower     upper</span>
+<span class="sd">    0      B  1.455223  0.041401   35.149887  0.000000  1.374029  1.536417</span>
+<span class="sd">    1      E  1.753613  0.042083   41.670491  0.000000  1.671082  1.836143</span>
+<span class="sd">    2      D  1.752348  0.043173   40.589377  0.000000  1.667680  1.837016</span>
+<span class="sd">    3      C  1.804776  0.046642   38.694122  0.000000  1.713303  1.896249</span>
+<span class="sd">    4      A  2.108937  0.042558   49.554601  0.000000  2.025477  2.192398</span>
+<span class="sd">    x_cat1   estimate    stderr t-statistic   p-value      lower      upper</span>
+<span class="sd">    0      B  10.220695  0.261317   39.112304  0.000000   9.708205  10.733185</span>
+<span class="sd">    1      E  12.407975  0.267176   46.441156  0.000000  11.884002  12.931947</span>
+<span class="sd">    2      D  11.924641  0.258935   46.052716  0.000000  11.416831  12.432451</span>
+<span class="sd">    3      C  12.274732  0.281095   43.667495  0.000000  11.723457  12.826006</span>
+<span class="sd">    4      A  14.824860  0.241133   61.480129  0.000000  14.351972  15.297748</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">AggTTest1SampDfFunction</span><span class="p">(),</span>
+        <span class="p">{</span><span class="s2">&quot;Y&quot;</span><span class="p">:</span> <span class="n">Y</span><span class="p">,</span> <span class="s2">&quot;alternative&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">alternative</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;mu&quot;</span><span class="p">:</span> <span class="n">mu</span><span class="p">,</span> <span class="s2">&quot;X&quot;</span><span class="p">:</span> <span class="n">X</span><span class="p">},</span>
+        <span class="p">[],</span>
+    <span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;ttest_2samp&quot;</span><span class="p">)</span>
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;ttest_2samp&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;Y&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;alternative&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;two-sided&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;X&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;pse&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;index&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggTTest2SampDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_default</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">Y</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;Y&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">alternative</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;alternative&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;index&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">pse</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;pse&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">x_str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">X</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;, </span><span class="si">{</span><span class="n">X</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">x_str</span> <span class="o">=</span> <span class="n">x_str</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">pse</span> <span class="k">else</span> <span class="sa">f</span><span class="s2">&quot;, pse = </span><span class="si">{</span><span class="n">pse</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">Y</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">alternative</span><span class="si">}{</span><span class="n">x_str</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<div class="viewcode-block" id="ttest_2samp"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.ttest_2samp">[docs]</a><span class="k">def</span> <span class="nf">ttest_2samp</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">alternative</span><span class="o">=</span><span class="s2">&quot;two-sided&quot;</span><span class="p">,</span> <span class="n">X</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">pse</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is used to calculate the t-test for the means of two independent samples of scores. It returns the calculated t-statistic and the two-tailed p-value.</span>
+
+<span class="sd">    :param Y: str, form like f (avg(x1), avg(x2), ...), f is the complex function expression, x1 and x2 are column names, the columns involved here must be numeric.</span>
+<span class="sd">    :type Y: str, required</span>
+<span class="sd">    :param index: str, the treatment variable.</span>
+<span class="sd">    :type index: str, required</span>
+<span class="sd">    :param alternative: str, use &#39;two-sided&#39; for two-tailed test, &#39;greater&#39; for one-tailed test in the positive direction, and &#39;less&#39; for one-tailed test in the negative direction.</span>
+<span class="sd">    :type alternative: str, optional</span>
+<span class="sd">    :param X: str, an expression used as continuous covariates for CUPED variance reduction. It follows the regression approach and can be a simple form like &#39;avg(x1)/avg(x2)&#39;,&#39;avg(x3)&#39;,&#39;avg(x1)/avg(x2)+avg(x3)&#39;.</span>
+<span class="sd">    :type X: str, optional</span>
+<span class="sd">    :param pse: str, an expression used as discrete covariates for post-stratification variance reduction. It involves grouping by a covariate, calculating variances separately, and then weighting them. It can be any complex function form, such as &#39;x_cat1&#39;.</span>
+<span class="sd">    :type pse: str, optional</span>
+
+<span class="sd">    :return: DataFrame contains the following columns:</span>
+<span class="sd">    estimate: the mean value of the statistic to be tested.</span>
+<span class="sd">    stderr: the standard error of the statistic to be tested.</span>
+<span class="sd">    t-statistic: the calculated t-statistic.</span>
+<span class="sd">    p-value: the calculated p-value.</span>
+<span class="sd">    lower: the lower bound of the confidence interval.</span>
+<span class="sd">    upper: the upper bound of the confidence interval.</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; df.agg(S.ttest_2samp(&#39;avg(numerator)/avg(denominator)&#39;, &#39;treatment&#39;, alternative = &#39;two-sided&#39;, pse = &#39;x_cat1&#39;)).show()</span>
+<span class="sd">    &gt;&gt;&gt; df.agg(S.ttest_2samp(&#39;avg(numerator)/avg(denominator)&#39;, &#39;treatment&#39;, alternative = &#39;two-sided&#39;, X = &#39;avg(numerator_pre)/avg(denominator_pre)&#39;)).show()</span>
+<span class="sd">    &gt;&gt;&gt; df.groupBy(&#39;x_cat1&#39;).ttest_2samp(&#39;avg(numerator)&#39;, &#39;treatment&#39;, alternative = &#39;two-sided&#39;, X = &#39;avg(numerator_pre)&#39;).show()</span>
+<span class="sd">    &gt;&gt;&gt; df.groupBy(&#39;x_cat1&#39;).agg(S.ttest_2samp(&#39;avg(numerator)/avg(denominator)&#39;, &#39;treatment&#39;, alternative = &#39;two-sided&#39;, X = &#39;avg(numerator_pre)/avg(denominator_pre)&#39;)).show()</span>
+<span class="sd">    </span>
+<span class="sd">    .. code-block:: text</span>
+
+<span class="sd">            mean0     mean1  estimate    stderr t-statistic   p-value     lower  \</span>
+<span class="sd">        0  0.791139  2.487152  1.696013  0.032986   51.416725  0.000000  1.631355   </span>
+
+<span class="sd">            upper  </span>
+<span class="sd">        0  1.760672  </span>
+<span class="sd">            mean0     mean1  estimate    stderr t-statistic   p-value     lower  \</span>
+<span class="sd">        0  0.793732  2.486118  1.692386  0.026685   63.419925  0.000000  1.640077   </span>
+
+<span class="sd">            upper  </span>
+<span class="sd">        0  1.744694  </span>
+<span class="sd">        x_cat1     mean0      mean1   estimate    stderr t-statistic   p-value  \</span>
+<span class="sd">        0      B  2.481226  17.787127  15.305901  0.365716   41.851896  0.000000   </span>
+<span class="sd">        1      E  4.324137  19.437071  15.112935  0.370127   40.831785  0.000000   </span>
+<span class="sd">        2      D  4.582961  19.156961  14.574000  0.373465   39.023766  0.000000   </span>
+<span class="sd">        3      C  4.579375  19.816027  15.236652  0.419183   36.348422  0.000000   </span>
+<span class="sd">        4      A  7.518409  22.195092  14.676682  0.342147   42.895825  0.000000   </span>
+
+<span class="sd">            lower      upper  </span>
+<span class="sd">        0  14.588665  16.023138  </span>
+<span class="sd">        1  14.387062  15.838808  </span>
+<span class="sd">        2  13.841579  15.306421  </span>
+<span class="sd">        3  14.414564  16.058739  </span>
+<span class="sd">        4  14.005694  15.347671  </span>
+<span class="sd">        x_cat1     mean0     mean1  estimate    stderr t-statistic   p-value  \</span>
+<span class="sd">        0      B  0.409006  2.202847  1.793841  0.053917   33.270683  0.000000   </span>
+<span class="sd">        1      E  0.714211  2.435665  1.721455  0.056144   30.661265  0.000000   </span>
+<span class="sd">        2      D  0.781435  2.455767  1.674332  0.058940   28.407344  0.000000   </span>
+<span class="sd">        3      C  0.778977  2.562364  1.783388  0.065652   27.164280  0.000000   </span>
+<span class="sd">        4      A  1.242126  2.766098  1.523972  0.060686   25.112311  0.000000   </span>
+
+<span class="sd">            lower     upper  </span>
+<span class="sd">        0  1.688101  1.899581  </span>
+<span class="sd">        1  1.611348  1.831562  </span>
+<span class="sd">        2  1.558742  1.789923  </span>
+<span class="sd">        3  1.654633  1.912142  </span>
+<span class="sd">        4  1.404959  1.642984  </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">AggTTest2SampDfFunction</span><span class="p">(),</span>
+        <span class="p">{</span><span class="s2">&quot;Y&quot;</span><span class="p">:</span> <span class="n">Y</span><span class="p">,</span> <span class="s2">&quot;alternative&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">alternative</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;X&quot;</span><span class="p">:</span> <span class="n">X</span><span class="p">,</span> <span class="s2">&quot;pse&quot;</span><span class="p">:</span> <span class="n">pse</span><span class="p">},</span>
+        <span class="p">[</span><span class="n">index</span><span class="p">],</span>
+    <span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;xexpt_ttest_2samp&quot;</span><span class="p">)</span>
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;xexpt_ttest_2samp&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;numerator&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;denominator&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;index&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;uin&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;metric_type&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;avg&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;group_buckets&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;[1,1]&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;alpha&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;0.05&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;MDE&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;0.005&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;power&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;0.8&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;X&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggXexptTTest2SampDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_default</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">numerator</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;numerator&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">denominator</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;denominator&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;index&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">metric_type</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;metric_type&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">group_buckets</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;group_buckets&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">alpha</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;alpha&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">MDE</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;MDE&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">power</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;power&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">X</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">uin</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;uin&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">metric_type</span> <span class="o">==</span> <span class="s2">&quot;avg&quot;</span><span class="p">:</span>
+            <span class="n">group_buckets</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+            <span class="n">metric_type</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">group_buckets</span> <span class="o">=</span> <span class="s2">&quot;,&quot;</span> <span class="o">+</span> <span class="n">group_buckets</span>
+            <span class="n">metric_type</span> <span class="o">=</span> <span class="s2">&quot;,&#39;&quot;</span> <span class="o">+</span> <span class="n">metric_type</span> <span class="o">+</span> <span class="s2">&quot;&#39;&quot;</span>
+
+        <span class="k">if</span> <span class="n">X</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="s2">&quot;,&quot;</span> <span class="o">+</span> <span class="n">X</span>
+
+        <span class="n">sql</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;(&quot;</span>
+            <span class="o">+</span> <span class="n">numerator</span>
+            <span class="o">+</span> <span class="s2">&quot;,&quot;</span>
+            <span class="o">+</span> <span class="n">denominator</span>
+            <span class="o">+</span> <span class="s2">&quot;,&quot;</span>
+            <span class="o">+</span> <span class="n">index</span>
+            <span class="o">+</span> <span class="s2">&quot;,&quot;</span>
+            <span class="o">+</span> <span class="n">uin</span>
+            <span class="o">+</span> <span class="n">metric_type</span>
+            <span class="o">+</span> <span class="n">group_buckets</span>
+            <span class="o">+</span> <span class="s2">&quot;,&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">alpha</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;,&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">MDE</span><span class="p">)</span>
+            <span class="o">+</span> <span class="s2">&quot;,&quot;</span>
+            <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">power</span><span class="p">)</span>
+            <span class="o">+</span> <span class="n">X</span>
+            <span class="o">+</span> <span class="s2">&quot;)&quot;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<div class="viewcode-block" id="xexpt_ttest_2samp"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.xexpt_ttest_2samp">[docs]</a><span class="k">def</span> <span class="nf">xexpt_ttest_2samp</span><span class="p">(</span>
+    <span class="n">numerator</span><span class="p">,</span>
+    <span class="n">denominator</span><span class="p">,</span>
+    <span class="n">index</span><span class="p">,</span>
+    <span class="n">uin</span><span class="p">,</span>
+    <span class="n">metric_type</span><span class="o">=</span><span class="s2">&quot;avg&quot;</span><span class="p">,</span>
+    <span class="n">group_buckets</span><span class="o">=</span><span class="s2">&quot;[1,1]&quot;</span><span class="p">,</span>
+    <span class="n">alpha</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+    <span class="n">MDE</span><span class="o">=</span><span class="mf">0.005</span><span class="p">,</span>
+    <span class="n">power</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
+    <span class="n">X</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is used to calculate the t-test for the means of two independent samples of scores. It returns the calculated t-statistic and the two-tailed p-value.</span>
+
+
+<span class="sd">    :param numerator: column name, the numerator of the metric, can use sql expression, the column must be numeric.</span>
+<span class="sd">    :type numerator: str, required</span>
+<span class="sd">    :param denominator: column name, the denominator of the metric, can use sql expression, the column must be numeric.</span>
+<span class="sd">    :type denominator: str, required</span>
+<span class="sd">    :param index: column name, used to represent the control group and the experimental group.</span>
+<span class="sd">    :type index: str, required</span>
+<span class="sd">    :param uin: column name, used to bucket samples, can use sql expression, int64 type.</span>
+<span class="sd">    :type uin: str, required</span>
+<span class="sd">    :param metric_type:</span>
+<span class="sd">        avg: used to test the mean indicator, avg(num)/avg(demo), default is avg.</span>
+<span class="sd">        sum: used to test the sum indicator, at this time the denominator can be omitted or 1, otherwise the user is prompted.</span>
+<span class="sd">    :type metric_type: str, optional</span>
+<span class="sd">    :param group_buckets: the number of traffic buckets for each group, only effective when metric_type=&#39;sum&#39;. The default is [1,1], the number of elements is equal to the number of groups, only the correct ratio is required.</span>
+<span class="sd">    :type group_buckets: list, optional</span>
+<span class="sd">    :param alpha: numeric, significance level, default 0.05.</span>
+<span class="sd">    :type alpha: float, optional</span>
+<span class="sd">    :param MDE: numeric, minimum test difference, default 0.005.</span>
+<span class="sd">    :type MDE: float, optional</span>
+<span class="sd">    :param power: numeric, statistical power, default 0.8.</span>
+<span class="sd">    :type power: float, optional</span>
+<span class="sd">    :param X: str, an expression used as continuous covariates for CUPED variance reduction. It follows the regression approach and can be a simple form like &#39;avg(x1)/avg(x2)&#39;,&#39;avg(x3)&#39;,&#39;avg(x1)/avg(x2)+avg(x3)&#39;.</span>
+<span class="sd">    :type X: str, optional</span>
+
+<span class="sd">    :return: DataFrame contains the following columns:</span>
+<span class="sd">    groupname: the name of the group.</span>
+<span class="sd">    numerator: the mean of the numerator.</span>
+<span class="sd">    denominator: the mean of the denominator (only when metric_type=avg).</span>
+<span class="sd">    numerator_pre: the mean of numerator before the experiment (only when metric_type=avg).</span>
+<span class="sd">    denominator_pre: the mean of denominator before the experiment (only when metric_type=avg).</span>
+<span class="sd">    mean: the mean of the metric (only when metric_type=avg).</span>
+<span class="sd">    std_samp: the standard deviation of the metric (only when metric_type=avg).</span>
+<span class="sd">    ratio: group_buckets (only when metric_type=sum).</span>
+<span class="sd">    diff_relative: the relative difference between the two groups.</span>
+<span class="sd">    95%_relative_CI: the 95% confidence interval of the relative difference.</span>
+<span class="sd">    p-value: the calculated p-value.</span>
+<span class="sd">    t-statistic: the calculated t-statistic.</span>
+<span class="sd">    power: the calculated power.</span>
+<span class="sd">    recommend_samples: the recommended sample size.</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">    ----------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; df.xexpt_ttest_2samp(&#39;numerator&#39;, &#39;denominator&#39;, &#39;treatment&#39;, uin = &#39;rand()&#39;, metric_type = &#39;sum&#39;, group_buckets=[1,1]).show()</span>
+<span class="sd">    groupname   numerator     ratio</span>
+<span class="sd">    0           23058.627723  1</span>
+<span class="sd">    1           100540.303112 1</span>
+<span class="sd">    diff_relative 95%_relative_CI           p-value     t-statistic power       recommend_samples</span>
+<span class="sd">    336.020323%   [320.514511%,351.526135%] 0.000000    42.478747   0.050458    24404575</span>
+
+<span class="sd">    &gt;&gt;&gt; df.xexpt_ttest_2samp(&#39;numerator&#39;, &#39;denominator&#39;, &#39;treatment&#39;, uin = &#39;rand()&#39;, metric_type = &#39;sum&#39;, group_buckets=[1,1], X = &#39;avg(numerator_pre)/avg(denominator_pre)&#39;).show()</span>
+<span class="sd">    groupname   numerator     ratio       numerator_pre</span>
+<span class="sd">    0           23058.627723  1           21903.112431</span>
+<span class="sd">    1           100540.303112 1           23096.875608</span>
+<span class="sd">    diff_relative 95%_relative_CI           p-value     t-statistic power       recommend_samples</span>
+<span class="sd">    310.412514%   [299.416469%,321.408558%] 0.000000    55.335445   0.050911    12696830</span>
+
+<span class="sd">    &gt;&gt;&gt; df.xexpt_ttest_2samp(&#39;numerator&#39;, &#39;denominator&#39;, &#39;treatment&#39;, uin = &#39;rand()&#39;, metric_type = &#39;avg&#39;, X = &#39;avg(numerator_pre)/avg(denominator_pre)&#39;).show()</span>
+<span class="sd">    groupname   numerator     denominator  numerator_pre denominator_pre mean        std_samp</span>
+<span class="sd">    0           23058.627723  29023.233157 21903.112431  29131.831739    0.793678    1.253257</span>
+<span class="sd">    1           100540.303112 40452.337656 23096.875608  30776.559777    2.486168    5.123161</span>
+<span class="sd">    diff_relative 95%_relative_CI           p-value     t-statistic diff        95%_CI              power       recommend_samples</span>
+<span class="sd">    213.246344%   [206.698202%,219.794486%] 0.000000    63.835777   1.692490    [1.640519,1.744461] 0.052570    14172490</span>
+
+<span class="sd">    &gt;&gt;&gt; df.agg(S.xexpt_ttest_2samp(&#39;numerator&#39;, &#39;denominator&#39;, &#39;treatment&#39;, uin = &#39;rand()&#39;, metric_type = &#39;avg&#39;, alpha = 0.05, MDE = 0.005, power = 0.8, X = &#39;avg(numerator_pre)+avg(x1)&#39;)).show()</span>
+<span class="sd">    groupname   numerator     denominator  numerator_pre denominator_pre mean        std_samp</span>
+<span class="sd">    0           23058.627723  29023.233157 21903.112431  -62.102593      1.057338    2.341991</span>
+<span class="sd">    1           100540.303112 40452.337656 23096.875608  -122.234609     2.732950    5.918014</span>
+<span class="sd">    diff_relative 95%_relative_CI           p-value     t-statistic diff        95%_CI              power       recommend_samples</span>
+<span class="sd">    158.474659%   [152.453710%,164.495607%] 0.000000    51.593567   1.675612    [1.611950,1.739274] 0.053041    11982290</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">AggXexptTTest2SampDfFunction</span><span class="p">(),</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;metric_type&quot;</span><span class="p">:</span> <span class="n">metric_type</span><span class="p">,</span>
+            <span class="s2">&quot;group_buckets&quot;</span><span class="p">:</span> <span class="n">group_buckets</span><span class="p">,</span>
+            <span class="s2">&quot;alpha&quot;</span><span class="p">:</span> <span class="n">alpha</span><span class="p">,</span>
+            <span class="s2">&quot;MDE&quot;</span><span class="p">:</span> <span class="n">MDE</span><span class="p">,</span>
+            <span class="s2">&quot;power&quot;</span><span class="p">:</span> <span class="n">power</span><span class="p">,</span>
+            <span class="s2">&quot;X&quot;</span><span class="p">:</span> <span class="n">X</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">[</span><span class="n">numerator</span><span class="p">,</span> <span class="n">denominator</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">uin</span><span class="p">],</span>
+    <span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;SRM&quot;</span><span class="p">)</span>
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;srm&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;x&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;groupby&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;ratio&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;[1,1]&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggSRMDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_default</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">groupby</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;groupby&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">ratio</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;ratio&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">x</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s1">&#39;,&#39;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">groupby</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s1">&#39;,&#39;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ratio</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<div class="viewcode-block" id="srm"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.srm">[docs]</a><span class="k">def</span> <span class="nf">srm</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">groupby</span><span class="p">,</span> <span class="n">ratio</span><span class="o">=</span><span class="s2">&quot;[1,1]&quot;</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    perform srm test</span>
+
+
+<span class="sd">    :param x: column name, the numerator of the metric, can use SQL expression, the column must be numeric.</span>
+<span class="sd">        If you are concerned about whether the sum of x1 meets expectations, you should fill in x1, then it will calculate sum(x1);</span>
+<span class="sd">        If you are concerned about whether the sample size meets expectations, you should fill in 1, then it will calculate sum(1).</span>
+<span class="sd">    :type x: str, required</span>
+<span class="sd">    :param groupby: column name, representing the field for aggregation grouping, can support Integer/String.</span>
+<span class="sd">    :type groupby: str, required</span>
+<span class="sd">    :param ratio: list. The expected traffic ratio, needs to be filled in according to the order of the groupby field. Each value must be &gt;0. For example, [1,1,2] represents the expected ratio is 1:1:2.</span>
+<span class="sd">    :type ratio: list, required</span>
+
+<span class="sd">    :return: DataFrame contains the following columns:</span>
+<span class="sd">    groupname: the name of the group.</span>
+<span class="sd">    f_obs: the observed traffic.</span>
+<span class="sd">    ratio: the expected traffic ratio.</span>
+<span class="sd">    chisquare: the calculated chi-square.</span>
+<span class="sd">    p-value: the calculated p-value.</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">    &gt;&gt;&gt; df.srm(&#39;x1&#39;, &#39;treatment&#39;, &#39;[1,2]&#39;).show()</span>
+<span class="sd">            groupname   f_obs       ratio       chisquare   p-value</span>
+<span class="sd">    0           23058.627723 1.000000    48571.698643 0.000000</span>
+<span class="sd">    1           1.0054e+05  1.000000</span>
+
+<span class="sd">    &gt;&gt;&gt; df.agg(S.srm(&#39;x1&#39;, &#39;treatment&#39;, &#39;[1,2]&#39;)).show()</span>
+<span class="sd">            groupname   f_obs       ratio       chisquare   p-value</span>
+<span class="sd">    0           23058.627723 1.000000    48571.698643 0.000000</span>
+<span class="sd">    1           1.0054e+05  1.000000</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span><span class="n">AggSRMDfFunction</span><span class="p">(),</span> <span class="p">{</span><span class="s2">&quot;ratio&quot;</span><span class="p">:</span> <span class="n">ratio</span><span class="p">},</span> <span class="p">[</span><span class="n">x</span><span class="p">,</span> <span class="n">groupby</span><span class="p">])</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;mannWhitneyUTest&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;alternative&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;two-sided&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;continuity_correction&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_data&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_index&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggMannWhitneyUTestDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_clickhouse</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">alternative</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">arg_dict</span><span class="p">[</span><span class="s1">&#39;alternative&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+        <span class="n">continuity_correction</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;continuity_correction&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sample_data</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;sample_data&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sample_index</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;sample_index&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+            <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">alternative</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">continuity_correction</span><span class="si">}</span><span class="s2">)(</span><span class="si">{</span><span class="n">sample_data</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">sample_index</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<div class="viewcode-block" id="mann_whitney_utest"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.mann_whitney_utest">[docs]</a><span class="k">def</span> <span class="nf">mann_whitney_utest</span><span class="p">(</span>
+    <span class="n">sample_data</span><span class="p">,</span> <span class="n">sample_index</span><span class="p">,</span> <span class="n">alternative</span><span class="o">=</span><span class="s2">&quot;two-sided&quot;</span><span class="p">,</span> <span class="n">continuity_correction</span><span class="o">=</span><span class="mi">1</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is used to calculate the Mann-Whitney U test. It returns the calculated U-statistic and the two-tailed p-value.</span>
+
+<span class="sd">    :param sample_data: column name, the numerator of the metric, can use SQL expression, the column must be numeric.</span>
+<span class="sd">    :type sample_data: str, required</span>
+<span class="sd">    :param sample_index: column name, the index to represent the control group and the experimental group, 1 for the experimental group and 0 for the control group.</span>
+<span class="sd">    :type sample_index: str, required</span>
+<span class="sd">    :param alternative:</span>
+<span class="sd">        &#39;two-sided&#39;: the default value, two-sided test.</span>
+<span class="sd">        &#39;greater&#39;: one-tailed test in the positive direction.</span>
+<span class="sd">        &#39;less&#39;: one-tailed test in the negative direction.</span>
+<span class="sd">    :type alternative: str, optional</span>
+<span class="sd">    :param continuous_correction: bool, default 1, whether to apply continuity correction.</span>
+<span class="sd">    :type continuous_correction: bool, optional</span>
+
+<span class="sd">    :return: Tuple with two elements:</span>
+<span class="sd">    U-statistic: Float64.</span>
+<span class="sd">    p-value: Float64.</span>
+
+<span class="sd">    Example:</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; df.mann_whitney_utest(&#39;x1&#39;, &#39;treatment&#39;).show()</span>
+<span class="sd">    [2380940.0, 0.0]</span>
+<span class="sd">    &gt;&gt;&gt; df.agg(S.mann_whitney_utest(&#39;x1&#39;, &#39;treatment&#39;)).show()</span>
+<span class="sd">    [2380940.0, 0.0]</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">AggMannWhitneyUTestDfFunction</span><span class="p">(),</span>
+        <span class="p">{</span><span class="s2">&quot;alternative&quot;</span><span class="p">:</span> <span class="n">alternative</span><span class="p">,</span> <span class="s2">&quot;continuity_correction&quot;</span><span class="p">:</span> <span class="n">continuity_correction</span><span class="p">},</span>
+        <span class="p">[</span><span class="n">sample_data</span><span class="p">,</span> <span class="n">sample_index</span><span class="p">],</span>
+    <span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;kolmogorovSmirnovTest&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span><span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_data&quot;</span><span class="p">),</span> <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_index&quot;</span><span class="p">))</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggKolmogorovSmirnovTestDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+
+<div class="viewcode-block" id="kolmogorov_smirnov_test"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.kolmogorov_smirnov_test">[docs]</a><span class="k">def</span> <span class="nf">kolmogorov_smirnov_test</span><span class="p">(</span><span class="n">sample_data</span><span class="p">,</span> <span class="n">sample_index</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is used to calculate the Kolmogorov-Smirnov test for goodness of fit. It returns the calculated statistic and the two-tailed p-value.</span>
+
+
+<span class="sd">    :param sample_data: Sample data. Integer, Float or Decimal.</span>
+<span class="sd">    :type sample_data: int, float or decimal, required</span>
+<span class="sd">    :param sample_index: Sample index. Integer.</span>
+<span class="sd">    :type sample_index: int, required</span>
+
+<span class="sd">    :return: Tuple with two elements:</span>
+<span class="sd">    calculated statistic: Float64.</span>
+<span class="sd">    calculated p-value: Float64.</span>
+
+
+<span class="sd">    Example:</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; df.kolmogorov_smirnov_test(&#39;y&#39;, &#39;treatment&#39;).show()</span>
+<span class="sd">    [0.6382961593945475, 0.0]</span>
+<span class="sd">    &gt;&gt;&gt; df.agg(S.kolmogorov_smirnov_test(&#39;y&#39;, &#39;treatment&#39;)).show()</span>
+<span class="sd">    [0.6382961593945475, 0.0]</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">AggKolmogorovSmirnovTestDfFunction</span><span class="p">(),</span> <span class="p">{},</span> <span class="p">[</span><span class="n">sample_data</span><span class="p">,</span> <span class="n">sample_index</span><span class="p">]</span>
+    <span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;studentTTest&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span><span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_data&quot;</span><span class="p">),</span> <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_index&quot;</span><span class="p">))</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggStudentTTestDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+
+<div class="viewcode-block" id="student_ttest"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.student_ttest">[docs]</a><span class="k">def</span> <span class="nf">student_ttest</span><span class="p">(</span><span class="n">sample_data</span><span class="p">,</span> <span class="n">sample_index</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is used to calculate the t-test for the mean of one group of scores. It returns the calculated t-statistic and the two-tailed p-value.</span>
+
+<span class="sd">    :param sample_data: column name, the numerator of the metric, can use sql expression, the column must be numeric</span>
+<span class="sd">    :type sample_data: str, required</span>
+<span class="sd">    :param sample_index: column name, the index to represent the control group and the experimental group, 1 for the experimental group and 0 for the control group</span>
+<span class="sd">    :type sample_index: str, required</span>
+
+<span class="sd">    :return: Tuple with two elements:</span>
+<span class="sd">    calculated statistic: Float64.</span>
+<span class="sd">    calculated p-value: Float64.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; df.student_ttest(&#39;y&#39;, &#39;treatment&#39;).show()</span>
+<span class="sd">    [-72.8602591880598, 0.0]</span>
+
+<span class="sd">    &gt;&gt;&gt; df.agg(S.student_ttest(&#39;y&#39;, &#39;treatment&#39;)).show()</span>
+<span class="sd">    [-72.8602591880598, 0.0]</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span><span class="n">AggStudentTTestDfFunction</span><span class="p">(),</span> <span class="p">{},</span> <span class="p">[</span><span class="n">sample_data</span><span class="p">,</span> <span class="n">sample_index</span><span class="p">])</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;welchTTest&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span><span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_data&quot;</span><span class="p">),</span> <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_index&quot;</span><span class="p">))</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggWelchTTestDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+
+<div class="viewcode-block" id="welch_ttest"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.welch_ttest">[docs]</a><span class="k">def</span> <span class="nf">welch_ttest</span><span class="p">(</span><span class="n">sample_data</span><span class="p">,</span> <span class="n">sample_index</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is used to calculate welch&#39;s t-test for the mean of two independent samples of scores. It returns the calculated t-statistic and the two-tailed p-value.</span>
+
+<span class="sd">    :param sample_data: column name, the numerator of the metric, can use sql expression, the column must be numeric</span>
+<span class="sd">    :type sample_data: str, required</span>
+<span class="sd">    :param sample_index: column name, the index to represent the control group and the experimental group, 1 for the experimental group and 0 for the control group</span>
+<span class="sd">    :type sample_index: str, required</span>
+
+<span class="sd">    :return: Tuple with two elements:</span>
+<span class="sd">    calculated statistic: Float64.</span>
+<span class="sd">    calculated p-value: Float64.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">    &gt;&gt;&gt; df.welch_ttest(&#39;y&#39;, &#39;treatment&#39;).show()</span>
+<span class="sd">    [-73.78492246858345, 0.0]</span>
+<span class="sd">    &gt;&gt;&gt; df.agg(S.welch_ttest(&#39;y&#39;, &#39;treatment&#39;)).show()</span>
+<span class="sd">    [-73.78492246858345, 0.0]</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span><span class="n">AggWelchTTestDfFunction</span><span class="p">(),</span> <span class="p">{},</span> <span class="p">[</span><span class="n">sample_data</span><span class="p">,</span> <span class="n">sample_index</span><span class="p">])</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;meanZTest&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_data&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_index&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;population_variance_x&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;population_variance_y&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;confidence_level&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggMeanZTestDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+
+<div class="viewcode-block" id="mean_z_test"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.mean_z_test">[docs]</a><span class="k">def</span> <span class="nf">mean_z_test</span><span class="p">(</span>
+    <span class="n">sample_data</span><span class="p">,</span>
+    <span class="n">sample_index</span><span class="p">,</span>
+    <span class="n">population_variance_x</span><span class="p">,</span>
+    <span class="n">population_variance_y</span><span class="p">,</span>
+    <span class="n">confidence_level</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function is used to calculate the z-test for the mean of two independent samples of scores. It returns the calculated z-statistic and the two-tailed p-value.</span>
+
+<span class="sd">    :param sample_data: column name, the numerator of the metric, can use sql expression, the column must be numeric</span>
+<span class="sd">    :type sample_data: str, required</span>
+<span class="sd">    :param sample_index: column name, the index to represent the control group and the experimental group, 1 for the experimental group and 0 for the control group</span>
+<span class="sd">    :type sample_index: str, required</span>
+<span class="sd">    :param population_variance_x: Variance for control group.</span>
+<span class="sd">    :type population_variance_x: Float, required</span>
+<span class="sd">    :param population_variance_y: Variance for experimental group.</span>
+<span class="sd">    :type population_variance_y: Float, required</span>
+<span class="sd">    :param confidence_level: Confidence level in order to calculate confidence intervals.</span>
+<span class="sd">    :type confidence_level: Float, required</span>
+
+<span class="sd">    :return:</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">        df.mean_z_test(&#39;y&#39;, &#39;treatment&#39;, 0.9, 0.9, 0.95).show()</span>
+<span class="sd">        df.agg(S.mean_z_test(&#39;y&#39;, &#39;treatment&#39;, 0.9, 0.9, 0.95)).show()</span>
+
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">AggMeanZTestDfFunction</span><span class="p">(),</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;population_variance_x&quot;</span><span class="p">:</span> <span class="n">population_variance_x</span><span class="p">,</span>
+            <span class="s2">&quot;population_variance_y&quot;</span><span class="p">:</span> <span class="n">population_variance_y</span><span class="p">,</span>
+            <span class="s2">&quot;confidence_level&quot;</span><span class="p">:</span> <span class="n">confidence_level</span><span class="p">,</span>
+        <span class="p">},</span>
+        <span class="p">[</span><span class="n">sample_data</span><span class="p">,</span> <span class="n">sample_index</span><span class="p">],</span>
+    <span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;bootStrap&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span><span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;func&quot;</span><span class="p">),</span> <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;sample_num&quot;</span><span class="p">),</span> <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;bs_num&quot;</span><span class="p">))</span>
+<span class="k">class</span> <span class="nc">BootStrapDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+
+<div class="viewcode-block" id="boot_strap"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.boot_strap">[docs]</a><span class="k">def</span> <span class="nf">boot_strap</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">sample_num</span><span class="p">,</span> <span class="n">bs_num</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Compute a two-sided bootstrap confidence interval of a statistic.</span>
+<span class="sd">    boot_strap sample_num samples from data and compute the func.</span>
+
+<span class="sd">    :param func: function to apply.</span>
+<span class="sd">    :type func: str, required</span>
+<span class="sd">    :param sample_num: number of samples.</span>
+<span class="sd">    :type sample_num: int, required</span>
+<span class="sd">    :param bs_num: number of bootstrap samples.</span>
+<span class="sd">    :type bs_num: int, required</span>
+
+<span class="sd">    :return: list of calculated statistics.</span>
+<span class="sd">    :type return: Array(Float64).</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">        df.boot_strap(func=&#39;avg(x1)&#39;, sample_num=10000, bs_num=5).show()</span>
+<span class="sd">        df.agg(S.boot_strap(func=&quot;ttest_1samp(avg(x1), &#39;two-sided&#39;,0)&quot;, sample_num=100000, bs_num=3)). show()</span>
+<span class="sd">        df.agg(S.boot_strap(func=&quot;ttest_2samp(avg(x1), treatment, &#39;two-sided&#39;)&quot;, sample_num=100000, bs_num=3)). show()</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">BootStrapDfFunction</span><span class="p">(),</span>
+        <span class="p">{},</span>
+        <span class="p">[</span><span class="s2">&quot;&#39;&quot;</span> <span class="o">+</span> <span class="n">func</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;@&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="n">sample_num</span><span class="p">,</span> <span class="n">bs_num</span><span class="p">],</span>
+    <span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Permutation&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;func&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;permutation_num&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;mde&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;mde_type&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="k">class</span> <span class="nc">PermutationDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+
+<div class="viewcode-block" id="permutation"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.permutation">[docs]</a><span class="k">def</span> <span class="nf">permutation</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">permutation_num</span><span class="p">,</span> <span class="n">mde</span><span class="o">=</span><span class="s2">&quot;0&quot;</span><span class="p">,</span> <span class="n">mde_type</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :param func: function to apply.</span>
+<span class="sd">    :type func: str, required</span>
+<span class="sd">    :param permutation_num: number of permutations.</span>
+<span class="sd">    :type permutation_num: int, required</span>
+<span class="sd">    :param col: columns to apply function to.</span>
+<span class="sd">    :type col: int, float or decimal, required</span>
+
+<span class="sd">    :return: list of calculated statistics.</span>
+<span class="sd">    :type return: Array(Float64).</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">        df.permutation(&#39;mannWhitneyUTest&#39;, 3, &#39;x1&#39;)</span>
+<span class="sd">        df.agg(S.permutation(&#39;mannWhitneyUTest&#39;, 3, &#39;x1&#39;)).show()</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">PermutationDfFunction</span><span class="p">(),</span>
+        <span class="p">{},</span>
+        <span class="p">[</span><span class="s2">&quot;&#39;&quot;</span> <span class="o">+</span> <span class="n">func</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;@&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="n">permutation_num</span><span class="p">,</span> <span class="n">mde</span><span class="p">,</span> <span class="n">mde_type</span><span class="p">],</span>
+    <span class="p">)</span></div>
+
+
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">CLICKHOUSE</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;MatrixMultiplication&quot;</span><span class="p">)</span>
+<span class="nd">@register_fn</span><span class="p">(</span><span class="n">engine</span><span class="o">=</span><span class="n">OlapEngineType</span><span class="o">.</span><span class="n">STARROCKS</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;matrix_multiplication&quot;</span><span class="p">)</span>
+<span class="nd">@define_args</span><span class="p">(</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;std&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;False&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;invert&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;False&quot;</span><span class="p">,</span> <span class="n">is_param</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+    <span class="n">FnArg</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;col&quot;</span><span class="p">,</span> <span class="n">is_variadic</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<span class="p">)</span>
+<span class="nd">@aggregrate</span>
+<span class="k">class</span> <span class="nc">AggMatrixMultiplicationDfFunction</span><span class="p">(</span><span class="n">DfFunction</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">sql_impl_clickhouse</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">col</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">),</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;col&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">column</span><span class="p">))</span>
+        <span class="n">std</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;std&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">invert</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;invert&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">std</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">invert</span><span class="si">}</span><span class="s2">)&quot;</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+    <span class="k">def</span> <span class="nf">sql_impl_starrocks</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">DfContext</span><span class="p">,</span>
+        <span class="n">fn_args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">fn_params</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FnArg</span><span class="p">],</span>
+        <span class="n">arg_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="n">col</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">),</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;col&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">column</span><span class="p">))</span>
+        <span class="n">std</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;std&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">invert</span> <span class="o">=</span> <span class="n">arg_dict</span><span class="p">[</span><span class="s2">&quot;invert&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">sql</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fn_name</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;([</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">], </span><span class="si">{</span><span class="n">std</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">invert</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="k">return</span> <span class="n">sql</span>
+
+
+<div class="viewcode-block" id="matrix_multiplication"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.matrix_multiplication">[docs]</a><span class="k">def</span> <span class="nf">matrix_multiplication</span><span class="p">(</span><span class="o">*</span><span class="n">col</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">invert</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :param col: columns to apply function to.</span>
+<span class="sd">    :type col: int, float or decimal, required</span>
+<span class="sd">    :param std: whether to return standard deviation.</span>
+<span class="sd">    :type std: bool, required</span>
+<span class="sd">    :param invert: whether to invert the matrix.</span>
+<span class="sd">    :type invert: bool, required</span>
+
+<span class="sd">    :return: list of calculated statistics.</span>
+<span class="sd">    :type return: Array(Float64).</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(&#39;test_data_small&#39;)</span>
+<span class="sd">        df.matrix_multiplication(&#39;x1&#39;, &#39;x2&#39;, std = False, invert = False).show()</span>
+<span class="sd">        df.agg(S.matrix_multiplication(&#39;x1&#39;, &#39;x2&#39;, std = False, invert = False)).show()</span>
+<span class="sd">        df.agg(S.matrix_multiplication(&#39;x1&#39;, &#39;x2&#39;, std = True, invert = True)).show()</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">DfFnColWrapper</span><span class="p">(</span>
+        <span class="n">AggMatrixMultiplicationDfFunction</span><span class="p">(),</span> <span class="p">{</span><span class="s2">&quot;std&quot;</span><span class="p">:</span> <span class="n">std</span><span class="p">,</span> <span class="s2">&quot;invert&quot;</span><span class="p">:</span> <span class="n">invert</span><span class="p">},</span> <span class="n">col</span>
+    <span class="p">)</span></div>
+
+
+<span class="kn">import</span> <span class="nn">scipy.stats</span> <span class="k">as</span> <span class="nn">stats</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">seaborn</span> <span class="k">as</span> <span class="nn">sns</span>
+<span class="kn">from</span> <span class="nn">matplotlib</span> <span class="kn">import</span> <span class="n">rcParams</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+
+
+<div class="viewcode-block" id="IPWestimator"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.IPWestimator">[docs]</a><span class="k">def</span> <span class="nf">IPWestimator</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">P</span><span class="p">,</span> <span class="n">B</span><span class="o">=</span><span class="mi">500</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Estimate the Average Treatment Effect (ATE) using Inverse Probability of Treatment Weighting (IPTW).</span>
+
+<span class="sd">    :param table: the name of the input data table.</span>
+<span class="sd">    :type table: str, required</span>
+<span class="sd">    :param Y: the column name of the outcome variable.</span>
+<span class="sd">    :type Y: str, required</span>
+<span class="sd">    :param T: the column name of the treatment variable.</span>
+<span class="sd">    :type T: str, required</span>
+<span class="sd">    :param P: the column name of the propensity score.</span>
+<span class="sd">    :type P: str, required</span>
+<span class="sd">    :param B: the number of bootstrap samples, default is 500.</span>
+<span class="sd">    :type B: int, optional</span>
+
+<span class="sd">    :return: dict, containing the following key-value pairs:</span>
+<span class="sd">    &#39;ATE&#39;: Average Treatment Effect.</span>
+<span class="sd">    &#39;stddev&#39;: Standard deviation.</span>
+<span class="sd">    &#39;p_value&#39;: p-value.</span>
+<span class="sd">    &#39;95% confidence_interval&#39;: 95% confidence interval.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------</span>
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        table = &#39;test_data_small&#39;</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(table)</span>
+<span class="sd">        Y = &#39;numerator&#39;</span>
+<span class="sd">        T = &#39;treatment&#39;</span>
+<span class="sd">        P = &#39;weight&#39;</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        S.IPWestimator(df,Y,T,P,B=500)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="n">df_2_table</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+    <span class="c1"># Create SQL instance</span>
+    <span class="n">sql_instance</span> <span class="o">=</span> <span class="n">create_sql_instance</span><span class="p">()</span>
+
+    <span class="c1"># Get the number of rows in the table</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;select count(*) as cnt from </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)[</span><span class="s2">&quot;cnt&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="c1"># Execute SQL query to calculate IPTW estimates</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;&quot;&quot;WITH (</span>
+<span class="s2">      SELECT DistributedNodeRowNumber(1)(0)</span>
+<span class="s2">      FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span>
+<span class="s2">    ) AS pa</span>
+<span class="s2">    SELECT</span>
+<span class="s2">      BootStrapMulti(&#39;sum:1;sum:1;sum:1;sum:1&#39;,  </span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">B</span><span class="si">}</span><span class="s2">, pa)(</span>
+<span class="s2">      </span><span class="si">{</span><span class="n">Y</span><span class="si">}</span><span class="s2">*</span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">/(</span><span class="si">{</span><span class="n">P</span><span class="si">}</span><span class="s2">+0.01), </span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">/(</span><span class="si">{</span><span class="n">P</span><span class="si">}</span><span class="s2">+0.01), </span><span class="si">{</span><span class="n">Y</span><span class="si">}</span><span class="s2">*(1-</span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">)/(1-</span><span class="si">{</span><span class="n">P</span><span class="si">}</span><span class="s2">+0.01), (1-</span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">)/(1-</span><span class="si">{</span><span class="n">P</span><span class="si">}</span><span class="s2">+0.01)) as res</span>
+<span class="s2">    FROM </span>
+<span class="s2">    </span><span class="si">{</span><span class="n">table</span><span class="si">}</span>
+<span class="s2">    ;</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+        <span class="p">)[</span><span class="s2">&quot;res&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;]&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;[&quot;</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Process the query results</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">res</span> <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">]</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="nb">float</span><span class="p">(</span><span class="n">j</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">i</span> <span class="k">if</span> <span class="n">j</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">res</span><span class="p">])</span>
+
+    <span class="c1"># Calculate IPTW estimates</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:]</span> <span class="o">/</span> <span class="n">res</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">res</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="p">:]</span> <span class="o">/</span> <span class="n">res</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="n">ATE</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="c1"># Calculate standard deviation</span>
+    <span class="n">std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="c1"># Calculate t-value</span>
+    <span class="n">t_value</span> <span class="o">=</span> <span class="n">ATE</span> <span class="o">/</span> <span class="n">std</span>
+
+    <span class="c1"># Calculate p-value</span>
+    <span class="n">p_value</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">stats</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">cdf</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">t_value</span><span class="p">),</span> <span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">*</span> <span class="mi">2</span>
+
+    <span class="c1"># Calculate 95% confidence interval</span>
+    <span class="n">confidence_interval</span> <span class="o">=</span> <span class="p">[</span><span class="n">ATE</span> <span class="o">-</span> <span class="mf">1.96</span> <span class="o">*</span> <span class="n">std</span><span class="p">,</span> <span class="n">ATE</span> <span class="o">+</span> <span class="mf">1.96</span> <span class="o">*</span> <span class="n">std</span><span class="p">]</span>
+
+    <span class="c1"># Return results</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;ATE&quot;</span><span class="p">:</span> <span class="n">ATE</span><span class="p">,</span>
+        <span class="s2">&quot;stddev&quot;</span><span class="p">:</span> <span class="n">std</span><span class="p">,</span>
+        <span class="s2">&quot;p_value&quot;</span><span class="p">:</span> <span class="n">p_value</span><span class="p">,</span>
+        <span class="s2">&quot;95</span><span class="si">% c</span><span class="s2">onfidence_interval&quot;</span><span class="p">:</span> <span class="n">confidence_interval</span><span class="p">,</span>
+    <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="ATEestimator"><a class="viewcode-back" href="../../inference.html#dataframe.statistics.ATEestimator">[docs]</a><span class="k">def</span> <span class="nf">ATEestimator</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">T</span><span class="p">,</span> <span class="n">B</span><span class="o">=</span><span class="mi">500</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Estimate the Average Treatment Effect (ATE) using a simple difference in means approach.</span>
+
+<span class="sd">    :param table: the name of the input data table.</span>
+<span class="sd">    :type table: str, required</span>
+<span class="sd">    :param Y: the column name of the outcome variable.</span>
+<span class="sd">    :type Y: str, required</span>
+<span class="sd">    :param T: the column name of the treatment variable.</span>
+<span class="sd">    :type T: str, required</span>
+<span class="sd">    :param B: the number of bootstrap samples, default is 500.</span>
+<span class="sd">    :type B: int, optional</span>
+
+<span class="sd">    :return: dict, containing the following key-value pairs:</span>
+<span class="sd">    &#39;ATE&#39;: Average Treatment Effect.</span>
+<span class="sd">    &#39;stddev&#39;: Standard deviation.</span>
+<span class="sd">    &#39;p_value&#39;: p-value.</span>
+<span class="sd">    &#39;95% confidence_interval&#39;: 95% confidence interval.</span>
+
+<span class="sd">    Example</span>
+<span class="sd">    ----------</span>
+<span class="sd">    .. code-block:: python</span>
+<span class="sd">        import fast_causal_inference</span>
+<span class="sd">        table = &#39;test_data_small&#39;</span>
+<span class="sd">        df = fast_causal_inference.readClickHouse(table)</span>
+<span class="sd">        Y = &#39;numerator&#39;</span>
+<span class="sd">        T = &#39;treatment&#39;</span>
+<span class="sd">        import fast_causal_inference.dataframe.statistics as S</span>
+<span class="sd">        S.ATEestimator(df,Y,T,B=500)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="n">df_2_table</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+    <span class="c1"># Create SQL instance</span>
+    <span class="n">sql_instance</span> <span class="o">=</span> <span class="n">create_sql_instance</span><span class="p">()</span>
+
+    <span class="c1"># Get the number of rows in the table</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;select count(*) as cnt from </span><span class="si">{</span><span class="n">table</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)[</span><span class="s2">&quot;cnt&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="c1"># Execute SQL query to compute ATE estimator using a simple difference in means approach</span>
+
+    <span class="n">res</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">sql_instance</span><span class="o">.</span><span class="n">sql</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;&quot;&quot;WITH (</span>
+<span class="s2">      SELECT DistributedNodeRowNumber(1)(0)</span>
+<span class="s2">      FROM </span><span class="si">{</span><span class="n">table</span><span class="si">}</span>
+<span class="s2">    ) AS pa</span>
+<span class="s2">    SELECT</span>
+<span class="s2">      BootStrapMulti(&#39;sum:1;sum:1;sum:1;sum:1&#39;,  </span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">B</span><span class="si">}</span><span class="s2">, pa)(</span>
+<span class="s2">      </span><span class="si">{</span><span class="n">Y</span><span class="si">}</span><span class="s2">*</span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="n">Y</span><span class="si">}</span><span class="s2">*(1-</span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">),(1-</span><span class="si">{</span><span class="n">T</span><span class="si">}</span><span class="s2">)) as res</span>
+<span class="s2">    FROM </span>
+<span class="s2">    </span><span class="si">{</span><span class="n">table</span><span class="si">}</span>
+<span class="s2">    ;</span>
+<span class="s2">    &quot;&quot;&quot;</span>
+        <span class="p">)[</span><span class="s2">&quot;res&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;]&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;[&quot;</span><span class="p">)</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Process the query results</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">res</span> <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">]</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="nb">float</span><span class="p">(</span><span class="n">j</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="n">i</span> <span class="k">if</span> <span class="n">j</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">res</span><span class="p">])</span>
+
+    <span class="c1"># Calculate IPTW estimates</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">res</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:]</span> <span class="o">/</span> <span class="n">res</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">res</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="p">:]</span> <span class="o">/</span> <span class="n">res</span><span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="p">:]</span>
+
+    <span class="c1"># Compute the ATE</span>
+    <span class="n">ATE</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="c1"># Compute standard deviation</span>
+    <span class="n">std</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="c1"># Compute t-value</span>
+    <span class="n">t_value</span> <span class="o">=</span> <span class="n">ATE</span> <span class="o">/</span> <span class="n">std</span>
+
+    <span class="c1"># Compute p-value</span>
+    <span class="n">p_value</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">stats</span><span class="o">.</span><span class="n">t</span><span class="o">.</span><span class="n">cdf</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">t_value</span><span class="p">),</span> <span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">*</span> <span class="mi">2</span>
+
+    <span class="c1"># Compute 95% confidence interval</span>
+    <span class="n">confidence_interval</span> <span class="o">=</span> <span class="p">[</span><span class="n">ATE</span> <span class="o">-</span> <span class="mf">1.96</span> <span class="o">*</span> <span class="n">std</span><span class="p">,</span> <span class="n">ATE</span> <span class="o">+</span> <span class="mf">1.96</span> <span class="o">*</span> <span class="n">std</span><span class="p">]</span>
+
+    <span class="c1"># Return the results</span>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;ATE&quot;</span><span class="p">:</span> <span class="n">ATE</span><span class="p">,</span>
+        <span class="s2">&quot;stddev&quot;</span><span class="p">:</span> <span class="n">std</span><span class="p">,</span>
+        <span class="s2">&quot;p_value&quot;</span><span class="p">:</span> <span class="n">p_value</span><span class="p">,</span>
+        <span class="s2">&quot;95</span><span class="si">% c</span><span class="s2">onfidence_interval&quot;</span><span class="p">:</span> <span class="n">confidence_interval</span><span class="p">,</span>
+    <span class="p">}</span></div>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Tencent.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
