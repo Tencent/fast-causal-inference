@@ -1,0 +1,179 @@
+-- name: test_corner_cases
+
+drop database if exists corner_cases_test_db;
+-- result:
+-- !result
+create database corner_cases_test_db;
+-- result:
+-- !result
+use corner_cases_test_db;
+-- result:
+-- !result
+drop table if exists corner_cases_test_tbl;
+-- result:
+-- !result
+create table corner_cases_test_tbl
+(
+    `id` int,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `weight` double,
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean
+)
+properties (
+    "replication_num"="1"
+);
+-- result:
+-- !result
+
+
+select delta_method("x1/x2", false, [X1, X2]) from corner_cases_test_tbl;
+-- result:
+None
+-- !result
+
+select ttest_1samp('x1/x2', 'less', 1.111, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+-- result:
+None
+-- !result
+
+select ttest_2samp('x1/x2', 'less', treatment, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+-- result:
+None
+-- !result
+
+select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from corner_cases_test_tbl;
+-- result:
+None
+-- !result
+
+select ols(Y, [X1, X2], false) from corner_cases_test_tbl;
+-- result:
+None
+-- !result
+
+select ols_train(Y, [X1, X2], false) from corner_cases_test_tbl;
+-- result:
+None
+-- !result
+
+select eval_ml_method(
+    '{"name":"ols", "num_variables":2,"use_bias":false,"coef":[1,2]}', 
+    [X1, X2]) 
+from corner_cases_test_tbl;
+-- result:
+-- !result
+
+select wls(Y, [X1, X2], false, weight) from corner_cases_test_tbl;
+-- result:
+None
+-- !result
+
+select wls_train(Y, [X1, X2], false, weight) from corner_cases_test_tbl;
+-- result:
+None
+-- !result
+
+
+insert into corner_cases_test_tbl(id, Y, X1, X2, X3, weight, treatment, numerator, denominator) values(0, 3, 1, 2, 3, 4, 1, 2, 1);
+-- result:
+-- !result
+
+select delta_method("x1/x2", false, [X1, X2]) from corner_cases_test_tbl;
+-- result:
+nan
+-- !result
+
+select ttest_1samp('x1/x2', 'less', 1.111, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+-- result:
+count(1) should be greater than 1.
+-- !result
+
+select ttest_2samp('x1/x2', 'less', treatment, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+-- result:
+count(0) of group 0 should be greater than 1.
+-- !result
+
+select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from corner_cases_test_tbl;
+-- result:
+xexpt_ttest_2samp need excatly two groups, but you give (1) groups.
+-- !result
+
+select ols(Y, [X1, X2], false) from corner_cases_test_tbl;
+-- result:
+Given too less data, num_rows(1) is less than 2.
+-- !result
+
+select ols_train(Y, [X1, X2], false) from corner_cases_test_tbl;
+-- result:
+{"Error": "Given too less data, num_rows(1) is less than 2."}
+-- !result
+
+select floor(eval_ml_method(
+    '{"name":"ols", "num_variables":2,"use_bias":false,"coef":[1,2]}', 
+    [X1, X2])) 
+from corner_cases_test_tbl;
+-- result:
+5
+-- !result
+
+
+insert into corner_cases_test_tbl(id, Y, X1, X2, X3, weight, treatment, numerator, denominator) values(1, 4, 2, 3, 4, 5, 0, 3, 2);
+-- result:
+-- !result
+
+select delta_method("x1/x2", false, [X1, X2]) from corner_cases_test_tbl;
+-- result:
+[REGEX]0.00640[0-9]*
+-- !result
+
+select ttest_1samp('x1/x2', 'less', 1.111, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+-- result:
+
+estimate    stderr      t-statistic p-value     lower       upper       
+-0.511000   0.000000    -2.7434e+08 0.000000    -inf        -0.511000   
+
+-- !result
+
+select ttest_2samp('x1/x2', 'less', treatment, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+-- result:
+count(1) of group 0 should be greater than 1.
+-- !result
+
+select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from corner_cases_test_tbl;
+-- result:
+count(1) of group(0) should be greater than 1.
+-- !result
+
+select ols(Y, [X1, X2], false) from corner_cases_test_tbl;
+-- result:
+Given too less data, df: n(2)-k(2)-1 is less than one.
+-- !result
+
+select ols_train(Y, [X1, X2], false) from corner_cases_test_tbl;
+-- result:
+{"Error": "Given too less data, df: n(2)-k(2)-1 is less than one."}
+-- !result
+
+select floor(eval_ml_method(
+    '{"name":"ols", "num_variables":2,"use_bias":false,"coef":[1,2]}', 
+    [X1, X2])) 
+from corner_cases_test_tbl;
+-- result:
+8
+5
+-- !result
+
+select wls(Y, [X1, X2], false, weight) from corner_cases_test_tbl;
+-- result:
+Given too less data, df: n(2)-k(2)-1 is less than one.
+-- !result
+
+select wls_train(Y, [X1, X2], false, weight) from corner_cases_test_tbl;
+-- result:
+{"Error": "Given too less data, df: n(2)-k(2)-1 is less than one."}
+-- !result

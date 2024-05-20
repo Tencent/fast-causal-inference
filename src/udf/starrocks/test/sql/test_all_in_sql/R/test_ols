@@ -1,0 +1,133 @@
+-- name: test_ols
+
+drop database if exists ols_test_db;
+-- result:
+-- !result
+create database ols_test_db;
+-- result:
+-- !result
+use ols_test_db;
+-- result:
+-- !result
+drop table if exists ols_test_tbl;
+-- result:
+-- !result
+create table ols_test_tbl
+(
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean,
+    `numerator_pre` bigint,
+    `denominator_pre` boolean,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `X3_string` string,
+    `X7_needcut` bigint,
+    `X8_needcut` bigint,
+    `weight` double,
+    `distance` double
+)
+properties (
+    "replication_num"="1"
+);
+-- result:
+-- !result
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test.csv -XPUT -H column_separator:, ${url}/api/ols_test_db/ols_test_tbl/_stream_load
+-- result:
+-- !result
+sync;
+-- result:
+-- !result
+
+select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from ols_test_tbl;
+-- result:
+[REGEX]793200\s646026213\s323166914
+-- !result
+
+select ols(Y, [X1, X2, X3, weight], false) from ols_test_tbl;
+-- result:
+
+Call:
+  lm( formula = y ~ x1 + x2 + x3 + x4 )
+
+Coefficients:
+.               Estimate    Std. Error  t value     Pr(>|t|)    
+x1              -20.528704  6.298855    -3.259117   0.001118    
+x2              95.353022   30.638332   3.112213    0.001857    
+x3              3553.144390 31.193115   113.907969  0.000000    
+x4              -40.894824  37.980938   -1.076720   0.281606    
+
+Residual standard error: 15528.986180 on 793195 degrees of freedom
+Multiple R-squared: 0.016095, Adjusted R-squared: 0.016090
+F-statistic: 3243.857985 on 4 and 793195 DF,  p-value: 0.000000
+
+-- !result
+
+
+select ols(Y, [X1, X2, X3, weight], true) from ols_test_tbl;
+-- result:
+
+Call:
+  lm( formula = y ~ x1 + x2 + x3 + x4 )
+
+Coefficients:
+.               Estimate    Std. Error  t value     Pr(>|t|)    
+(Intercept)     356.216890  67.732529   5.259170    0.000000    
+x1              -45.842475  7.927275    -5.782879   0.000000    
+x2              -29.268450  38.732114   -0.755664   0.449851    
+x3              3548.677962 31.204130   113.724623  0.000000    
+x4              -52.068275  38.039652   -1.368789   0.171065    
+
+Residual standard error: 15528.715438 on 793195 degrees of freedom
+Multiple R-squared: 0.016053, Adjusted R-squared: 0.016048
+F-statistic: 3235.275415 on 4 and 793195 DF,  p-value: 0.000000
+
+-- !result
+
+select ols_train(Y, [X1, X2, X3, weight], false) as params from ols_test_tbl;
+-- result:
+[REGEX]{"coef":\s*[-20.52870[0-9]*,\s*95.35302[0-9]*,\s*3553.14439[0-9]*,\s*-40.89482[0-9]*],\s*"name":\s*"ols",\s*"num_variables":\s*4,\s*"use_bias":\s*false}
+-- !result
+
+select ols_train(Y, [X1, X2, X3, weight], true) as params from ols_test_tbl;
+-- result:
+[REGEX]{"coef":\s*[-45.84247[0-9]*,\s*-29.26845[0-9]*,\s*3548.67796[0-9]*,\s*-52.06827[0-9]*,\s*356.21689[0-9]*],\s*"name":\s*"ols",\s*"num_variables":\s*4,\s*"use_bias":\s*true}
+-- !result
+
+with model as (
+    select ols_train(Y, [X1, X2, X3, weight], false) as params
+    from ols_test_tbl
+)
+select round(eval_ml_method(model.params, [X1, X2, X3, weight]), 5) as Y_prime from ols_test_tbl, model order by Y_prime limit 10 offset 1000;
+-- result:
+-170.8507
+-170.85039
+-170.84204
+-170.83302
+-170.8327
+-170.82533
+-170.8169
+-170.80384
+-170.79763
+-170.79657
+-- !result
+
+with model as (
+    select ols_train(Y, [X1, X2, X3, weight], true) as params
+    from ols_test_tbl
+)
+select round(eval_ml_method(model.params, [X1, X2, X3, weight]), 5) as Y_prime from ols_test_tbl, model order by Y_prime limit 10 offset 1000;
+-- result:
+-302.33981
+-302.324
+-302.31119
+-302.30209
+-302.29558
+-302.25788
+-302.2566
+-302.24704
+-302.24417
+-302.19639
+-- !result
