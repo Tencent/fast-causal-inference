@@ -1,35 +1,117 @@
-__doc__ = """
-因果推断Oteam 
-提供常见因果分析的工具
-pip install -U fast-causal-inference
+"""
+Fast Causal Inference
 """
 
-from .all_in_sql import *
+__all__ = [
+    "set_tenant",
+    "set_config",
+    "set_default",
+    "readTdw",
+    "readStarRocks",
+    "readClickHouse",
+    "readSparkDf",
+    "readCsv",
+    "get_context",
+    "create",
+    "create_sql_instance",
+    "clickhouse_create_view",
+    "clickhouse_create_view_v2",
+    "clickhouse_drop_view",
+    "clickhouse_drop_partition",
+    "clickhouse_2_csv",
+    "csv_2_clickhouse",
+    "clickhouse_2_tdw",
+    "dataframe_2_clickhouse",
+    "clickhouse_2_dataframe",
+    "tdw_2_clickhouse",
+    "FCIProvider",
+]
 
-PROJECT_CONF = dict()
+from .dataframe import (
+    readClickHouse,
+    readTdw,
+    readStarRocks,
+    readSparkDf,
+    readCsv,
+)
+import importlib
+
+from .dataframe.provider import FCIProvider
 
 
-def set_tenant(tenant_id, secret_key):
-    global PROJECT_CONF
-    from .common.rainbow import RainbowConfCenter
-    if not tenant_id or not secret_key:
-        raise Exception("please input tenant_id and secret_key")
-    PROJECT_CONF = RainbowConfCenter(tenant_id=tenant_id, secret_key=secret_key).get_conf()
+get_context = importlib.import_module("fast_causal_inference.common").get_context
 
 
 def set_config(conf_path):
-    global PROJECT_CONF
-    import yaml
-    from yaml.loader import SafeLoader
-    if not conf_path:
-        raise Exception("please input tenant_conf")
-    with open(conf_path, 'r') as f:
-        PROJECT_CONF = yaml.load(f, Loader=SafeLoader)
+    get_context().set_project_conf_from_yaml(conf_path)
+
+def create():
+    import fast_causal_inference.util as fci_util
+
+    return fci_util.create()
 
 
-import logging.config
-import os
-logging.config.fileConfig(os.path.abspath(__file__).replace("__init__.py", "conf/fast_causal_inference_logging.conf"))
-logger = logging.getLogger('my_custom')
+def create_sql_instance():
+    import fast_causal_inference.util as fci_util
 
-# logger.setLevel("INFO")
+    return fci_util.create_sql_instance()
+
+
+def clickhouse_create_view(*args, **kwargs):
+    from fast_causal_inference.util import ClickHouseUtils
+
+    return ClickHouseUtils.clickhouse_create_view(*args, **kwargs)
+
+
+def clickhouse_create_view_v2(*args, **kwargs):
+    from fast_causal_inference.util import ClickHouseUtils
+
+    return ClickHouseUtils.clickhouse_create_view_v2(*args, **kwargs)
+
+
+def clickhouse_drop_view(*args, **kwargs):
+    from fast_causal_inference.util import ClickHouseUtils
+
+    return ClickHouseUtils.clickhouse_drop_view(*args, **kwargs)
+
+
+def clickhouse_drop_partition(*args, **kwargs):
+    from fast_causal_inference.util import ClickHouseUtils
+
+    return ClickHouseUtils.clickhouse_drop_partition(*args, **kwargs)
+
+
+def clickhouse_2_csv(*args, **kwargs):
+    from fast_causal_inference.util import ClickHouseUtils
+
+    return ClickHouseUtils.clickhouse_2_csv(*args, **kwargs)
+
+
+def csv_2_clickhouse(*args, **kwargs):
+    from fast_causal_inference.util import ClickHouseUtils
+
+    return ClickHouseUtils.csv_2_clickhouse(*args, **kwargs)
+
+
+def clickhouse_2_tdw(*args, **kwargs):
+    from fast_causal_inference.util import data_transformer
+
+    return data_transformer.clickhouse_2_tdw(*args, **kwargs)
+
+
+def dataframe_2_clickhouse(*args, **kwargs):
+    from fast_causal_inference.util import data_transformer
+
+    return data_transformer.dataframe_2_clickhouse(*args, **kwargs)
+
+
+def clickhouse_2_dataframe(*args, **kwargs):
+    from fast_causal_inference.util import data_transformer
+
+    return data_transformer.clickhouse_2_dataframe(*args, **kwargs)
+
+
+def tdw_2_clickhouse(*args, **kwargs):
+    from fast_causal_inference.util import data_transformer
+
+    return data_transformer.tdw_2_clickhouse(*args, **kwargs)

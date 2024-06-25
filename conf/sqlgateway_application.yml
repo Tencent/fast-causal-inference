@@ -31,6 +31,17 @@ spring:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
 
+olap:
+  clickhouse:
+    driver: com.clickhouse.jdbc.ClickHouseDriver
+    devices:
+      - id: 1
+        url: jdbc:clickhouse://172.22.0.3:8123/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
+        user: default
+        password: allinsql666
+        ip:
+          - 172.22.0.3
+
 clickhouse:
   driver: com.clickhouse.jdbc.ClickHouseDriver
   devices:
@@ -38,6 +49,8 @@ clickhouse:
       url: jdbc:clickhouse://172.22.0.3:8123/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
       user: default
       password: allinsql666
+      ip:
+        - 172.22.0.3
 
 mybatis:
   configuration:

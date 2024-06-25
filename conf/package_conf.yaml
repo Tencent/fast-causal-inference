@@ -11,3 +11,4 @@ datasource:
 sqlgateway:
   url: http://172.22.0.4:9099
   path: /api/v1/sqlgateway/sql-run
+  dataframe_path: /api/v1/sqlgateway/dataframe-run/protobuf/json
