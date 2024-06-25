@@ -2,7 +2,6 @@ pandas
 matplotlib
 clickhouse_driver
 pyDes
-murmurhash3
 seaborn
 requests
 graphviz
@@ -10,3 +9,8 @@ statsmodels
 pyyaml
 py4j>=0.10.9
 scikit-Learn
+pypinyin
+protobuf>=3.20.0
+pytest
+pytest-xdist
+pymysql

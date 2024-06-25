@@ -1,0 +1,78 @@
+-- name: test_ttest_1samp
+
+drop database if exists ttest_1samp_test_db;
+-- result:
+-- !result
+create database ttest_1samp_test_db;
+-- result:
+-- !result
+use ttest_1samp_test_db;
+-- result:
+-- !result
+drop table if exists ttest_1samp_test_tbl;
+-- result:
+-- !result
+create table ttest_1samp_test_tbl
+(
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean,
+    `numerator_pre` bigint,
+    `denominator_pre` boolean,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `X3_string` string,
+    `X7_needcut` bigint,
+    `X8_needcut` bigint,
+    `weight` double,
+    `distance` double
+)
+properties (
+    "replication_num"="1"
+);
+-- result:
+-- !result
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test.csv -XPUT -H column_separator:, ${url}/api/ttest_1samp_test_db/ttest_1samp_test_tbl/_stream_load
+-- result:
+-- !result
+sync;
+-- result:
+-- !result
+
+select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from ttest_1samp_test_tbl;
+-- result:
+[REGEX]793200\s646026213\s323166914
+-- !result
+
+
+select ttest_1samp('x1/x2', 'less', 0, [numerator, denominator]) from ttest_1samp_test_tbl;
+-- result:
+[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*814.455640\s*35.154624\s*23.167810\s*1.000000\s*-inf\s*872.279918
+-- !result
+
+select ttest_1samp('x1/x2', 'two-sided', 0, [numerator, denominator]) from ttest_1samp_test_tbl;
+-- result:
+[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*814.455640\s*35.154624\s*23.167810\s*0.000000\s*745.553737\s*883.357542
+-- !result
+
+select ttest_1samp('x1/x2', 'two-sided', 1, [numerator, denominator]) from ttest_1samp_test_tbl;
+-- result:
+[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*813.455640\s*35.154624\s*23.139364\s*0.000000\s*744.553737\s*882.357542
+-- !result
+
+select ttest_1samp('x1/x2', 'greater', 1.111, [numerator, denominator]) from ttest_1samp_test_tbl;
+-- result:
+[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*813.344640\s*35.154624\s*23.136206\s*0.000000\s*755.520361\s*inf 
+-- !result
+
+select ttest_1samp('x1/x2', 'less', 1.111, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5') from ttest_1samp_test_tbl;
+-- result:
+[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*813.344640\s*34.872044\s*23.323687\s*1.000000\s*-inf\s*870.704114
+-- !result
+
+select ttest_1samp('x1/x2', 'less', 1.111, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttest_1samp_test_tbl;
+-- result:
+[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*813.344640\s*34.872044\s*23.323687\s*1.000000\s*-inf\s*755.985165
+-- !result

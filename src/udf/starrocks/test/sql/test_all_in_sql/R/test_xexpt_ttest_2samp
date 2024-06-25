@@ -1,0 +1,62 @@
+-- name: test_xexpt_ttest_2samp
+
+drop database if exists xexpt_ttest_2samp_test_db;
+-- result:
+-- !result
+create database xexpt_ttest_2samp_test_db;
+-- result:
+-- !result
+use xexpt_ttest_2samp_test_db;
+-- result:
+-- !result
+drop table if exists xexpt_ttest_2samp_test_tbl;
+-- result:
+-- !result
+create table xexpt_ttest_2samp_test_tbl
+(
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean,
+    `numerator_pre` bigint,
+    `denominator_pre` boolean,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `X3_string` string,
+    `X7_needcut` bigint,
+    `X8_needcut` bigint,
+    `weight` double,
+    `distance` double
+)
+properties (
+    "replication_num"="1"
+);
+-- result:
+-- !result
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test.csv -XPUT -H column_separator:, ${url}/api/xexpt_ttest_2samp_test_db/xexpt_ttest_2samp_test_tbl/_stream_load
+-- result:
+-- !result
+sync;
+-- result:
+-- !result
+
+select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from xexpt_ttest_2samp_test_tbl;
+-- result:
+[REGEX]793200\s646026213\s323166914
+-- !result
+
+select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from xexpt_ttest_2samp_test_tbl;
+-- result:
+[REGEX]\s*groupname\s*numerator\s*denominator\s*numerator_pre\s*denominator_pre\s*mean\s*std_samp\s*0\s*333186776\s*396774\s*2124493\s*595507\s*892.071100\s*43972.702294\s*1\s*312839437\s*396426\s*2123883\s*595028\s*736.775857\s*44974.169927\s*diff_relative\s*97%_relative_CI\s*p-value\s*t-statistic diff\s*97%_CI\s*power\s*recommend_samples\s*-17.408393%\s*.-41.705142%,6.888356%.\s*0.119981\s*-1.554852\s*-155.295243\s*.-372.039522,61.449037.\s*0.030105\s*1824084404\s*
+-- !result
+
+select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1], 'X=x3', 0.3, 0.4, 0.12) from xexpt_ttest_2samp_test_tbl;
+-- result:
+[REGEX]\s*groupname\s*numerator\s*denominator\s*mean\s*std_samp\s*0\s*333186776\s*396774\s*467.869635\s*556263.131195\s*1\s*312839437\s*396426\s*417.173038\s*509652.969332\s*diff_relative\s*70%_relative_CI\s*p-value\s*t-statistic\s*diff\s*70%_CI\s*power\s*recommend_samples\s*-10.835625%\s*.-276.207583%,254.536334%.\s*0.966244\s*-0.042320\s*-50.696598\s*.-1292.291412,1190.898216.\s*0.305875\s*311819\s*
+-- !result
+
+select xexpt_ttest_2samp(X1, treatment, [numerator, denominator], 'X=', 0.3, 0.4, 0.12) from xexpt_ttest_2samp_test_tbl;
+-- result:
+[REGEX]\s*groupname\s*numerator\s*denominator\s*mean\s*std_samp\s*0\s*333186776\s*396774\s*839.739439\s*79775.246613\s*1\s*312839437\s*396426\s*789.149646\s*90766.692380\s*diff_relative\s*70%_relative_CI\s*p-value\s*t-statistic\s*diff\s*70%_CI\s*power\s*recommend_samples\s*-6.024463%\s*.-29.708153%,17.659227%.\s*0.792058\s*-0.263640\s*-50.589793\s*.-249.471077,148.291491.\s*0.765056\s*2484\s*
+-- !result
