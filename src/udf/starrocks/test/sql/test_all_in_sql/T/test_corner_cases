@@ -1,0 +1,89 @@
+-- name: test_corner_cases
+
+drop database if exists corner_cases_test_db;
+create database corner_cases_test_db;
+use corner_cases_test_db;
+
+drop table if exists corner_cases_test_tbl;
+create table corner_cases_test_tbl
+(
+    `id` int,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `weight` double,
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean
+)
+properties (
+    "replication_num"="1"
+);
+
+select delta_method("x1/x2", false, [X1, X2]) from corner_cases_test_tbl;
+
+select ttest_1samp('x1/x2', 'less', 1.111, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+
+select ttest_2samp('x1/x2', 'less', treatment, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+
+select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from corner_cases_test_tbl;
+
+select ols(Y, [X1, X2], false) from corner_cases_test_tbl;
+
+select ols_train(Y, [X1, X2], false) from corner_cases_test_tbl;
+
+select eval_ml_method(
+    '{"name":"ols", "num_variables":2,"use_bias":false,"coef":[1,2]}', 
+    [X1, X2]) 
+from corner_cases_test_tbl;
+
+select wls(Y, [X1, X2], false, weight) from corner_cases_test_tbl;
+
+select wls_train(Y, [X1, X2], false, weight) from corner_cases_test_tbl;
+
+
+
+insert into corner_cases_test_tbl(id, Y, X1, X2, X3, weight, treatment, numerator, denominator) values(0, 3, 1, 2, 3, 4, 1, 2, 1);
+
+select delta_method("x1/x2", false, [X1, X2]) from corner_cases_test_tbl;
+
+select ttest_1samp('x1/x2', 'less', 1.111, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+
+select ttest_2samp('x1/x2', 'less', treatment, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+
+select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from corner_cases_test_tbl;
+
+select ols(Y, [X1, X2], false) from corner_cases_test_tbl;
+
+select ols_train(Y, [X1, X2], false) from corner_cases_test_tbl;
+
+select floor(eval_ml_method(
+    '{"name":"ols", "num_variables":2,"use_bias":false,"coef":[1,2]}', 
+    [X1, X2])) 
+from corner_cases_test_tbl;
+
+
+
+insert into corner_cases_test_tbl(id, Y, X1, X2, X3, weight, treatment, numerator, denominator) values(1, 4, 2, 3, 4, 5, 0, 3, 2);
+
+select delta_method("x1/x2", false, [X1, X2]) from corner_cases_test_tbl;
+
+select ttest_1samp('x1/x2', 'less', 1.111, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+
+select ttest_2samp('x1/x2', 'less', treatment, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
+
+select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from corner_cases_test_tbl;
+
+select ols(Y, [X1, X2], false) from corner_cases_test_tbl;
+
+select ols_train(Y, [X1, X2], false) from corner_cases_test_tbl;
+
+select floor(eval_ml_method(
+    '{"name":"ols", "num_variables":2,"use_bias":false,"coef":[1,2]}', 
+    [X1, X2])) 
+from corner_cases_test_tbl;
+
+select wls(Y, [X1, X2], false, weight) from corner_cases_test_tbl;
+
+select wls_train(Y, [X1, X2], false, weight) from corner_cases_test_tbl;

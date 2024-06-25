@@ -1,0 +1,113 @@
+-- name: test_wls
+
+drop database if exists wls_test_db;
+-- result:
+-- !result
+create database wls_test_db;
+-- result:
+-- !result
+use wls_test_db;
+-- result:
+-- !result
+drop table if exists wls_test_tbl;
+-- result:
+-- !result
+create table wls_test_tbl
+(
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean,
+    `numerator_pre` bigint,
+    `denominator_pre` boolean,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `X3_string` string,
+    `X7_needcut` bigint,
+    `X8_needcut` bigint,
+    `weight` double,
+    `distance` double
+)
+properties (
+    "replication_num"="1"
+);
+-- result:
+-- !result
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test.csv -XPUT -H column_separator:, ${url}/api/wls_test_db/wls_test_tbl/_stream_load
+-- result:
+-- !result
+sync;
+-- result:
+-- !result
+
+select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from wls_test_tbl;
+-- result:
+[REGEX]793200\s646026213\s323166914
+-- !result
+
+select wls(Y, [X1, X2, X3], weight, false) from wls_test_tbl;
+-- result:
+
+Call:
+  lm( formula = y ~ x1 + x2 + x3 )
+
+Coefficients:
+.               Estimate    Std. Error  t value     Pr(>|t|)    
+x1              -21.786115  6.384398    -3.412399   0.000644    
+x2              70.688126   21.412558   3.301246    0.000963    
+x3              3342.576937 30.183867   110.740513  0.000000    
+
+Residual standard error: 13814.557005 on 793196 degrees of freedom
+Multiple R-squared: 0.015306, Adjusted R-squared: 0.015303
+F-statistic: 4109.891192 on 3 and 793196 DF,  p-value: 0.000000
+
+-- !result
+
+
+select wls(Y, [X1, X2, X3], weight, true) from wls_test_tbl;
+-- result:
+
+Call:
+  lm( formula = y ~ x1 + x2 + x3 )
+
+Coefficients:
+.               Estimate    Std. Error  t value     Pr(>|t|)    
+(Intercept)     429.262501  73.826251   5.814497    0.000000    
+x1              -47.119707  7.729295    -6.096249   0.000000    
+x2              -92.505308  35.301768   -2.620416   0.008782    
+x3              3339.590629 30.187593   110.627919  0.000000    
+
+Residual standard error: 13814.262606 on 793196 degrees of freedom
+Multiple R-squared: 0.015207, Adjusted R-squared: 0.015203
+F-statistic: 4082.705345 on 3 and 793196 DF,  p-value: 0.000000
+
+-- !result
+
+select wls_train(Y, [X1, X2, X3], weight, false) as params from wls_test_tbl;
+-- result:
+[REGEX]{"coef":\s*[-21.78611[0-9]*,\s*70.68812[0-9]*,\s*3342.57693[0-9]*],\s*"name":\s*"ols",\s*"num_variables":\s*3,\s*"use_bias":\s*false}
+-- !result
+
+select wls_train(Y, [X1, X2, X3], weight, true) as params from wls_test_tbl;
+-- result:
+[REGEX]{"coef":\s*[-47.11970[0-9]*,\s*-92.50530[0-9]*,\s*3339.59062[0-9]*,\s*429.26250[0-9]*],\s*"name":\s*"ols",\s*"num_variables":\s*3,\s*"use_bias":\s*true}
+-- !result
+
+with model as (
+    select wls_train(Y, [X1, X2, X3], weight, false) as params
+    from wls_test_tbl
+)
+select round(avg(eval_ml_method(model.params, [X1, X2, X3])), 5) from wls_test_tbl, model;
+-- result:
+351.9874
+-- !result
+
+with model as (
+    select wls_train(Y, [X1, X2, X3], weight, true) as params
+    from wls_test_tbl
+)
+select round(avg(eval_ml_method(model.params, [X1, X2, X3])), 5) from wls_test_tbl, model;
+-- result:
+400.29798
+-- !result

@@ -1,0 +1,52 @@
+-- name: test_ols
+
+drop database if exists ols_test_db;
+create database ols_test_db;
+use ols_test_db;
+
+drop table if exists ols_test_tbl;
+create table ols_test_tbl
+(
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean,
+    `numerator_pre` bigint,
+    `denominator_pre` boolean,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `X3_string` string,
+    `X7_needcut` bigint,
+    `X8_needcut` bigint,
+    `weight` double,
+    `distance` double
+)
+properties (
+    "replication_num"="1"
+);
+
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test.csv -XPUT -H column_separator:, ${url}/api/ols_test_db/ols_test_tbl/_stream_load
+sync;
+
+select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from ols_test_tbl;
+
+select ols(Y, [X1, X2, X3, weight], false) from ols_test_tbl;
+
+select ols(Y, [X1, X2, X3, weight], true) from ols_test_tbl;
+
+select ols_train(Y, [X1, X2, X3, weight], false) as params from ols_test_tbl;
+
+select ols_train(Y, [X1, X2, X3, weight], true) as params from ols_test_tbl;
+
+with model as (
+    select ols_train(Y, [X1, X2, X3, weight], false) as params
+    from ols_test_tbl
+)
+select eval_ml_method(model.params, [X1, X2, X3, weight]) as Y_prime from ols_test_tbl, model order by Y_prime limit 10 offset 1000;
+
+with model as (
+    select ols_train(Y, [X1, X2, X3, weight], true) as params
+    from ols_test_tbl
+)
+select eval_ml_method(model.params, [X1, X2, X3, weight]) as Y_prime from ols_test_tbl, model order by Y_prime limit 10 offset 1000;
