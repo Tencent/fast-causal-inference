@@ -2,3 +2,6 @@
 	path = contrib/ClickHouse
 	url = https://github.com/ClickHouse/ClickHouse.git
 	branch = 23.3
+[submodule "contrib/starrocks"]
+	path = contrib/starrocks
+	url = https://github.com/StarRocks/starrocks
