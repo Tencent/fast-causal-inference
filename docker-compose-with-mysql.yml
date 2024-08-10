@@ -63,6 +63,16 @@ services:
     networks:
       all_in_sql_network:
         ipv4_address: 172.22.0.3
+  starrocks:
+    image: "fastcausalinference/starrocks-server:latest"
+    volumes: 
+      - "./starrocks/be/storage/:/data/deploy/starrocks/be/storage/"
+      - "./starrocks/be/log/:/data/deploy/starrocks/be/log/"
+      - "./starrocks/fe/meta/:/data/deploy/starrocks/fe/meta/"
+      - "./starrocks/fe/log/:/data/deploy/starrocks/fe/log/"
+    networks:
+      all_in_sql_network:
+        ipv4_address: 172.22.0.6
   mysql:
     image: "mysql:5.7.43"
     environment:
@@ -76,3 +86,4 @@ services:
     networks:
       all_in_sql_network:
         ipv4_address: 172.22.0.2
+        

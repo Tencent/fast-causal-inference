@@ -930,11 +930,7 @@ public class QueryAnalyzer {
                     }
                 }
             } else {
-                try {
-                    table = metadataMgr.getTableWithUser(catalogName, dbName, tbName);
-                } catch (AnalysisException e) {
-                    ErrorReport.reportAnalysisException(ErrorCode.ERR_TABLE_PRI_ERROR, e.getMessage());
-                }
+                table = metadataMgr.getTable(catalogName, dbName, tbName);
             }
 
             if (table == null) {

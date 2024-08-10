@@ -30,7 +30,7 @@
 #include "exprs/agg/bitmap_union_count.h"
 #include "exprs/agg/bitmap_union_int.h"
 #include "exprs/agg/count.h"
-#include "exprs/agg/delta_method.h"
+#include "exprs/agg/covariance.h"
 #include "exprs/agg/distinct.h"
 #include "exprs/agg/exchange_perf.h"
 #include "exprs/agg/group_concat.h"
@@ -148,13 +148,11 @@ public:
     template <LogicalType LT, bool is_sample>
     static AggregateFunctionPtr MakeStddevAggregateFunction();
 
-    template <LogicalType L, LogicalType R>
-    static AggregateFunctionPtr MakeTtest1SampAggregateFunction();
+    template <LogicalType LT, bool is_sample>
+    static AggregateFunctionPtr MakeCovarianceAggregateFunction();
 
-    template <LogicalType X1_LT, LogicalType X2_LT, LogicalType INDEX_LT, LogicalType X1_PRE_LT = TYPE_MAX_VALUE,
-              LogicalType X2_PRE_LT = TYPE_MAX_VALUE, LogicalType DIM_LT = TYPE_MAX_VALUE, bool use_cuped = false,
-              bool use_dim = false>
-    static AggregateFunctionPtr MakeTtest2SampAggregateFunction();
+    template <LogicalType LT>
+    static AggregateFunctionPtr MakeCorelationAggregateFunction();
 
     template <LogicalType LT>
     static auto MakeSumDistinctAggregateFunction();
@@ -325,6 +323,16 @@ AggregateFunctionPtr AggregateFactory::MakeVarianceAggregateFunction() {
 template <LogicalType LT, bool is_sample>
 AggregateFunctionPtr AggregateFactory::MakeStddevAggregateFunction() {
     return std::make_shared<StddevAggregateFunction<LT, is_sample>>();
+}
+
+template <LogicalType LT, bool is_sample>
+AggregateFunctionPtr AggregateFactory::MakeCovarianceAggregateFunction() {
+    return std::make_shared<CorVarianceAggregateFunction<LT, is_sample>>();
+}
+
+template <LogicalType LT>
+AggregateFunctionPtr AggregateFactory::MakeCorelationAggregateFunction() {
+    return std::make_shared<CorelationAggregateFunction<LT>>();
 }
 
 template <LogicalType LT>

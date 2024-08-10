@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### deploy ###
+clickhouse/
+jupyter/
+mysql/
+/starrocks/

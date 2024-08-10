@@ -52,6 +52,34 @@ init_dir() {
       cp examples/schema.sql mysql/initdb
     fi
   fi
+
+  if [ ! -d "starrocks" ]; then
+    mkdir -p starrocks
+  fi
+
+  if [ ! -d "starrocks/be" ]; then
+    mkdir -p starrocks/be
+  fi
+
+  if [ ! -d "starrocks/fe" ]; then
+    mkdir -p starrocks/fe
+  fi
+
+  if [ ! -d "starrocks/fe/log" ]; then
+    mkdir -p starrocks/fe/log
+  fi
+
+  if [ ! -d "starrocks/fe/meta" ]; then
+    mkdir -p starrocks/fe/meta
+  fi
+
+  if [ ! -d "starrocks/be/storage" ]; then
+    mkdir -p starrocks/be/storage
+  fi
+
+  if [ ! -d "starrocks/be/log" ]; then
+    mkdir -p starrocks/be/log
+  fi
 }
 
 deploy() {
