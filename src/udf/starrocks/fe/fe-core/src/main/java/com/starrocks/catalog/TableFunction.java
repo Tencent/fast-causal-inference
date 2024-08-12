@@ -89,9 +89,9 @@ public class TableFunction extends Function {
         for (Type type : Lists.newArrayList(Type.TINYINT, Type.SMALLINT, Type.INT, Type.BIGINT, Type.LARGEINT)) {
             // generate_series with default step size: 1
             TableFunction func = new TableFunction(new FunctionName("generate_series"),
-                    Lists.newArrayList("generate_series"),
-                    Lists.newArrayList(type, type),
-                    Lists.newArrayList(type));
+                                                   Lists.newArrayList("generate_series"),
+                                                   Lists.newArrayList(type, type),
+                                                   Lists.newArrayList(type));
             functionSet.addBuiltin(func);
 
             // generate_series with explicit step size

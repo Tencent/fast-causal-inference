@@ -314,7 +314,11 @@ vectorized_functions = [
 
     [30410, 'parse_url', 'VARCHAR', ['VARCHAR', 'VARCHAR'], 'StringFunctions::parse_url',
      'StringFunctions::parse_url_prepare', 'StringFunctions::parse_url_close'],
+    [30411, 'url_extract_parameter', 'VARCHAR', ['VARCHAR', 'VARCHAR'], 'StringFunctions::url_extract_parameter',
+     'StringFunctions::url_extract_parameter_prepare', 'StringFunctions::url_extract_parameter_close'],
     [30420, 'strcmp', 'INT', ['VARCHAR', 'VARCHAR'], 'StringFunctions::strcmp'],
+    [30421, 'url_encode', 'VARCHAR', ['VARCHAR'], 'StringFunctions::url_encode'],
+    [30422, 'url_decode', 'VARCHAR', ['VARCHAR'], 'StringFunctions::url_decode'],
 
     # Binary Functions
     # to_binary
@@ -419,6 +423,9 @@ vectorized_functions = [
     [50250, 'time_to_sec', 'BIGINT', ['TIME'], 'TimeFunctions::time_to_sec'],
     [50260, 'jodatime_format', 'VARCHAR', ['DATETIME', 'VARCHAR'], 'TimeFunctions::jodadatetime_format', 'TimeFunctions::jodatime_format_prepare', 'TimeFunctions::jodatime_format_close'],
     [50261, 'jodatime_format', 'VARCHAR', ['DATE', 'VARCHAR'], 'TimeFunctions::jodadate_format', 'TimeFunctions::jodatime_format_prepare', 'TimeFunctions::jodatime_format_close'],
+
+    [50262, 'to_iso8601', 'VARCHAR', ['DATETIME'], 'TimeFunctions::datetime_to_iso8601'],
+    [50263, 'to_iso8601', 'VARCHAR', ['DATE'], 'TimeFunctions::date_to_iso8601'],
 
     # unix timestamp extended version to int64
     # be sure to put before int32 version, so fe will find signature in order.
