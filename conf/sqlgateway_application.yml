@@ -27,6 +27,11 @@ spring:
       password: allinsql666
       jdbc-url: jdbc:clickhouse://172.22.0.3:8123/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
       driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+    starrocks:
+      username: root
+      password: 
+      jdbc-url: jdbc:clickhouse://172.22.0.6:9030/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
+      driver-class-name: com.mysql.cj.jdbc.Driver
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
@@ -41,6 +46,15 @@ olap:
         password: allinsql666
         ip:
           - 172.22.0.3
+  starrocks:
+    driver: com.mysql.cj.jdbc.Driver
+    devices:
+      - id: 2
+        url: jdbc:mysql://172.22.0.6:9030/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
+        user: root
+        password: 
+        ip:
+          - 172.22.0.6
 
 clickhouse:
   driver: com.clickhouse.jdbc.ClickHouseDriver
@@ -51,6 +65,17 @@ clickhouse:
       password: allinsql666
       ip:
         - 172.22.0.3
+
+starrocks:
+  driver: com.mysql.cj.jdbc.Driver
+  devices:
+    - id: 2
+      url: jdbc:mysql://172.22.0.6:9030/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
+      user: root
+      password: 
+      ip:
+        - 172.22.0.6
+
 
 mybatis:
   configuration:

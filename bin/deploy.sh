@@ -86,5 +86,12 @@ deploy() {
   docker-compose up -d
 }
 
+prepare_data() {
+  sleep 15
+  echo "init starrocks db"
+  mysql -uroot -h172.22.0.6 -P9030 < examples/test_data_small_sr.sql
+}
+
 init_dir
 deploy
+prepare_data
