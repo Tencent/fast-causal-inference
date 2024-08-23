@@ -1,0 +1,3 @@
+\ngroupname   f_obs       ratio       chisquare   p-value     \n0           3.3319e+08  1.000000    9.6735e+07  0.000000    \n1           3.1284e+08  2.000000    \n
+\ngroupname   f_obs       ratio       chisquare   p-value     \n0           3.3319e+08  1.000000    3.1217e+09  0.000000    \n1           3.1284e+08  20.000000   \n
+\ngroupname   f_obs       ratio       chisquare   p-value     \n0           3.3319e+08  1.200000    8.5708e+07  0.000000    \n1           3.1284e+08  2.300000    \n

@@ -9,7 +9,7 @@ if [ ! -f "$base_path/contrib/ClickHouse/LICENSE" ];then
   echo "fetch contrib submodule"
   git submodule update --init --recursive
 fi
-cp -f $base_path/src/udf/ClickHouse/src/AggregateFunctions/* $base_path/contrib/ClickHouse/src/AggregateFunctions/
+cp -f $base_path/src/udf/clickhouse_udf/src/AggregateFunctions/* $base_path/contrib/ClickHouse/src/AggregateFunctions/
 cd $base_path/contrib/ClickHouse/; mkdir -p build
 export CC=clang-16
 export CXX=clang++-16
