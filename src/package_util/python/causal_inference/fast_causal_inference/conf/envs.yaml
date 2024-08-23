@@ -8,6 +8,15 @@ datasource:
     clickhouse_user: default
     clickhouse_password: allinsql666
     ttl: 14
+  - device_id: 2
+    starrocks_cluster_name:
+    starrocks_database: all_in_sql
+    starrocks_launch_host: 172.22.0.6
+    starrocks_port: 9030
+    starrocks_http_port: 8040
+    starrocks_user: root
+    starrocks_password: 
+    ttl: 14
 sqlgateway:
   url: http://172.22.0.4:9099
   path: /api/v1/sqlgateway/sql-run

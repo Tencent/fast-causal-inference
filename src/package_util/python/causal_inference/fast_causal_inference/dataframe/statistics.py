@@ -573,6 +573,7 @@ def srm(x, groupby, ratio="[1,1]"):
 
 
 @register_fn(engine=OlapEngineType.CLICKHOUSE, name="mannWhitneyUTest")
+@register_fn(engine=OlapEngineType.STARROCKS, name="mann_whitney_u_test")
 @define_args(
     FnArg(name="alternative", is_param=True, default="two-sided"),
     FnArg(name="continuity_correction", is_param=True, default=1),
@@ -595,6 +596,23 @@ class AggMannWhitneyUTestDfFunction(DfFunction):
         sql = (
             self.fn_name(ctx)
             + f"({alternative}, {continuity_correction})({sample_data}, {sample_index})"
+        )
+        return sql
+
+    def sql_impl_starrocks(
+        self,
+        ctx: DfContext,
+        fn_args: List[FnArg],
+        fn_params: List[FnArg],
+        arg_dict: Dict,
+    ) -> str:
+        alternative = f"'{arg_dict['alternative'].sql(ctx)}'"
+        continuity_correction = arg_dict["continuity_correction"].sql(ctx)
+        sample_data = arg_dict["sample_data"].sql(ctx)
+        sample_index = arg_dict["sample_index"].sql(ctx)
+        sql = (
+            self.fn_name(ctx)
+            + f"({sample_data}, {sample_index}, {alternative}, {continuity_correction})"
         )
         return sql
 
