@@ -40,7 +40,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./ipynb
-          name: ipynb-${{ github.run_id }}
+          name: ipynb
 
       - name: Setup Causal Inference HTML Pages
         uses: actions/configure-pages@v5
@@ -49,7 +49,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./docs
-          name: html-${{ github.run_id }}
+          name: html
 
   deploy:
     needs: build
@@ -69,10 +69,12 @@ jobs:
         uses: actions/deploy-pages@v4
         with:
           publish_dir: ./ipynb
+          name: ipynb
 
       - name: Deploy Causal Inference HTML to GitHub Pages
         id: deployment_html
         uses: actions/deploy-pages@v4
         with:
           publish_dir: ./docs
+          name: html
 
