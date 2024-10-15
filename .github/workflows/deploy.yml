@@ -64,6 +64,16 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
+      - name: Download JupyterLite site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ipynb
+
+      - name: Download Causal Inference HTML artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: html
+
       - name: Deploy JupyterLite site to GitHub Pages
         id: deployment_jupyterlite
         uses: actions/deploy-pages@v4
