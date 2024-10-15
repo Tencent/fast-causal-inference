@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 set -o pipefail
+1
 
 history_path=`pwd`
 base_path=$(cd $(dirname $0)/..; pwd)
