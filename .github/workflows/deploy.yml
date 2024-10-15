@@ -28,13 +28,12 @@ jobs:
         uses: mamba-org/setup-micromamba@v1
         with:
           micromamba-version: '1.5.8-0'
-          environment-file: docs/build-environment.yml
+          environment-file: build-environment.yml
           cache-environment: true
 
       - name: Build the JupyterLite site
         shell: bash -l {0}
         run: |
-          cp README.md content
           jupyter lite build --contents docs/ipynbs --output-dir ipynb
 
       - name: Upload JupyterLite site artifact
