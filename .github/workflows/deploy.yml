@@ -34,7 +34,7 @@ jobs:
       - name: Build the JupyterLite site
         shell: bash -l {0}
         run: |
-          jupyter lite build --contents docs/ipynbs --output-dir ipynb --environment-file build-environment.yml
+          jupyter lite build --contents docs/ipynbs --output-dir ipynb
 
       - name: Upload JupyterLite site artifact
         uses: actions/upload-pages-artifact@v3
