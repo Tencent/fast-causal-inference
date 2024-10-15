@@ -59,8 +59,8 @@ jobs:
       id-token: write
 
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: page-url
+      url: 'https://tencent.github.io/fast-causal-inference'
 
     runs-on: ubuntu-latest
     steps:
