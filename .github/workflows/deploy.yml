@@ -17,39 +17,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
-
+        uses: actions/checkout@v4
       - name: Setup Causal Inference HTML Pages
         uses: actions/configure-pages@v5
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install mamba
         uses: mamba-org/setup-micromamba@v1
         with:
           micromamba-version: '1.5.8-0'
           environment-file: build-environment.yml
           cache-environment: true
-
+      - name: Install the dependencies
+        run: |
+            python -m pip install -r requirements.txt
       - name: Build the JupyterLite site
         shell: bash -l {0}
         run: |
           jupyter lite build --contents docs/ipynbs --output-dir ipynb
-
+          cp -r docs/* ipynb/
       - name: Upload JupyterLite site artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./ipynb
-          name: ipynb
 
-      - name: Upload Causal Inference HTML artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./docs
-          name: html
 
   deploy:
     needs: build
@@ -64,11 +57,9 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy JupyterLite site to GitHub Pages
-        id: deployment_jupyterlite
+      - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          publish_dir: ./ipynb
-          name: ipynb
+
 
 
