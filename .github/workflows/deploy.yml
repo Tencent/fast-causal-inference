@@ -37,7 +37,7 @@ jobs:
           jupyter lite build --contents docs/ipynbs --output-dir ipynb
 
       - name: Upload JupyterLite site artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./ipynb
           name: ipynb
@@ -46,7 +46,7 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload Causal Inference HTML artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./docs
           name: html
@@ -59,8 +59,8 @@ jobs:
       id-token: write
 
     environment:
-      name: page-url
-      url: 'https://tencent.github.io/fast-causal-inference'
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     runs-on: ubuntu-latest
     steps:
