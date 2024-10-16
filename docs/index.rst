@@ -37,6 +37,8 @@ Set SparkSession
 
     import os
     from pyspark.sql import SparkSession
+    import fast_causal_inference
+    allinsql_provider = fast_causal_inference.FCIProvider("olap_database")
 
     JARS = ",".join([
         "starrocks-spark-connector-3.1.2.jar",  # spark 读写 SR 依赖的jar包
