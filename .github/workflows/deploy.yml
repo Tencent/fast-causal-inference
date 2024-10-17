@@ -36,6 +36,8 @@ jobs:
       - name: Build the JupyterLite site
         shell: bash -l {0}
         run: |
+          cp ./lib/fast-causal-inference.tar.gz ./docs/ipynbs/
+          cp ./confpackage_conf.yaml ./docs/ipynbs/.jupyter/
           jupyter lite build --contents docs/ipynbs --output-dir ipynb
           mkdir -p ./ipynb/docs/
           cp -r ./docs/* ./ipynb/docs/
