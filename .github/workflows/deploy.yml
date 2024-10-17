@@ -24,12 +24,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install mamba
-        uses: mamba-org/setup-micromamba@v1
-        with:
-          micromamba-version: '1.5.8-0'
-          environment-file: build-environment.yml
-          cache-environment: true
       - name: Install the dependencies
         run: |
             python -m pip install -r requirements.txt
