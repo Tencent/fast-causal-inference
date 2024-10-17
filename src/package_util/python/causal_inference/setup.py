@@ -11,14 +11,14 @@ with open("requirements.txt", "r") as f:
             requirements.append(line.strip('\n').strip())
 
 setup(name='fast-causal-inference',
-      version='2.0.39',
+      version='3.0.5',
       description='fast causal inference package',
       long_description=long_description,
       long_description_content_type='text/markdown',
       url='',
       python_requires='>=3.6.0',
-      author=['bearlyhuang', 'fhbai', 'broccozhang'],
-      author_email=['bearlyhuang@tencent.com', 'fhbai@tencent.com', 'broccozhang@tencent.com'],
+      author=['cooperxiong', 'easonsliu', 'fhbai', 'broccozhang'],
+      author_email=['cooperxiong@tencent.com', 'easonsliu@tencent.com', 'fhbai@tencent.com', 'broccozhang@tencent.com'],
       install_requires=requirements,
       license='Apache License 2.0',
       packages=find_packages(exclude=("test",)),

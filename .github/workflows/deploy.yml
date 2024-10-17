@@ -26,9 +26,7 @@ jobs:
           python-version: '3.11'
       - name: Install the dependencies
         run: |
-            tar -xvzf ./lib/fast-causal-inference.tar.gz -C ./docs/ipynbs/
             python -m pip install -r requirements.txt
-            python -m pip install -e ./docs/ipynbs/fast-causal-inference
       - name: Build the JupyterLite site
         shell: bash -l {0}
         run: |
