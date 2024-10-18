@@ -21,21 +21,14 @@ jobs:
       - name: Setup Causal Inference HTML Pages
         uses: actions/configure-pages@v5
       - shell: bash
-        env:
-          starrocks_host: ${{ secrets.starrocks_host }}
-          starrocks_port: ${{ secrets.starrocks_port }}
-          starrocks_http_port: ${{ secrets.starrocks_http_port }}
-          starrocks_user: ${{ secrets.starrocks_user }}
-          starrocks_password: ${{ secrets.starrocks_password }}
-          sqlgateway_url: ${{ secrets.sqlgateway_url }}
         run: |
           echo "$starrocks_host"
-          sed -i "s/starrocks_launch_host/$starrocks_host/g" ./conf/package_conf.yaml
-          sed -i "s/starrocks_port/$starrocks_port/g" ./conf/package_conf.yaml
-          sed -i "s/starrocks_http_port/$starrocks_http_port/g" ./conf/package_conf.yaml
-          sed -i "s/starrocks_user/$starrocks_user/g" ./conf/package_conf.yaml
-          sed -i "s/starrocks_password/$starrocks_password/g" ./conf/package_conf.yaml
-          sed -i "s/url/$sqlgateway_url/g" ./conf/package_conf.yaml
+          sed -i "s/starrocks_launch_host/${{ secrets.starrocks_host }}/g" ./conf/package_conf.yaml
+          sed -i "s/starrocks_port/${{ secrets.starrocks_port }}/g" ./conf/package_conf.yaml
+          sed -i "s/starrocks_http_port/${{ secrets.starrocks_http_port }}/g" ./conf/package_conf.yaml
+          sed -i "s/starrocks_user/${{ secrets.starrocks_user }}/g" ./conf/package_conf.yaml
+          sed -i "s/starrocks_password/${{ secrets.starrocks_password }}/g" ./conf/package_conf.yaml
+          sed -i "s/url/${{ secrets.sqlgateway_url }}/g" ./conf/package_conf.yaml
           mkdir -p ./docs/ipynbs/.jupyter/
           cp ./conf/package_conf.yaml ./docs/ipynbs/.jupyter/
       - name: Setup Python
