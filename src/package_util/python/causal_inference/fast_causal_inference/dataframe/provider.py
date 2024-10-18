@@ -155,7 +155,6 @@ class FCIProvider:
 
             import fast_causal_inference
             allinsql_provider = fast_causal_inference.FCIProvider("all_in_sql_guest")
-            from pytoolkit import TDWSQLProvider
             print(spark_df.count())
             df_ch = allinsql_provider.readSparkDf(spark, spark_df)
 

@@ -1,7 +1,6 @@
 __all__ = [
     "readClickHouse",
     "readStarRocks",
-    "readTdw",
     "readSparkDf",
     "readCsv",
     "DataFrame",
@@ -1972,37 +1971,6 @@ def readOlap(table_name, olap="clickhouse", provider=FCIProvider("global")):
     else:
         raise Exception(f"Unsupported olap {olap}")
 
-
-def readTdw(
-    session,
-    db,
-    table,
-    group="tl",
-    tdw_user=None,
-    tdw_passward=None,
-    priParts=None,
-    str_replace="-1",
-    numeric_replace=0,
-    olap="clickhouse",
-    provider=FCIProvider("global")
-):
-    get_context().set_project_conf(provider.project_conf)
-    from pytoolkit import TDWSQLProvider
-
-    tdw = TDWSQLProvider(
-        session, group=group, db=db, user=tdw_user, passwd=tdw_passward
-    )
-    df_new = tdw.table(tblName=table, priParts=priParts)
-    df_new = AisTools.preprocess_na(df_new, str_replace, numeric_replace)
-    table_name = DataFrame.createTableName()
-    if olap.lower() == "clickhouse":
-        dataframe_2_clickhouse(dataframe=df_new, clickhouse_table_name=table_name)
-        return readClickHouse(table_name, provider)
-    elif olap.lower() == "starrocks":
-        dataframe_2_starrocks(dataframe=df_new, starrocks_table_name=table_name)
-        return readStarRocks(table_name)
-    else:
-        raise Exception(f"Olap engine `{olap}` not supported.")
 
 
 def readSparkDf(session, dataframe, str_replace="-1", numeric_replace=0, olap="clickhouse", provider=FCIProvider("global")):

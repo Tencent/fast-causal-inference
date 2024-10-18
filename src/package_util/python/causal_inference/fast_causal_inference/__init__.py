@@ -6,7 +6,6 @@ __all__ = [
     "set_tenant",
     "set_config",
     "set_default",
-    "readTdw",
     "readStarRocks",
     "readClickHouse",
     "readSparkDf",
@@ -20,16 +19,13 @@ __all__ = [
     "clickhouse_drop_partition",
     "clickhouse_2_csv",
     "csv_2_clickhouse",
-    "clickhouse_2_tdw",
     "dataframe_2_clickhouse",
     "clickhouse_2_dataframe",
-    "tdw_2_clickhouse",
     "FCIProvider",
 ]
 
 from .dataframe import (
     readClickHouse,
-    readTdw,
     readStarRocks,
     readSparkDf,
     readCsv,
@@ -93,11 +89,6 @@ def csv_2_clickhouse(*args, **kwargs):
     return ClickHouseUtils.csv_2_clickhouse(*args, **kwargs)
 
 
-def clickhouse_2_tdw(*args, **kwargs):
-    from fast_causal_inference.util import data_transformer
-
-    return data_transformer.clickhouse_2_tdw(*args, **kwargs)
-
 
 def dataframe_2_clickhouse(*args, **kwargs):
     from fast_causal_inference.util import data_transformer
@@ -110,8 +101,3 @@ def clickhouse_2_dataframe(*args, **kwargs):
 
     return data_transformer.clickhouse_2_dataframe(*args, **kwargs)
 
-
-def tdw_2_clickhouse(*args, **kwargs):
-    from fast_causal_inference.util import data_transformer
-
-    return data_transformer.tdw_2_clickhouse(*args, **kwargs)

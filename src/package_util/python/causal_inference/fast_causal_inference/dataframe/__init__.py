@@ -5,7 +5,6 @@ This module provides the DataFrame class, which is a spark-dataframe-like wrappe
 __all__ = [
     "readClickHouse",
     "readStarRocks",
-    "readTdw",
     "readSparkDf",
     "readCsv",
     "DataFrame",
@@ -15,7 +14,6 @@ __all__ = [
 from .dataframe import (
     readClickHouse,
     readStarRocks,
-    readTdw,
     readSparkDf,
     readCsv,
     DataFrame,
