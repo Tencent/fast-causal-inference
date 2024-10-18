@@ -38,17 +38,7 @@ def dataframe_2_clickhouse(
     """
     get_context().logger.info("running, please wait")
     start = _perf_counter()
-    from fast_causal_inference.util.tdw import TDWUtils
-
-    TDWUtils.datafame_2_clickhouse_distribute(
-        dataframe,
-        clickhouse_table_name,
-        clickhouse_partition_column,
-        clickhouse_primary_column,
-        is_auto_create=is_auto_create,
-        num_partitions=num_partitions,
-        batch_size=batch_size,
-    )
+    raise NotImplementedError("Not implemented")
     end = _perf_counter()
     get_context().logger.info("done" + "time cost: %s Seconds" % (end - start))
 
@@ -73,16 +63,7 @@ def dataframe_2_starrocks(
     """
     get_context().logger.info("running, please wait")
     start = _perf_counter()
-    from fast_causal_inference.util.tdw import TDWUtils
-
-    TDWUtils.datafame_2_starrocks(
-        dataframe,
-        starrocks_table_name,
-        starrocks_partition_column,
-        starrocks_primary_column,
-        is_auto_create=is_auto_create,
-        batch_size=batch_size,
-    )
+    raise NotImplementedError("Not implemented")
     end = _perf_counter()
     get_context().logger.info("done" + "time cost: %s Seconds" % (end - start))
 

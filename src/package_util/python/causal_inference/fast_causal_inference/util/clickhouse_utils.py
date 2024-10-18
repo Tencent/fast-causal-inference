@@ -13,7 +13,7 @@ from clickhouse_driver import Client
 import datetime
 
 """
-dataframe和tdw默认操作的是Clickhouse分布式表
+dataframe默认操作的是Clickhouse分布式表
 reference: https://clickhouse.com/docs/en/integrations/python
 """
 
@@ -573,7 +573,7 @@ class ClickHouseUtils(object):
             return False
 
     """
-    clickhouse field type trans tdw field type
+    clickhouse field type trans field type
     """
 
     def field_type_map(self, col_type):
@@ -609,249 +609,31 @@ class ClickHouseUtils(object):
             raise Exception(col_type + " col_type is not support")
         return col_trans_type
 
-    def get_sql_statement(self, col_names, col_tdw_types, col_clickhouse_types):
+    def get_sql_statement(self, col_names, col__types, col_clickhouse_types):
         create_clickhouse_sql_statement = ""
-        create_tdw_sql_statement = ""
+        create__sql_statement = ""
         for col_index in range(len(col_names)):
             col_name = col_names[col_index]
             col_clickhouse_type = col_clickhouse_types[col_index]
-            col_tdw_type = col_tdw_types[col_index]
+            col__type = col__types[col_index]
             get_context().logger.debug(
                 "col_name="
                 + str(col_name)
                 + ",col_clickhouse_type="
                 + str(col_clickhouse_type)
-                + ",col_tdw_type="
-                + str(col_tdw_type)
+                + ",col__type="
+                + str(col__type)
             )
             create_clickhouse_sql_statement += (
                 col_name + " " + col_clickhouse_type + ","
             )
-            create_tdw_sql_statement += (
-                col_name + " " + col_tdw_type + " comment '" + col_name + "',"
+            create__sql_statement += (
+                col_name + " " + col__type + " comment '" + col_name + "',"
             )
         create_clickhouse_sql_statement = create_clickhouse_sql_statement[:-1]
-        create_tdw_sql_statement = create_tdw_sql_statement[:-1]
-        return create_clickhouse_sql_statement, create_tdw_sql_statement
+        create__sql_statement = create__sql_statement[:-1]
+        return create_clickhouse_sql_statement, create__sql_statement
 
-    @classmethod
-    def clickhouse_2_tdw(
-        cls,
-        clickhouse_table_name,
-        tdw_database_name,
-        tdw_table_name,
-        spark_session,
-        cmk=None,
-        is_auto_create=True,
-        provider=FCIProvider("global")
-    ):
-        clickhouse_utils = ClickHouseUtils(provider=provider)
-        num = clickhouse_utils.table_rows(clickhouse_table_name)
-        get_context().logger.info("clickhouse table count=" + str(num))
-        if num > ClickHouseUtils.MAX_ROWS:
-            raise Exception(
-                "clickhouse table rows num too big, >"
-                + str(ClickHouseUtils.MAX_ROWS)
-                + " not support"
-            )
-        field_names, field_types, field_raw_types = clickhouse_utils.get_table_meta(
-            clickhouse_table_name
-        )
-        col_list = list()
-        for i in range(field_names.__len__()):
-            col_list.append([field_names[i], field_types[i], field_names[i]])
-        get_context().logger.debug(col_list)
-        sql_statement, create_tdw_sql_statement = clickhouse_utils.get_sql_statement(
-            field_names, field_types, field_raw_types
-        )
-        from fast_causal_inference.util import TDWUtils
-
-        tdw_utils = TDWUtils(get_context().spark_session)
-
-        export_hdfs_path = tdw_utils.base_hdfs_path + tdw_table_name + "_hdfs_export"
-        tdw_utils = TDWUtils(spark_session)
-        if tdw_utils.table_exits(tdw_database_name, tdw_table_name):
-            raise Exception("tdw table is already exist")
-        tdw_utils.hdfs_mkdir_and_chmod(tdw_utils.name_space + export_hdfs_path)
-        if is_auto_create:
-            from fast_causal_inference.util import get_user
-
-            user = get_user()
-            if not cmk:
-                raise Exception("please input cmk arg")
-            get_context().logger.debug("user=" + user + ",cmk=" + cmk)
-            sql = """
-                            set `supersql.datasource.default`=hive_online_internal;
-                            set `supersql.bypass.forceAll`=true;
-                            use %s;
-                            CREATE EXTERNAL TABLE IF NOT EXISTS %s(
-                                %s
-                            )
-                            STORED AS PARQUET
-                            LOCATION '%s'
-                            """ % (
-                tdw_database_name,
-                tdw_table_name,
-                create_tdw_sql_statement,
-                tdw_utils.name_space + export_hdfs_path,
-            )
-            get_context().logger.debug(sql)
-        if clickhouse_utils.is_distribute_table(
-            clickhouse_table_name=clickhouse_table_name
-        ):
-            # distribute table
-            def clickhouse_node_job(
-                clickhouse_utils, clickhouse_hdfs_table_name, sql_statement, file_name
-            ):
-                get_context().logger.debug(clickhouse_utils.host)
-                location_file = (
-                    tdw_utils.base_hdfs_path + tdw_table_name + "_" + file_name
-                )
-                get_context().logger.debug(
-                    "clickhouse_node_job, location_file=" + location_file
-                )
-                clickhouse_utils.create_table(
-                    clickhouse_hdfs_table_name,
-                    sql_statement,
-                    type="hdfs",
-                    format="Parquet",
-                    location=tdw_utils.name_space + location_file,
-                )
-                clickhouse_utils.insert_table(
-                    clickhouse_hdfs_table_name,
-                    clickhouse_table_name + "_local",
-                    ",".join(field_names),
-                    ",".join(field_names),
-                )
-                get_context().logger.debug(
-                    "insert success, sink clickhouse_hdfs_table_name="
-                    + clickhouse_hdfs_table_name
-                    + ",source clickhouse_table_name="
-                    + clickhouse_table_name
-                )
-                get_context().logger.debug(
-                    "location_file="
-                    + location_file
-                    + ",export_hdfs_path="
-                    + export_hdfs_path
-                )
-                tdw_utils.hdfs_move(location_file, export_hdfs_path + "/" + file_name)
-                clickhouse_utils.close()
-
-            with ThreadPoolExecutor(
-                max_workers=min(16, clickhouse_utils.cluster_hosts_len)
-            ) as pool:
-                all_task = list()
-                for i in range(clickhouse_utils.cluster_hosts_len):
-                    timestamp = str(int(time.time()))
-                    file_name = (
-                        "part"
-                        + "_"
-                        + clickhouse_utils.cluster_hosts[i].replace(".", "_")
-                        + "_"
-                        + timestamp
-                        + ".parquet"
-                    )
-                    clickhouse_hdfs_table_name = (
-                        clickhouse_table_name + "_hdfs_export_" + timestamp
-                    )
-                    future = pool.submit(
-                        clickhouse_node_job,
-                        ClickHouseUtils(host=clickhouse_utils.cluster_hosts[i], provider=provider),
-                        clickhouse_hdfs_table_name,
-                        sql_statement,
-                        file_name,
-                    )
-                    future.add_done_callback(handle_exception)
-                    all_task.append(future)
-                wait(all_task, timeout=None, return_when=ALL_COMPLETED)
-        else:
-            # local table
-            timestamp = str(int(time.time()))
-            location_file = tdw_utils.base_hdfs_path + "part" + timestamp + ".parquet"
-            clickhouse_hdfs_table_name = (
-                clickhouse_table_name + "_hdfs_export_" + timestamp
-            )
-            clickhouse_utils.create_table(
-                table_name=clickhouse_hdfs_table_name,
-                col_statement=sql_statement,
-                type="hdfs",
-                format="Parquet",
-                location=tdw_utils.name_space + location_file,
-            )
-            clickhouse_utils.insert_table(
-                clickhouse_hdfs_table_name,
-                clickhouse_table_name,
-                ",".join(field_names),
-                ",".join(field_names),
-            )
-            get_context().logger.debug(location_file)
-            get_context().logger.debug(export_hdfs_path)
-            tdw_utils.hdfs_move(
-                location_file, export_hdfs_path + "/part" + timestamp + ".parquet"
-            )
-        clickhouse_utils.close()
-
-    @classmethod
-    def clickhouse_2_tdw_v2(
-        self,
-        session,
-        clickhouse_table,
-        tdw_database,
-        tdw_table,
-        tdw_user,
-        tdw_passward,
-        group,
-        is_drop_table=False,
-        overwrite=True,
-        priPart=None,
-        provider=FCIProvider("global")
-    ):
-        clickhouse_utils = ClickHouseUtils(provider=provider)
-        num = clickhouse_utils.table_rows(clickhouse_table)
-        get_context().logger.info("clickhouse table count=" + str(num))
-        if num > ClickHouseUtils.MAX_ROWS:
-            raise Exception(
-                "clickhouse table rows num too big, >"
-                + str(ClickHouseUtils.MAX_ROWS)
-                + " not support"
-            )
-        field_names, field_types, field_raw_types = clickhouse_utils.get_table_meta(
-            clickhouse_table
-        )
-        from pytoolkit import TDWSQLProvider, TDWUtil, TableDesc
-
-        # 将 field_names, field_types 转为 [[name, type, name], ...]
-        col_list = list()
-        for i in range(field_names.__len__()):
-            col_list.append([field_names[i], field_types[i], field_names[i]])
-        tdw = TDWUtil(
-            user=tdw_user, passwd=tdw_passward, dbName=tdw_database, group=group
-        )
-        table_desc = (
-            TableDesc()
-            .setTblName(tdw_table)
-            .setCols(col_list)
-            .setComment("all in sql to tdw")
-        )
-        if is_drop_table:
-            tdw.dropTable(tdw_table)
-        tdw.createTable(table_desc)
-
-        SPARK_SESSION = session
-
-        spark_df = self.clickhouse_2_dataframe(SPARK_SESSION, clickhouse_table, provider=provider)
-        spark_df = spark_df.select(field_names)
-        tdw = TDWSQLProvider(
-            SPARK_SESSION,
-            user=tdw_user,
-            passwd=tdw_passward,
-            db=tdw_database,
-            group=group,
-        )
-        tdw.saveToTable(
-            df=spark_df, tblName=tdw_table, overwrite=overwrite, priPart=priPart
-        )
 
     # select from distribute table
     @classmethod

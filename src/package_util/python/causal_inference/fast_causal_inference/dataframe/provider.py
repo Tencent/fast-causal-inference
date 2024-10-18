@@ -20,7 +20,7 @@ class FCIProvider:
                 if key == "default-spark-confs":
                     self.DEFAULT_SPARK_CONFS = value
                     continue
-                if key not in ('RAINBOW_URL', 'RAINBOW_GROUP', 'RAINBOW_ENV', 'mirrors'):
+                if key not in ('mirrors'):
                     continue
                 if not value:
                     raise Exception(

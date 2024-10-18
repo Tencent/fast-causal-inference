@@ -312,7 +312,6 @@ class StarRocksUtils(object):
         return field_names, field_types, field_raw_types
 
     """
-    starrocks field type trans tdw field type
     """
 
     @classmethod
@@ -371,28 +370,28 @@ class StarRocksUtils(object):
             raise Exception(col_type + " col_type is not support")
         return col_trans_type
 
-    def get_sql_statement(self, col_names, col_tdw_types, col_starrocks_types):
+    def get_sql_statement(self, col_names, col__types, col_starrocks_types):
         create_starrocks_sql_statement = ""
-        create_tdw_sql_statement = ""
+        create__sql_statement = ""
         for col_index in range(len(col_names)):
             col_name = col_names[col_index]
             col_starrocks_type = col_starrocks_types[col_index]
-            col_tdw_type = col_tdw_types[col_index]
+            col__type = col__types[col_index]
             get_context().logger.debug(
                 "col_name="
                 + str(col_name)
                 + ",col_starrocks_type="
                 + str(col_starrocks_type)
-                + ",col_tdw_type="
-                + str(col_tdw_type)
+                + ",col__type="
+                + str(col__type)
             )
             create_starrocks_sql_statement += col_name + " " + col_starrocks_type + ","
-            create_tdw_sql_statement += (
-                col_name + " " + col_tdw_type + " comment '" + col_name + "',"
+            create__sql_statement += (
+                col_name + " " + col__type + " comment '" + col_name + "',"
             )
         create_starrocks_sql_statement = create_starrocks_sql_statement[:-1]
-        create_tdw_sql_statement = create_tdw_sql_statement[:-1]
-        return create_starrocks_sql_statement, create_tdw_sql_statement
+        create__sql_statement = create__sql_statement[:-1]
+        return create_starrocks_sql_statement, create__sql_statement
 
     @classmethod
     def starrocks_2_dataframe(
@@ -590,59 +589,3 @@ class StarRocksUtils(object):
                 writer.writerow(row)
         self.close()
 
-    @classmethod
-    def starrocks_2_tdw(
-        self,
-        session,
-        starrocks_table,
-        tdw_database,
-        tdw_table,
-        tdw_user,
-        tdw_passward,
-        group,
-        overwrite=True,
-        priPart=None,
-    ):
-        sr = StarRocksUtils()
-        num = sr.table_rows(starrocks_table)
-        get_context().logger.info("starrocks table count=" + str(num))
-        if num > sr.MAX_ROWS:
-            raise Exception(
-                "starrocks table rows num too big, >"
-                + str(sr.MAX_ROWS)
-                + " not support"
-            )
-        field_names, field_types, field_raw_types = sr.get_table_meta(
-            starrocks_table
-        )
-        from pytoolkit import TDWSQLProvider, TDWUtil, TableDesc
-
-        # 将 field_names, field_types 转为 [[name, type, name], ...]
-        col_list = list()
-        for i in range(field_names.__len__()):
-            col_list.append([field_names[i], field_types[i], field_names[i]])
-        tdw = TDWUtil(
-            user=tdw_user, passwd=tdw_passward, dbName=tdw_database, group=group
-        )
-        table_desc = (
-            TableDesc()
-            .setTblName(tdw_table)
-            .setCols(col_list)
-            .setComment("all in sql to tdw")
-        )
-        tdw.createTable(table_desc)
-
-        SPARK_SESSION = session
-
-        spark_df = self.starrocks_2_dataframe(SPARK_SESSION, starrocks_table)
-        spark_df = spark_df.select(field_names)
-        tdw = TDWSQLProvider(
-            SPARK_SESSION,
-            user=tdw_user,
-            passwd=tdw_passward,
-            db=tdw_database,
-            group=group,
-        )
-        tdw.saveToTable(
-            df=spark_df, tblName=tdw_table, overwrite=overwrite, priPart=priPart
-        )
