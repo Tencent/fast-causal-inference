@@ -155,6 +155,7 @@ class DataFrame:
             PROJECT_CONF["sqlgateway"]["url"]
             + PROJECT_CONF["sqlgateway"]["dataframe_path"]
         )
+        print(f"url: {self.url}")
         self.rtx = get_user()
         self._ctx = DfContext(engine=olap_engine, dataframe=self)
         self._select_list = []

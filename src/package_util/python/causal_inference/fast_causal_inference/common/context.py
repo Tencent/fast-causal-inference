@@ -78,6 +78,10 @@ class AllInSqlGlobalContext:
         if not conf_path:
             raise Exception("please input tenant_conf")
 
+        import sys
+        if conf_path not in sys.path:
+            sys.path.append(conf_path)
+
         with open(conf_path, "r") as f:
             import yaml
             from yaml.loader import SafeLoader

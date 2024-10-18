@@ -31,7 +31,7 @@ class FCIProvider:
         self.database = database
 
         self._ctx = AllInSqlGlobalContext()
-        self._ctx.set_project_conf_from_yaml('.jupyter/conf.yaml')
+        self._ctx.set_project_conf_from_yaml('ipynbs_config/conf.yaml')
         self.context.logger.debug(vars(self))
 
 
