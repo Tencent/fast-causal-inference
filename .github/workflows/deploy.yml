@@ -30,12 +30,12 @@ jobs:
           sqlgateway_url: ${{ secrets.sqlgateway_url }}
         run: |
           echo "$starrocks_host"
-          sed -i "s/starrocks_launch_host/$starrocks_host" ./conf/package_conf.yaml
-          sed -i "s/starrocks_port/$starrocks_port" ./conf/package_conf.yaml
-          sed -i "s/starrocks_http_port/$starrocks_http_port" ./conf/package_conf.yaml
-          sed -i "s/starrocks_user/$starrocks_user" ./conf/package_conf.yaml
-          sed -i "s/starrocks_password/$starrocks_password" ./conf/package_conf.yaml
-          sed -i "s/url/$sqlgateway_url" ./conf/package_conf.yaml
+          sed -i "s/starrocks_launch_host/$starrocks_host/g" ./conf/package_conf.yaml
+          sed -i "s/starrocks_port/$starrocks_port/g" ./conf/package_conf.yaml
+          sed -i "s/starrocks_http_port/$starrocks_http_port/g" ./conf/package_conf.yaml
+          sed -i "s/starrocks_user/$starrocks_user/g" ./conf/package_conf.yaml
+          sed -i "s/starrocks_password/$starrocks_password/g" ./conf/package_conf.yaml
+          sed -i "s/url/$sqlgateway_url/g" ./conf/package_conf.yaml
           mkdir -p ./docs/ipynbs/.jupyter/
           cp ./conf/package_conf.yaml ./docs/ipynbs/.jupyter/
       - name: Setup Python
