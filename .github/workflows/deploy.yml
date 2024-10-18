@@ -29,7 +29,6 @@ jobs:
             python -m pip install -r requirements.txt
       - shell: bash
         run: |
-          echo "$starrocks_host"
           sed -i "s|\(starrocks_launch_host:\s*\).*|\1${{ secrets.starrocks_host }}|g" ./conf/package_conf.yaml
           sed -i "s|\(starrocks_port:\s*\).*|\1${{ secrets.starrocks_port }}|g" ./conf/package_conf.yaml
           sed -i "s|\(starrocks_http_port:\s*\).*|\1${{ secrets.starrocks_http_port }}|g" ./conf/package_conf.yaml
