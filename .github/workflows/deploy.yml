@@ -29,8 +29,8 @@ jobs:
           sed -i "s|starrocks_user|${{ secrets.starrocks_user }}|g" ./conf/package_conf.yaml
           sed -i "s|starrocks_password|${{ secrets.starrocks_password }}|g" ./conf/package_conf.yaml
           sed -i "s|url|${{ secrets.sqlgateway_url }}|g" ./conf/package_conf.yaml
-          mkdir -p ./docs/ipynbs/.jupyter/
-          cp ./conf/package_conf.yaml ./docs/ipynbs/.jupyter/
+          mkdir -p ./docs/ipynbs/ipynbs_config/
+          cp ./conf/package_conf.yaml ./docs/ipynbs/ipynbs_config/
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
