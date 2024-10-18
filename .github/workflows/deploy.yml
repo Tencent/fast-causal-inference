@@ -23,7 +23,7 @@ jobs:
       - shell: bash
         env:
           starrocks_host: ${{ secrets.starrocks_host }}
-          starrocks_port: ${{ starrocks_port }}
+          starrocks_port: ${{ secrets.starrocks_port }}
           starrocks_http_port: ${{ starrocks_http_port }}
           starrocks_user: ${{ starrocks_user }}
           starrocks_password: ${{ starrocks_password }}
