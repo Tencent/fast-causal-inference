@@ -20,6 +20,17 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Causal Inference HTML Pages
         uses: actions/configure-pages@v5
+      - shell: bash
+        run: |
+          echo "$starrocks_host"
+          sed -i "s|starrocks_launch_host|${{ secrets.starrocks_host }}|g" ./conf/package_conf.yaml
+          sed -i "s|starrocks_port|${{ secrets.starrocks_port }}|g" ./conf/package_conf.yaml
+          sed -i "s|starrocks_http_port|${{ secrets.starrocks_http_port }}|g" ./conf/package_conf.yaml
+          sed -i "s|starrocks_user|${{ secrets.starrocks_user }}|g" ./conf/package_conf.yaml
+          sed -i "s|starrocks_password|${{ secrets.starrocks_password }}|g" ./conf/package_conf.yaml
+          sed -i "s|url|${{ secrets.sqlgateway_url }}|g" ./conf/package_conf.yaml
+          mkdir -p ./docs/ipynbs/.jupyter/
+          cp ./conf/package_conf.yaml ./docs/ipynbs/.jupyter/
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -30,7 +41,6 @@ jobs:
       - name: Build the JupyterLite site
         shell: bash -l {0}
         run: |
-          cp ./conf/package_conf.yaml ./docs/ipynbs/.jupyter/
           jupyter lite build --contents docs/ipynbs --output-dir ipynb
           mkdir -p ./ipynb/docs/
           cp -r ./docs/* ./ipynb/docs/
