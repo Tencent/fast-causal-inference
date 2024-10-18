@@ -22,6 +22,7 @@ jobs:
         uses: actions/configure-pages@v5
       - name: Replace config.yaml
         run: |
+          echo "${{ secrets.starrocks_host }}"
           sed -i "s/starrocks_launch_host/${{ secrets.starrocks_host }}" ./conf/package_conf.yaml
           sed -i "s/starrocks_port/${{ secrets.starrocks_port }}" ./conf/package_conf.yaml
           sed -i "s/starrocks_http_port/${{ secrets.starrocks_http_port }}" ./conf/package_conf.yaml
