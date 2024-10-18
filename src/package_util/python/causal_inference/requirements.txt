@@ -1,7 +1,5 @@
 pandas
 matplotlib
-clickhouse_driver
-pyDes
 seaborn
 requests
 graphviz

@@ -9,7 +9,6 @@ from fast_causal_inference.common import handle_exception
 from fast_causal_inference.common import get_context
 from fast_causal_inference.dataframe.provider import FCIProvider
 
-from clickhouse_driver import Client
 import datetime
 
 """
@@ -63,14 +62,7 @@ class ClickHouseUtils(object):
         # send_receive_timeout. Default is 300 seconds.
         # sync_request_timeout. Default is 5 seconds.
         settings = {"connect_timeout": 120}
-        self.client = Client(
-            host=self.host,
-            port=self.DEFAULT_PORT,
-            database=database,
-            user=self.DEFAULT_USER,
-            password=self.DEFAULT_PASSWORD,
-            settings=settings,
-        )
+        self.client = None
         self.client.execute("set distributed_ddl_task_timeout = 1800")
         self.client.execute("set max_execution_time = 1800")
         self.client.execute("set max_parser_depth = 3000")
@@ -82,14 +74,7 @@ class ClickHouseUtils(object):
                 self.host = self.cluster_hosts[
                     random.randint(0, self.cluster_hosts_len - 1)
                 ]
-                self.client = Client(
-                    host=self.host,
-                    port=self.DEFAULT_PORT,
-                    database=database,
-                    user=self.DEFAULT_USER,
-                    password=self.DEFAULT_PASSWORD,
-                    settings=settings,
-                )
+                self.client = None
 
         from fast_causal_inference.util import SqlGateWayConn
 
@@ -1551,7 +1536,6 @@ class ClickHouseUtils(object):
         """
         # get_context().logger.info("creating view, please wait")
         start = _perf_counter()
-        from fast_causal_inference.util.clickhouse_utils import ClickHouseUtils
 
         ClickHouseUtils(provider=provider).create_view_v2(
             table_name,
@@ -1590,7 +1574,7 @@ class ClickHouseUtils(object):
         """
         # get_context().logger.info("running, please wait")
         start = _perf_counter()
-        from fast_causal_inference.util.clickhouse_utils import ClickHouseUtils
+
 
         ClickHouseUtils.drop_partition(clickhouse_view_name, clickhouse_partition_name, provider=provider)
         end = _perf_counter()
