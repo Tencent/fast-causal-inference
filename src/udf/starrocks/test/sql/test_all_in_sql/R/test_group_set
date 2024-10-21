@@ -1,0 +1,70 @@
+-- name: test_group_set
+
+drop database if exists group_set_test_db;
+-- result:
+-- !result
+create database group_set_test_db;
+-- result:
+-- !result
+use group_set_test_db;
+-- result:
+-- !result
+drop table if exists group_set_test_tbl;
+-- result:
+-- !result
+CREATE TABLE `group_set_test_tbl` (
+  `id` varchar(65533) NULL COMMENT "",
+  `x1` decimal128(38, 9) NULL COMMENT "",
+  `x2` decimal128(38, 9) NULL COMMENT "",
+  `x3` decimal128(38, 9) NULL COMMENT "",
+  `x4` decimal128(38, 9) NULL COMMENT "",
+  `x5` decimal128(38, 9) NULL COMMENT "",
+  `x_long_tail1` decimal128(38, 9) NULL COMMENT "",
+  `x_long_tail2` decimal128(38, 9) NULL COMMENT "",
+  `x_cat1` varchar(65533) NULL COMMENT "",
+  `treatment` bigint(20) NULL COMMENT "",
+  `t_ob` bigint(20) NULL COMMENT "",
+  `y` decimal128(38, 9) NULL COMMENT "",
+  `y_ob` decimal128(38, 9) NULL COMMENT "",
+  `numerator_pre` decimal128(38, 9) NULL COMMENT "",
+  `numerator` decimal128(38, 9) NULL COMMENT "",
+  `denominator_pre` decimal128(38, 9) NULL COMMENT "",
+  `denominator` decimal128(38, 9) NULL COMMENT "",
+  `weight` decimal128(38, 9) NULL COMMENT "",
+  `day_` varchar(65533) NULL COMMENT ""
+) ENGINE=OLAP 
+DUPLICATE KEY(`id`)
+DISTRIBUTED BY RANDOM
+PROPERTIES (
+"replication_num" = "1",
+"in_memory" = "false",
+"enable_persistent_index" = "false",
+"replicated_storage" = "true",
+"compression" = "LZ4"
+);
+-- result:
+-- !result
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test_10000.csv -XPUT  -H column_separator:, ${url}/api/group_set_test_db/group_set_test_tbl/_stream_load
+-- result:
+-- !result
+sync;
+-- result:
+-- !result
+select count(*), floor(sum(`numerator`)), floor(sum(`y`)) from group_set_test_tbl;
+-- result:
+[LOOSE]10000 123598 123598
+-- !result
+select group_set(y, treatment, [x_cat1], ['x_cat1']) from group_set_test_tbl;
+-- result:
+[LOOSE][['x_cat1', 0, 'A', 1040, 7883.013881830002, 93388.4308092458], ['x_cat1', 0, 'B', 962, 2175.575560187999, 34955.90589369758], ['x_cat1', 0, 'C', 979, 4561.420721749999, 50404.2554087117], ['x_cat1', 0, 'D', 992, 4401.9110216029985, 52387.39059314181], ['x_cat1', 0, 'E', 933, 4036.7065374100002, 47031.35757654568], ['x_cat1', 1, 'A', 1031, 22819.271023729998, 656910.8787876319], ['x_cat1', 1, 'B', 984, 17713.897061360003, 478356.7784165227], ['x_cat1', 1, 'C', 999, 19717.99843836099, 600486.8007667413], ['x_cat1', 1, 'D', 1007, 19435.446028554994, 551918.0485000414], ['x_cat1', 1, 'E', 1073, 20853.690559753995, 591133.0153527319]]
+-- !result
+insert into group_set_test_tbl select * from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+select group_set(y, treatment, [x_cat1], ['x_cat1']) from group_set_test_tbl;
+-- result:
+[LOOSE][['x_cat1', 0, 'A', 66560, 504512.8884371148, 5976859.571791859], ['x_cat1', 0, 'B', 61568, 139236.83585203407, 2237177.9771966585], ['x_cat1', 0, 'C', 62656, 291930.9261919995, 3225872.346157538], ['x_cat1', 0, 'D', 63488, 281722.3053825927, 3352792.997961143], ['x_cat1', 0, 'E', 59712, 258349.21839424773, 3010006.884898921], ['x_cat1', 1, 'A', 65984, 1460433.3455187536, 42042296.24240891], ['x_cat1', 1, 'B', 62976, 1133689.4119270302, 30614833.818656765], ['x_cat1', 1, 'C', 63936, 1261951.900055099, 38431155.24907076], ['x_cat1', 1, 'D', 64448, 1243868.5458274996, 35322755.10400316], ['x_cat1', 1, 'E', 68672, 1334636.1958242704, 37832512.98257513]]
+-- !result

@@ -134,7 +134,7 @@ public:
                                 size_t count, ublas::vector<double> const& means,
                                 ublas::matrix<double> const& cov_matrix, double& var_y, ublas::matrix<double>& cov_XY,
                                 ublas::matrix<double>& cov_XX, ublas::matrix<double>& theta) {
-        CHECK(!cuped_expression.empty());
+        DCHECK(!cuped_expression.empty());
         std::vector<std::pair<std::string, ExprTree<double>>> expressions;
         std::vector<std::string> cuped_elements;
         boost::split(cuped_elements, cuped_expression, boost::is_any_of("+"));
@@ -161,8 +161,13 @@ public:
         }
 
         ublas::matrix<double> cov_XX_inv(num_parts, num_parts, 0);
-        if (!MathHelpers::invert_matrix(cov_XX, cov_XX_inv)) {
-            return false;
+        MathHelpers::invert_matrix(cov_XX, cov_XX_inv);
+        for (size_t i = 0; i < cov_XX_inv.size1(); i++) {
+            for (size_t j = 0; j < cov_XX_inv.size2(); j++) {
+                if (std::isnan(cov_XX_inv(i, j))) {
+                    cov_XX_inv(i, j) = 0;
+                }
+            }
         }
         theta = ublas::prod(cov_XY, cov_XX_inv);
         var_y = DeltaMethodStats::calc_delta_method(Y_expr_tree, count, means, cov_matrix, false);
@@ -194,7 +199,9 @@ public:
     static double calc_pvalue(double t_stat, TtestAlternative alternative) {
         boost::math::normal normal_dist(0, 1);
         double p_value = 0;
-        if (std::isinf(t_stat)) {
+        if (std::isnan(t_stat)) {
+            p_value = std::numeric_limits<double>::quiet_NaN();
+        } else if (std::isinf(t_stat)) {
             p_value = 0;
         } else if (alternative == TtestAlternative::TwoSided) {
             p_value = 2 * (1 - cdf(normal_dist, std::abs(t_stat)));
@@ -203,7 +210,7 @@ public:
         } else if (alternative == TtestAlternative::Greater) {
             p_value = 1 - cdf(normal_dist, t_stat);
         } else {
-            CHECK(false);
+            p_value = std::numeric_limits<double>::quiet_NaN();
         }
         return p_value;
     }
@@ -227,7 +234,7 @@ public:
                 lower = estimate - t_quantile * stderr_var;
                 upper = std::numeric_limits<double>::infinity();
             } else {
-                CHECK(false);
+                lower = upper = std::numeric_limits<double>::quiet_NaN();
             }
         }
         return {lower, upper};

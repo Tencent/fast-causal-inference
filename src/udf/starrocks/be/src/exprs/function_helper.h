@@ -18,7 +18,9 @@
 #include "column/column_helper.h"
 #include "column/const_column.h"
 #include "column/type_traits.h"
+#include "column/vectorized_fwd.h"
 #include "gutil/casts.h"
+#include "util/slice.h"
 
 namespace starrocks {
 class FunctionContext;
@@ -94,22 +96,12 @@ public:
         return true;
     }
 
-    template <typename ElemColumnType, typename ElemCppType>
-    static std::pair<const ElemCppType*, size_t> get_data_of_array(const Column* col, size_t row_num) {
+    static std::optional<DatumArray> get_data_of_array(const Column* col, size_t row_num) {
         const auto* data_column = FunctionHelper::unwrap_if_nullable<const ArrayColumn*>(col, row_num);
         if (data_column == nullptr) {
-            return {nullptr, 0};
+            return {};
         }
-        const Column* ele_col = &data_column->elements();
-        const auto& offsets = data_column->offsets().get_data();
-        const auto* column = FunctionHelper::unwrap_if_nullable<const ElemColumnType*>(ele_col, row_num);
-        if (column == nullptr) {
-            return {nullptr, 0};
-        }
-        size_t offset = offsets[row_num];
-        size_t array_size = offsets[row_num + 1] - offset;
-        const ElemCppType* input = &column->get_data()[offset];
-        return {input, array_size};
+        return data_column->get(row_num).get_array();
     }
 
     /**

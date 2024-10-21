@@ -114,7 +114,6 @@ public:
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
                 size_t row_num) const override {
         if (this->data(state).is_uninitialized()) {
-            DCHECK(row_num == 0);
             int64_t node_key = get_backend_id().value_or(-1);
             if (UNLIKELY(node_key == -1)) {
                 ctx->set_error("Internal Error: fail to get be id.");

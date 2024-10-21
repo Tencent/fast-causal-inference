@@ -1,0 +1,53 @@
+-- name: test_group_set
+
+drop database if exists group_set_test_db;
+create database group_set_test_db;
+
+use group_set_test_db;
+
+drop table if exists group_set_test_tbl;
+
+CREATE TABLE `group_set_test_tbl` (
+  `id` varchar(65533) NULL COMMENT "",
+  `x1` decimal128(38, 9) NULL COMMENT "",
+  `x2` decimal128(38, 9) NULL COMMENT "",
+  `x3` decimal128(38, 9) NULL COMMENT "",
+  `x4` decimal128(38, 9) NULL COMMENT "",
+  `x5` decimal128(38, 9) NULL COMMENT "",
+  `x_long_tail1` decimal128(38, 9) NULL COMMENT "",
+  `x_long_tail2` decimal128(38, 9) NULL COMMENT "",
+  `x_cat1` varchar(65533) NULL COMMENT "",
+  `treatment` bigint(20) NULL COMMENT "",
+  `t_ob` bigint(20) NULL COMMENT "",
+  `y` decimal128(38, 9) NULL COMMENT "",
+  `y_ob` decimal128(38, 9) NULL COMMENT "",
+  `numerator_pre` decimal128(38, 9) NULL COMMENT "",
+  `numerator` decimal128(38, 9) NULL COMMENT "",
+  `denominator_pre` decimal128(38, 9) NULL COMMENT "",
+  `denominator` decimal128(38, 9) NULL COMMENT "",
+  `weight` decimal128(38, 9) NULL COMMENT "",
+  `day_` varchar(65533) NULL COMMENT ""
+) ENGINE=OLAP 
+DUPLICATE KEY(`id`)
+DISTRIBUTED BY RANDOM
+PROPERTIES (
+"replication_num" = "1",
+"in_memory" = "false",
+"enable_persistent_index" = "false",
+"replicated_storage" = "true",
+"compression" = "LZ4"
+);
+
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test_10000.csv -XPUT  -H column_separator:, ${url}/api/group_set_test_db/group_set_test_tbl/_stream_load
+
+sync;
+
+select count(*), floor(sum(`numerator`)), floor(sum(`y`)) from group_set_test_tbl;
+select group_set(y, treatment, [x_cat1], ['x_cat1']) from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+insert into group_set_test_tbl select * from group_set_test_tbl;
+select group_set(y, treatment, [x_cat1], ['x_cat1']) from group_set_test_tbl;

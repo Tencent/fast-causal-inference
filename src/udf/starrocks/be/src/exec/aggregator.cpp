@@ -23,6 +23,7 @@
 #include "column/chunk.h"
 #include "column/column_helper.h"
 #include "column/vectorized_fwd.h"
+#include "common/config.h"
 #include "common/status.h"
 #include "exec/exec_node.h"
 #include "exec/pipeline/operator.h"
@@ -34,6 +35,7 @@
 #include "runtime/descriptors.h"
 #include "types/logical_type.h"
 #include "udf/java/utils.h"
+#include "util/runtime_profile.h"
 
 namespace starrocks {
 
@@ -129,12 +131,15 @@ void AggregatorParams::init() {
 
             bool is_input_nullable = has_outer_join_child || desc.nodes[0].has_nullable_child;
             agg_fn_types[i] = {return_type, serde_type, arg_typedescs, is_input_nullable, desc.nodes[0].is_nullable};
-            if (fn.name.function_name == "array_agg") {
+            if (fn.name.function_name == "array_agg" || fn.name.function_name == "group_concat") {
                 // set order by info
                 if (fn.aggregate_fn.__isset.is_asc_order && fn.aggregate_fn.__isset.nulls_first &&
                     !fn.aggregate_fn.is_asc_order.empty()) {
                     agg_fn_types[i].is_asc_order = fn.aggregate_fn.is_asc_order;
                     agg_fn_types[i].nulls_first = fn.aggregate_fn.nulls_first;
+                }
+                if (fn.aggregate_fn.__isset.is_distinct) {
+                    agg_fn_types[i].is_distinct = fn.aggregate_fn.is_distinct;
                 }
             }
         }
@@ -184,6 +189,9 @@ ChunkUniquePtr AggregatorParams::create_result_chunk(bool is_serialize_fmt, cons
     return result_chunk;
 }
 
+#define ALIGN_TO(size, align) ((size + align - 1) / align * align)
+#define PAD(size, align) (align - (size % align)) % align;
+
 Aggregator::Aggregator(AggregatorParamsPtr params) : _params(std::move(params)) {}
 
 Status Aggregator::open(RuntimeState* state) {
@@ -213,6 +221,49 @@ Status Aggregator::open(RuntimeState* state) {
             return Status::OK();
         });
         RETURN_IF_ERROR(promise_st->get_future().get());
+    }
+
+    // For SQL: select distinct id from table or select id from from table group by id;
+    // we don't need to allocate memory for agg states.
+    if (_is_only_group_by_columns) {
+        TRY_CATCH_BAD_ALLOC(_init_agg_hash_variant(_hash_set_variant));
+    } else {
+        TRY_CATCH_BAD_ALLOC(_init_agg_hash_variant(_hash_map_variant));
+    }
+
+    {
+        _agg_states_total_size = 16;
+        _max_agg_state_align_size = 8;
+        if (!_is_only_group_by_columns) {
+            _hash_map_variant.visit([&](auto& variant) {
+                auto& hash_map_with_key = *variant;
+                using HashMapWithKey = std::remove_reference_t<decltype(hash_map_with_key)>;
+                _agg_states_total_size = sizeof(typename HashMapWithKey::KeyType);
+                _max_agg_state_align_size = alignof(typename HashMapWithKey::KeyType);
+            });
+
+            DCHECK_GT(_agg_fn_ctxs.size(), 0);
+            _max_agg_state_align_size = std::max(_max_agg_state_align_size, _agg_functions[0]->alignof_size());
+            _agg_states_total_size += PAD(_agg_states_total_size, _agg_functions[0]->alignof_size());
+
+            // compute agg state total size and offsets
+            for (int i = 0; i < _agg_fn_ctxs.size(); ++i) {
+                _agg_states_offsets[i] = _agg_states_total_size;
+                _agg_states_total_size += _agg_functions[i]->size();
+                _max_agg_state_align_size = std::max(_max_agg_state_align_size, _agg_functions[i]->alignof_size());
+
+                // If not the last aggregate_state, we need pad it so that next aggregate_state will be aligned.
+                if (i + 1 < _agg_fn_ctxs.size()) {
+                    size_t next_state_align_size = _agg_functions[i + 1]->alignof_size();
+                    // Extend total_size to next alignment requirement
+                    // Add padding by rounding up '_agg_states_total_size' to be a multiplier of next_state_align_size.
+                    _agg_states_total_size = ALIGN_TO(_agg_states_total_size, next_state_align_size);
+                }
+            }
+            _agg_states_total_size = ALIGN_TO(_agg_states_total_size, _max_agg_state_align_size);
+            _state_allocator.aggregate_key_size = _agg_states_total_size;
+            _state_allocator.pool = _mem_pool.get();
+        }
     }
 
     // AggregateFunction::create needs to call create in JNI,
@@ -251,15 +302,11 @@ Status Aggregator::open(RuntimeState* state) {
         }
     }
 
-    // For SQL: select distinct id from table or select id from from table group by id;
-    // we don't need to allocate memory for agg states.
-    if (_is_only_group_by_columns) {
-        TRY_CATCH_BAD_ALLOC(_init_agg_hash_variant(_hash_set_variant));
-    } else {
-        TRY_CATCH_BAD_ALLOC(_init_agg_hash_variant(_hash_map_variant));
-    }
-
     RETURN_IF_ERROR(check_has_error());
+
+    _buffer_mem_manager = std::make_unique<pipeline::ChunkBufferMemoryManager>(
+            1, config::local_exchange_buffer_mem_limit_per_driver,
+            state->chunk_size() * config::streaming_agg_chunk_buffer_size);
 
     return Status::OK();
 }
@@ -363,8 +410,10 @@ Status Aggregator::prepare(RuntimeState* state, ObjectPool* pool, RuntimeProfile
                                               fn.binary_type, state->func_version());
             }
             if (func == nullptr) {
-                return Status::InternalError(
-                        strings::Substitute("Invalid agg function plan: $0", fn.name.function_name));
+                return Status::InternalError(strings::Substitute(
+                        "Invalid agg function plan: $0 with (arg type $1, serde type $2, result type $3, nullable $4)",
+                        fn.name.function_name, type_to_string(arg_type.type), type_to_string(serde_type.type),
+                        type_to_string(return_type.type), is_input_nullable ? "true" : "false"));
             }
             VLOG_ROW << "get agg function " << func->get_name() << " serde_type " << serde_type << " return_type "
                      << return_type;
@@ -403,30 +452,6 @@ Status Aggregator::prepare(RuntimeState* state, ObjectPool* pool, RuntimeProfile
     }
 
     _mem_pool = std::make_unique<MemPool>();
-
-    _agg_states_total_size = 16;
-    // compute agg state total size and offsets
-    for (int i = 0; i < _agg_fn_ctxs.size(); ++i) {
-        _agg_states_offsets[i] = _agg_states_total_size;
-        _agg_states_total_size += _agg_functions[i]->size();
-        _max_agg_state_align_size = std::max(_max_agg_state_align_size, _agg_functions[i]->alignof_size());
-
-        // If not the last aggregate_state, we need pad it so that next aggregate_state will be aligned.
-        if (i + 1 < _agg_fn_ctxs.size()) {
-            size_t next_state_align_size = _agg_functions[i + 1]->alignof_size();
-            // Extend total_size to next alignment requirement
-            // Add padding by rounding up '_agg_states_total_size' to be a multiplier of next_state_align_size.
-            _agg_states_total_size = (_agg_states_total_size + next_state_align_size - 1) / next_state_align_size *
-                                     next_state_align_size;
-        }
-    }
-    // we need to allocate contiguous memory, so we need some alignment operations
-    _max_agg_state_align_size = std::max(_max_agg_state_align_size, HashTableKeyAllocator::aligned);
-    _agg_states_total_size = (_agg_states_total_size + _max_agg_state_align_size - 1) / _max_agg_state_align_size *
-                             _max_agg_state_align_size;
-    _state_allocator.aggregate_key_size = _agg_states_total_size;
-    _state_allocator.pool = _mem_pool.get();
-
     _is_only_group_by_columns = _agg_expr_ctxs.empty() && !_group_by_expr_ctxs.empty();
 
     _agg_stat = _pool->add(new AggStatistics(_runtime_profile));
@@ -452,7 +477,11 @@ Status Aggregator::prepare(RuntimeState* state, ObjectPool* pool, RuntimeProfile
     for (int i = 0; i < _agg_fn_ctxs.size(); ++i) {
         _agg_fn_ctxs[i] = FunctionContext::create_context(
                 state, _mem_pool.get(), AnyValUtil::column_type_to_type_desc(_agg_fn_types[i].result_type),
-                _agg_fn_types[i].arg_typedescs, _agg_fn_types[i].is_asc_order, _agg_fn_types[i].nulls_first);
+                _agg_fn_types[i].arg_typedescs, _agg_fn_types[i].is_distinct, _agg_fn_types[i].is_asc_order,
+                _agg_fn_types[i].nulls_first);
+        if (state->query_options().__isset.group_concat_max_len) {
+            _agg_fn_ctxs[i]->set_group_concat_max_len(state->query_options().group_concat_max_len);
+        }
         state->obj_pool()->add(_agg_fn_ctxs[i]);
     }
 
@@ -471,8 +500,8 @@ Status Aggregator::prepare(RuntimeState* state, ObjectPool* pool, RuntimeProfile
 }
 
 Status Aggregator::reset_state(starrocks::RuntimeState* state, const std::vector<ChunkPtr>& refill_chunks,
-                               pipeline::Operator* refill_op) {
-    RETURN_IF_ERROR(_reset_state(state));
+                               pipeline::Operator* refill_op, bool reset_sink_complete) {
+    RETURN_IF_ERROR(_reset_state(state, reset_sink_complete));
     // begin_pending_reset_state just tells the Aggregator, the chunks are intermediate type, it should call
     // merge method of agg functions to process these chunks.
     begin_pending_reset_state();
@@ -486,10 +515,12 @@ Status Aggregator::reset_state(starrocks::RuntimeState* state, const std::vector
     return Status::OK();
 }
 
-Status Aggregator::_reset_state(RuntimeState* state) {
+Status Aggregator::_reset_state(RuntimeState* state, bool reset_sink_complete) {
     _is_ht_eos = false;
     _num_input_rows = 0;
-    _is_sink_complete = false;
+    if (reset_sink_complete) {
+        _is_sink_complete = false;
+    }
     _it_hash.reset();
     _num_rows_processed = 0;
 
@@ -604,20 +635,40 @@ bool Aggregator::is_chunk_buffer_empty() {
 }
 
 ChunkPtr Aggregator::poll_chunk_buffer() {
-    std::lock_guard<std::mutex> l(_buffer_mutex);
-    if (_buffer.empty()) {
-        return nullptr;
+    ChunkPtr chunk;
+    {
+        std::lock_guard<std::mutex> l(_buffer_mutex);
+        if (_buffer.empty()) {
+            return nullptr;
+        }
+        chunk = _buffer.front();
+        _buffer.pop();
     }
-    ChunkPtr chunk = _buffer.front();
-    _buffer.pop();
-    _buffer_size--;
+    size_t mem_usage = chunk->memory_usage();
+    size_t num_rows = chunk->num_rows();
+    _buffer_mem_manager->update_memory_usage(-mem_usage, -num_rows);
+
+    COUNTER_ADD(_agg_stat->chunk_buffer_peak_memory, -mem_usage);
+    COUNTER_ADD(_agg_stat->chunk_buffer_peak_size, -1);
+
     return chunk;
 }
 
 void Aggregator::offer_chunk_to_buffer(const ChunkPtr& chunk) {
-    std::lock_guard<std::mutex> l(_buffer_mutex);
-    _buffer.push(chunk);
-    _buffer_size++;
+    {
+        std::lock_guard<std::mutex> l(_buffer_mutex);
+        _buffer.push(chunk);
+    }
+
+    size_t mem_usage = chunk->memory_usage();
+    size_t num_rows = chunk->num_rows();
+    _buffer_mem_manager->update_memory_usage(mem_usage, num_rows);
+    COUNTER_ADD(_agg_stat->chunk_buffer_peak_memory, mem_usage);
+    COUNTER_ADD(_agg_stat->chunk_buffer_peak_size, 1);
+}
+
+bool Aggregator::is_chunk_buffer_full() {
+    return _buffer_mem_manager->is_full();
 }
 
 bool Aggregator::should_expand_preagg_hash_tables(size_t prev_row_returned, size_t input_chunk_size, int64_t ht_mem,
@@ -664,12 +715,19 @@ Status Aggregator::evaluate_agg_input_column(Chunk* chunk, std::vector<ExprConte
         // For simplicity and don't change the overall processing flow,
         // We handle const column as normal data column
         // TODO(kks): improve const column aggregate later
+        ASSIGN_OR_RETURN(auto&& col, agg_expr_ctxs[j]->evaluate(chunk));
+        // if first column is const, we have to unpack it. Most agg function only has one arg, and treat it as non-const column
         if (j == 0) {
-            ASSIGN_OR_RETURN(auto&& col, agg_expr_ctxs[j]->evaluate(chunk));
             _agg_input_columns[i][j] = ColumnHelper::unpack_and_duplicate_const_column(chunk->num_rows(), col);
         } else {
-            ASSIGN_OR_RETURN(auto&& col, agg_expr_ctxs[j]->evaluate(chunk));
-            _agg_input_columns[i][j] = std::move(col);
+            // if function has at least two argument, unpack const column selectively
+            // for function like corr, FE forbid second args to be const, we will always unpack const column for it
+            // for function like percentile_disc, the second args is const, do not unpack it
+            if (agg_expr_ctxs[j]->root()->is_constant()) {
+                _agg_input_columns[i][j] = std::move(col);
+            } else {
+                _agg_input_columns[i][j] = ColumnHelper::unpack_and_duplicate_const_column(chunk->num_rows(), col);
+            }
         }
         _agg_input_raw_columns[i][j] = _agg_input_columns[i][j].get();
     }
@@ -765,7 +823,7 @@ Status Aggregator::convert_to_chunk_no_groupby(ChunkPtr* chunk) {
     } else {
         TRY_CATCH_BAD_ALLOC(_serialize_to_chunk(_single_agg_state, agg_result_column));
     }
-
+    RETURN_IF_ERROR(check_has_error());
     // For agg function column is non-nullable and table is empty
     // sum(zero_row) should be null, not 0.
     if (UNLIKELY(_num_input_rows == 0 && _group_by_expr_ctxs.empty() && !use_intermediate)) {
@@ -834,7 +892,6 @@ Status Aggregator::output_chunk_by_streaming(Chunk* input_chunk, ChunkPtr* chunk
         DCHECK(!_group_by_columns.empty());
 
         RETURN_IF_ERROR(evaluate_agg_fn_exprs(input_chunk));
-
         const auto num_rows = _group_by_columns[0]->size();
         Columns agg_result_column = _create_agg_result_columns(num_rows, true);
         for (size_t i = 0; i < _agg_fn_ctxs.size(); i++) {
@@ -849,6 +906,7 @@ Status Aggregator::output_chunk_by_streaming(Chunk* input_chunk, ChunkPtr* chunk
                 result_chunk->append_column(std::move(agg_result_column[i]), slot_id);
             }
         }
+        RETURN_IF_ERROR(check_has_error());
     }
 
     _num_pass_through_rows += result_chunk->num_rows();
@@ -898,6 +956,7 @@ Status Aggregator::convert_to_spill_format(Chunk* input_chunk, ChunkPtr* chunk) 
                 result_chunk->append_column(std::move(agg_result_column[i]), slot_id);
             }
         }
+        RETURN_IF_ERROR(check_has_error());
     }
     _num_rows_processed += result_chunk->num_rows();
     *chunk = std::move(result_chunk);
@@ -1074,6 +1133,9 @@ Status Aggregator::_evaluate_group_by_exprs(Chunk* chunk) {
             // TODO: optimized the memory usage
             _group_by_columns[i] =
                     NullableColumn::create(_group_by_columns[i], NullColumn::create(_group_by_columns[i]->size(), 0));
+        } else if (!_group_by_types[i].is_nullable && _group_by_columns[i]->is_nullable()) {
+            return Status::InternalError(fmt::format("error nullablel column, index: {}, slot: {}", i,
+                                                     _group_by_expr_ctxs[i]->root()->debug_string()));
         }
     }
 
@@ -1302,28 +1364,31 @@ Status Aggregator::convert_hash_map_to_chunk(int32_t chunk_size, ChunkPtr* chunk
             }
         }
 
-        {
-            SCOPED_TIMER(_agg_stat->group_by_append_timer);
-            hash_map_with_key.insert_keys_to_columns(hash_map_with_key.results, group_by_columns, read_index);
-        }
+        if (read_index > 0) {
+            {
+                SCOPED_TIMER(_agg_stat->group_by_append_timer);
+                hash_map_with_key.insert_keys_to_columns(hash_map_with_key.results, group_by_columns, read_index);
+            }
 
-        {
-            SCOPED_TIMER(_agg_stat->agg_append_timer);
-            if (!use_intermediate) {
-                for (size_t i = 0; i < _agg_fn_ctxs.size(); i++) {
-                    TRY_CATCH_BAD_ALLOC(_agg_functions[i]->batch_finalize(_agg_fn_ctxs[i], read_index, _tmp_agg_states,
-                                                                          _agg_states_offsets[i],
-                                                                          agg_result_columns[i].get()));
-                }
-            } else {
-                for (size_t i = 0; i < _agg_fn_ctxs.size(); i++) {
-                    TRY_CATCH_BAD_ALLOC(_agg_functions[i]->batch_serialize(_agg_fn_ctxs[i], read_index, _tmp_agg_states,
-                                                                           _agg_states_offsets[i],
-                                                                           agg_result_columns[i].get()));
+            {
+                SCOPED_TIMER(_agg_stat->agg_append_timer);
+                if (!use_intermediate) {
+                    for (size_t i = 0; i < _agg_fn_ctxs.size(); i++) {
+                        TRY_CATCH_BAD_ALLOC(_agg_functions[i]->batch_finalize(_agg_fn_ctxs[i], read_index,
+                                                                              _tmp_agg_states, _agg_states_offsets[i],
+                                                                              agg_result_columns[i].get()));
+                    }
+                } else {
+                    for (size_t i = 0; i < _agg_fn_ctxs.size(); i++) {
+                        TRY_CATCH_BAD_ALLOC(_agg_functions[i]->batch_serialize(_agg_fn_ctxs[i], read_index,
+                                                                               _tmp_agg_states, _agg_states_offsets[i],
+                                                                               agg_result_columns[i].get()));
+                    }
                 }
             }
         }
 
+        RETURN_IF_ERROR(check_has_error());
         _is_ht_eos = (it == end);
 
         // If there is null key, output it last
@@ -1341,7 +1406,7 @@ Status Aggregator::convert_hash_map_to_chunk(int32_t chunk_size, ChunkPtr* chunk
                     } else {
                         TRY_CATCH_BAD_ALLOC(_serialize_to_chunk(hash_map_with_key.null_key_data, agg_result_columns));
                     }
-
+                    RETURN_IF_ERROR(check_has_error());
                     ++read_index;
                 } else {
                     // Output null key in next round

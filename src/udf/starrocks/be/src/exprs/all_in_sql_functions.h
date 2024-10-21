@@ -40,13 +40,8 @@ public:
     constexpr static std::string_view srm = "srm";
     constexpr static std::string_view group_set = "group_set";
     constexpr static std::string_view mann_whitney_u_test = "mann_whitney_u_test";
-    static bool is_all_in_sql_function(std::string_view func_name) {
-        DLOG(INFO) << "check func name: " << func_name;
-        for (auto func_name : all_in_sql_functions) {
-            DLOG(INFO) << "we have: " << func_name;
-        }
-        return all_in_sql_functions.count(func_name);
-    }
+    constexpr static std::string_view causal_forest = "causal_forest";
+    static bool is_all_in_sql_function(std::string_view func_name) { return all_in_sql_functions.count(func_name); }
 
 private:
     const static std::unordered_set<std::string_view> all_in_sql_functions;

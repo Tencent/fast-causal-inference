@@ -202,18 +202,23 @@ public:
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
                 size_t row_num) const override {
         const Column* data_col = columns[0];
-        auto [input, array_size] =
-                FunctionHelper::get_data_of_array<DeltaMethodDataElementColumnType, double>(data_col, row_num);
-        if (input == nullptr) {
-            ctx->set_error("Internal Error: fail to get data.");
+        auto input_opt = FunctionHelper::get_data_of_array(data_col, row_num);
+        if (!input_opt) {
+            // ctx->set_error("Internal Error: fail to get data.");
             return;
         }
 
-        if (this->data(state).is_uninitialized()) {
-            if (row_num > 0) {
-                ctx->set_error("Internal Error: state not initialized.");
+        size_t array_size = input_opt->size();
+        std::vector<double> input;
+        input.reserve(array_size);
+        for (size_t i = 0; i < array_size; ++i) {
+            if ((*input_opt)[i].is_null()) {
                 return;
             }
+            input.emplace_back((*input_opt)[i].get_double());
+        }
+
+        if (this->data(state).is_uninitialized()) {
             bool ret_reverse = false;
             const Column* ret_reverse_col = columns[1];
             if (!FunctionHelper::get_data_of_column<MatrixMulRetReverseColumnType>(ret_reverse_col, 0, ret_reverse)) {
@@ -231,7 +236,7 @@ public:
 
         bool use_weights = this->data(state).use_weights();
 
-        std::vector<double> X(input, input + array_size - use_weights);
+        std::vector<double> X(input.data(), input.data() + array_size - use_weights);
 
         if (use_weights) {
             double weight = input[array_size - 1];

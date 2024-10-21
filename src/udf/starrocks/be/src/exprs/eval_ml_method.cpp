@@ -22,6 +22,7 @@
 #include "common/status.h"
 #include "exprs/all_in_sql_functions.h"
 #include "exprs/jsonpath.h"
+#include "exprs/ml_eval_function/causal_forest_eval.h"
 #include "exprs/ml_eval_function/ols_eval.h"
 #include "types/logical_type.h"
 
@@ -63,6 +64,8 @@ StatusOr<EvalMLMethodImplBase*> EvalMLMethod::create_eval_ml_method_impl(JsonVal
     EvalMLMethodImplBase* impl = nullptr;
     if (function_name == AllInSqlFunctions::ols) {
         impl = new OlsEvalImpl;
+    } else if (function_name == AllInSqlFunctions::causal_forest) {
+        impl = new CausalForestEvalImpl;
     } else {
         return Status::InvalidArgument("unsupported model name.");
     }

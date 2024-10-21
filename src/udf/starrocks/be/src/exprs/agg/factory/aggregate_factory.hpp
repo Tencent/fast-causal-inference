@@ -22,6 +22,7 @@
 #include "exprs/agg/aggregate.h"
 #include "exprs/agg/aggregate_factory.h"
 #include "exprs/agg/any_value.h"
+#include "exprs/agg/approx_top_k.h"
 #include "exprs/agg/array_agg.h"
 #include "exprs/agg/avg.h"
 #include "exprs/agg/bitmap_agg.h"
@@ -31,6 +32,7 @@
 #include "exprs/agg/bitmap_union_int.h"
 #include "exprs/agg/count.h"
 #include "exprs/agg/covariance.h"
+#include "exprs/agg/delta_method.h"
 #include "exprs/agg/distinct.h"
 #include "exprs/agg/exchange_perf.h"
 #include "exprs/agg/group_concat.h"
@@ -114,6 +116,10 @@ public:
         return std::make_shared<ArrayAggAggregateFunctionV2>();
     }
 
+    static AggregateFunctionPtr MakeGroupConcatAggregateFunctionV2() {
+        return std::make_shared<GroupConcatAggregateFunctionV2>();
+    }
+
     template <LogicalType LT>
     static auto MakeMaxAggregateFunction();
 
@@ -153,6 +159,13 @@ public:
 
     template <LogicalType LT>
     static AggregateFunctionPtr MakeCorelationAggregateFunction();
+    template <LogicalType L, LogicalType R>
+    static AggregateFunctionPtr MakeTtest1SampAggregateFunction();
+
+    template <LogicalType X1_LT, LogicalType X2_LT, LogicalType INDEX_LT, LogicalType X1_PRE_LT = TYPE_MAX_VALUE,
+              LogicalType X2_PRE_LT = TYPE_MAX_VALUE, LogicalType DIM_LT = TYPE_MAX_VALUE, bool use_cuped = false,
+              bool use_dim = false>
+    static AggregateFunctionPtr MakeTtest2SampAggregateFunction();
 
     template <LogicalType LT>
     static auto MakeSumDistinctAggregateFunction();
@@ -211,6 +224,11 @@ public:
     template <LogicalType LT, bool ignoreNulls, bool isLag>
     static AggregateFunctionPtr MakeLeadLagWindowFunction() {
         return std::make_shared<LeadLagWindowFunction<LT, ignoreNulls, isLag>>();
+    }
+
+    template <LogicalType LT>
+    static AggregateFunctionPtr MakeApproxTopKAggregateFunction() {
+        return std::make_shared<ApproxTopKAggregateFunction<LT>>();
     }
 
     template <LogicalType LT>

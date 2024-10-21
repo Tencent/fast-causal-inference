@@ -15,6 +15,7 @@
 #pragma once
 
 #include <boost/numeric/ublas/matrix.hpp>
+#include <cmath>
 
 #include "column/array_column.h"
 #include "column/column_builder.h"
@@ -79,6 +80,14 @@ Status OlsEvalImpl::load(const JsonValue& model) {
               Status::InvalidArgument(fmt::format("Coef length({}) is not equal to num_variables({})+use_bias({}).",
                                                   coef_tmp.size(), _num_variables, (int)_use_bias)));
     std::copy(coef_tmp.begin(), coef_tmp.end(), _coef.data().begin());
+    for (auto& coef : _coef) {
+        if (std::isnan(coef)) {
+            coef = 0;
+        }
+        if (!std::isfinite(coef)) {
+            return Status::InvalidArgument("Coef contains infinite value.");
+        }
+    }
     return Status::OK();
 }
 
@@ -88,22 +97,24 @@ StatusOr<ColumnPtr> OlsEvalImpl::eval(const Columns& columns) const {
         return ColumnBuilder<TYPE_DOUBLE>(0).build(false);
     }
 
-    auto [_, num_variables] = FunctionHelper::get_data_of_array<DoubleColumn, double>(columns[1].get(), 0);
-    if (num_variables != _num_variables) {
-        return Status::InvalidArgument(fmt::format("Number of input columns ({}) is not equal to num_variables({}).",
-                                                   num_variables, _num_variables));
-    }
-
     ColumnBuilder<TYPE_DOUBLE> result_builder(num_rows);
-
     for (size_t i = 0; i < num_rows; ++i) {
-        auto [input, length] = FunctionHelper::get_data_of_array<DoubleColumn, double>(columns[1].get(), i);
-        if (input == nullptr) {
-            return Status::InvalidArgument("Fail to parse input columns.");
+        auto input_opt = FunctionHelper::get_data_of_array(columns[1].get(), i);
+        if (!input_opt) {
+            return Status::InvalidArgument("Input columns cannot be null.");
+        }
+        size_t length = input_opt->size();
+        if (length != _num_variables) {
+            return Status::InvalidArgument(fmt::format(
+                    "Number of input columns ({}) is not equal to num_variables({}).", length, _num_variables));
         }
         double ans = _use_bias ? _coef[length] : 0;
         for (size_t j = 0; j < length; ++j) {
-            ans += _coef[j] * input[j];
+            if (input_opt->at(j).is_null()) {
+                return Status::InvalidArgument("Input columns contains null value.");
+            }
+            double x = input_opt->at(j).get_double();
+            ans += _coef[j] * x;
         }
         result_builder.append(ans);
     }

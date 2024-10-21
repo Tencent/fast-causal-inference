@@ -217,8 +217,19 @@ public:
             return fmt::format("stderr({}) is an abnormal float value, please check your data.", stderr_var);
         }
 
+        std::string prefix;
+
         double estimate = mean - _ttest_params.mu();
         double t_stat = estimate / stderr_var;
+        if (std::isnan(t_stat) || std::isinf(t_stat)) {
+            prefix = "Warning: Data are essentially constant (standard error is zero), making t-statistic undefined. "
+                     "Check for variability in your data.\n\n";
+            if (std::abs(estimate) < std::numeric_limits<double>::epsilon()) {
+                t_stat = 0;
+            } else {
+                t_stat = std::numeric_limits<double>::infinity() * (estimate > 0 ? 1 : -1);
+            }
+        }
         double p_value = TtestCommon::calc_pvalue(t_stat, _ttest_params.alternative());
         auto [lower, upper] = TtestCommon::calc_confidence_interval(estimate, stderr_var, count, _ttest_params.alpha(),
                                                                     _ttest_params.alternative());
@@ -240,7 +251,7 @@ public:
         result_ss << MathHelpers::to_string_with_precision(upper);
         result_ss << "\n";
 
-        return result_ss.str();
+        return prefix + result_ss.str();
     }
 
 private:
@@ -258,18 +269,13 @@ public:
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
                 size_t row_num) const override {
         const Column* data_col = columns[3];
-        auto [input, array_size] =
-                FunctionHelper::get_data_of_array<DeltaMethodDataElementColumnType, double>(data_col, row_num);
-        if (input == nullptr) {
-            ctx->set_error("Internal Error: fail to get data.");
+        auto input_opt = FunctionHelper::get_data_of_array(data_col, row_num);
+        if (!input_opt) {
+            // ctx->set_error("Internal Error: fail to get data.");
             return;
         }
 
         if (this->data(state).is_uninitialized()) {
-            if (row_num > 0) {
-                ctx->set_error("Internal Error: state not initialized.");
-                return;
-            }
             const Column* expr_col = columns[0];
             const auto* func_expr = down_cast<const DeltaMethodExprColumnType*>(expr_col);
             Slice expr_slice = func_expr->get_data()[0];
@@ -314,10 +320,19 @@ public:
                     "ttest args - expression: {}, alternative: {}, mu: {}, cuped_expression: {}, alpha: {}", expression,
                     (int)alternative, mu, cuped_expression.value_or("null"),
                     alpha.value_or(TtestCommon::kDefaultAlphaValue));
-            this->data(state).init(alternative, array_size, mu, expression, cuped_expression, alpha);
+            this->data(state).init(alternative, input_opt->size(), mu, expression, cuped_expression, alpha);
         }
 
-        this->data(state).update(input, array_size);
+        std::vector<double> input;
+        input.reserve(input_opt->size());
+        for (const auto& datum : *input_opt) {
+            if (datum.is_null()) {
+                return;
+            }
+            input.push_back(datum.get_double());
+        }
+
+        this->data(state).update(input.data(), input.size());
     }
 
     void try_parse_cuped_or_alpha(const Column* col, std::optional<std::string>& cuped_expression,

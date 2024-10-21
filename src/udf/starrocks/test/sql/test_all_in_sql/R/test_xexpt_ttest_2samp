@@ -48,15 +48,36 @@ select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from xexpt_ttest_2samp
 
 select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from xexpt_ttest_2samp_test_tbl;
 -- result:
-[REGEX]\s*groupname\s*numerator\s*denominator\s*numerator_pre\s*denominator_pre\s*mean\s*std_samp\s*0\s*333186776\s*396774\s*2124493\s*595507\s*892.071100\s*43972.702294\s*1\s*312839437\s*396426\s*2123883\s*595028\s*736.775857\s*44974.169927\s*diff_relative\s*97%_relative_CI\s*p-value\s*t-statistic diff\s*97%_CI\s*power\s*recommend_samples\s*-17.408393%\s*.-41.705142%,6.888356%.\s*0.119981\s*-1.554852\s*-155.295243\s*.-372.039522,61.449037.\s*0.030105\s*1824084404\s*
+[LOOSE] 
+groupname   denominator numerator        denominator_pre numerator_pre mean        std_samp     
+0           396774      333186776        595507          2124493       892.071100  43972.702294 
+1           396426      312839437.399995 595028          2123883       736.775857  44974.169927 
+
+diff_relative 97%_relative_CI         p-value     t-statistic diff        97%_CI                  power(MDE=0.004000) recommend_samples MDE(power=0.600000) 
+-17.408393%   [-41.705142%,6.888356%] 0.119981    -1.554852   -155.295243 [-372.039522,61.449037] 0.030105            1824084404        0.271332            
+
 -- !result
 
 select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1], 'X=x3', 0.3, 0.4, 0.12) from xexpt_ttest_2samp_test_tbl;
 -- result:
-[REGEX]\s*groupname\s*numerator\s*denominator\s*mean\s*std_samp\s*0\s*333186776\s*396774\s*467.869635\s*556263.131195\s*1\s*312839437\s*396426\s*417.173038\s*509652.969332\s*diff_relative\s*70%_relative_CI\s*p-value\s*t-statistic\s*diff\s*70%_CI\s*power\s*recommend_samples\s*-10.835625%\s*.-276.207583%,254.536334%.\s*0.966244\s*-0.042320\s*-50.696598\s*.-1292.291412,1190.898216.\s*0.305875\s*311819\s*
+[LOOSE]        groupname   denominator numerator        mean        std_samp      
+        0           396774      333186776        467.869635  556263.131195 
+        1           396426      312839437.399995 417.173038  509652.969332 
+
+        diff_relative 70%_relative_CI            p-value     t-statistic diff        70%_CI                     power(MDE=0.400000) recommend_samples MDE(power=0.120000) 
+        -10.835625%   [-276.207583%,254.536334%] 0.966244    -0.042320   -50.696598  [-1292.291412,1190.898216] 0.305875            311819            -0.354757           
+
 -- !result
 
 select xexpt_ttest_2samp(X1, treatment, [numerator, denominator], 'X=', 0.3, 0.4, 0.12) from xexpt_ttest_2samp_test_tbl;
 -- result:
-[REGEX]\s*groupname\s*numerator\s*denominator\s*mean\s*std_samp\s*0\s*333186776\s*396774\s*839.739439\s*79775.246613\s*1\s*312839437\s*396426\s*789.149646\s*90766.692380\s*diff_relative\s*70%_relative_CI\s*p-value\s*t-statistic\s*diff\s*70%_CI\s*power\s*recommend_samples\s*-6.024463%\s*.-29.708153%,17.659227%.\s*0.792058\s*-0.263640\s*-50.589793\s*.-249.471077,148.291491.\s*0.765056\s*2484\s*
+[LOOSE]
+ 
+groupname   denominator numerator   mean        std_samp     
+0           396774      333186776   839.739439  79775.246613 
+1           396426      312839437.4 789.149646  90766.692380 
+
+diff_relative 70%_relative_CI          p-value     t-statistic diff        70%_CI                   power(MDE=0.400000) recommend_samples MDE(power=0.120000) 
+-6.024463%    [-29.708153%,17.659227%] 0.792058    -0.263640   -50.589793  [-249.471077,148.291491] 0.765056            2484              -0.031661           
+
 -- !result

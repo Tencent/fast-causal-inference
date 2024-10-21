@@ -60,14 +60,12 @@ public:
     }
 
     static void serialize(const std::string& data, uint8_t*& buffer) {
-        DLOG(INFO) << fmt::format("serializing std::string of length {}", data.length());
         size_t size = data.length();
         serialize(size, buffer);
         serialize(data.data(), buffer, size);
     }
 
     static void deserialize(const uint8_t*& buffer, std::string& data) {
-        DLOG(INFO) << fmt::format("deserializing std::string of length {}", data.length());
         size_t size = 0;
         deserialize(buffer, size);
         data.resize(size);
@@ -76,7 +74,6 @@ public:
 
     template <typename T>
     static void serialize(std::vector<T> const& data, uint8_t*& buffer) {
-        DLOG(INFO) << fmt::format("serializing std::vector of length {}", data.size());
         size_t size = data.size();
         serialize(size, buffer);
         for (auto const& elem : data) {
@@ -88,7 +85,6 @@ public:
     static void deserialize(const uint8_t*& buffer, std::vector<T>& data) {
         size_t size = 0;
         deserialize(buffer, size);
-        DLOG(INFO) << fmt::format("deserializing std::vector of length {}", size);
         data.resize(size);
         for (auto& elem : data) {
             deserialize(buffer, elem);
@@ -102,7 +98,6 @@ public:
                                    std::unordered_map<typename MapType::key_type, typename MapType::mapped_type>>,
             void>
     serialize(MapType const& data, uint8_t*& buffer) {
-        DLOG(INFO) << fmt::format("serializing std::map of size {}", data.size());
         size_t size = data.size();
         serialize(size, buffer);
         for (auto const& [key, value] : data) {
@@ -120,7 +115,6 @@ public:
     deserialize(const uint8_t*& buffer, MapType& data) {
         size_t size = 0;
         deserialize(buffer, size);
-        DLOG(INFO) << fmt::format("deserializing std::map of size {}", size);
         for (size_t i = 0; i < size; ++i) {
             typename MapType::key_type key;
             typename MapType::mapped_type value;
@@ -135,7 +129,6 @@ public:
                                              std::is_same_v<SetType, std::unordered_set<typename SetType::key_type>>,
                                      void>
     serialize(SetType const& data, uint8_t*& buffer) {
-        DLOG(INFO) << fmt::format("serializing std::set of size {}", data.size());
         size_t size = data.size();
         serialize(size, buffer);
         for (auto const& key : data) {
@@ -150,7 +143,6 @@ public:
     deserialize(const uint8_t*& buffer, SetType& data) {
         size_t size = 0;
         deserialize(buffer, size);
-        DLOG(INFO) << fmt::format("deserializing std::set of size {}", size);
         for (size_t i = 0; i < size; ++i) {
             typename SetType::key_type key;
             deserialize(buffer, key);
@@ -160,7 +152,6 @@ public:
 
     template <typename ElemType, size_t Length>
     static void serialize(std::array<ElemType, Length> const& data, uint8_t*& buffer) {
-        DLOG(INFO) << fmt::format("serializing std::array of length {}", Length);
         for (auto const& elem : data) {
             serialize(elem, buffer);
         }
@@ -168,7 +159,6 @@ public:
 
     template <typename ElemType, size_t Length>
     static void deserialize(const uint8_t*& buffer, std::array<ElemType, Length>& data) {
-        DLOG(INFO) << fmt::format("deserializing std::array of length {}", Length);
         for (auto& elem : data) {
             deserialize(buffer, elem);
         }
@@ -235,13 +225,11 @@ public:
 
     template <typename... Args>
     static void serialize(std::tuple<Args...> const& tuple, uint8_t*& buffer) {
-        DLOG(INFO) << fmt::format("serializing std::tuple of {} elements", sizeof...(Args));
         std::apply([&buffer](const auto&... element) { (serialize(element, buffer), ...); }, tuple);
     }
 
     template <typename... Args>
     static void deserialize(const uint8_t*& buffer, std::tuple<Args...>& tuple) {
-        DLOG(INFO) << fmt::format("deserializing std::tuple of {} elements", sizeof...(Args));
         std::apply([&buffer](auto&... element) { (deserialize(buffer, element), ...); }, tuple);
     }
 

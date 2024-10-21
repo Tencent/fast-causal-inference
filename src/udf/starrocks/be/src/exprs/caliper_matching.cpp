@@ -26,6 +26,7 @@
 #include "exprs/function_context.h"
 #include "exprs/function_helper.h"
 #include "types/logical_type.h"
+#include "util/slice.h"
 
 namespace starrocks {
 
@@ -67,9 +68,16 @@ StatusOr<ColumnPtr> CaliperMatchingFunction::caliper_matching(FunctionContext* c
     for (size_t row = 0; row < num_rows; ++row) {
         size_t group_hash = 0;
         if (columns.size() > 4) {
-            auto [exacts, length] = FunctionHelper::get_data_of_array<DoubleColumn, double>(columns[4].get(), row);
-            for (size_t i = 0; i < length; ++i) {
-                group_hash ^= std::hash<double>()(exacts[i]);
+            auto exacts = FunctionHelper::get_data_of_array(columns[4].get(), row);
+            if (!exacts) {
+                return Status::InvalidArgument("exacts cannot be null.");
+            }
+            LOG(INFO) << "exacts: " << exacts->size();
+            for (const auto& i : exacts.value()) {
+                if (i.is_null()) {
+                    return Status::InvalidArgument("exacts cannot be null.");
+                }
+                group_hash ^= std::hash<std::string>()(i.get_slice().to_string());
             }
         }
         auto treatment = treatment_viewer.value(row);
@@ -145,6 +153,9 @@ Status CaliperMatchingFunction::CaliperMatchingFunctionState::init_once(JsonValu
 int64_t CaliperMatchingFunction::CaliperMatchingFunctionState::get_index(bool treatment, int64_t score,
                                                                          size_t group_hash) {
     std::scoped_lock lock(_mtx);
+    if (!_info.count({score, group_hash})) {
+        return 0;
+    }
     auto& stats = _info[{score, group_hash}];
     auto& begin = stats[treatment ? 2 : 0];
     auto& count = stats[treatment ? 3 : 1];

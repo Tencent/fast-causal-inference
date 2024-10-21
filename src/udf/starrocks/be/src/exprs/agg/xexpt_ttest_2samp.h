@@ -44,7 +44,7 @@
 
 namespace starrocks {
 
-using XexptTtest2SampUinColumnType = RunTimeColumnType<TYPE_INT>;
+using XexptTtest2SampUinColumnType = RunTimeColumnType<TYPE_BIGINT>;
 using XexptTtest2SampCupedColumnType = RunTimeColumnType<TYPE_VARCHAR>;
 using XexptTtest2SampDataElementColumnType = RunTimeColumnType<TYPE_DOUBLE>;
 using XexptTtest2SampAlphaColumnType = RunTimeColumnType<TYPE_DOUBLE>;
@@ -173,9 +173,9 @@ public:
         this->_num_columns = num_columns;
     }
 
-    void update(const double* input, int num_variables, int32_t uin) {
+    void update(const double* input, int num_variables, uint64_t uin) {
         CHECK(num_variables == _num_columns);
-        uint32_t uin_hash = _hash(uin) / XexptTtest2SampStats::kBucketDivisor;
+        uint64_t uin_hash = _hash(uin) / XexptTtest2SampStats::kBucketDivisor;
         _count += 1;
         for (uint32_t i = 0; i < _num_columns; ++i) {
             _column_buckets(i, uin_hash) += input[i];
@@ -387,7 +387,8 @@ public:
                 delta_method_stats_avg.update(bucket_data.data(), _ttest_params.num_variables());
                 delta_method_stats_avg_sub_stats[key].update(bucket_data.data(), _ttest_params.num_variables());
                 bucket_data[1] = _ttest_params.ratios()[key_idx] / XexptTtest2SampStats::kNumBuckets;
-                if (!_ttest_params.cuped_expression().empty() && (int)bucket_data.size() >= 4) {
+                if (!_ttest_params.cuped_expression().empty() && (int)bucket_data.size() >= 4 &&
+                    _ttest_params.cuped_expression() == "x3/x4") {
                     bucket_data[3] = _ttest_params.ratios()[key_idx] / XexptTtest2SampStats::kNumBuckets;
                 }
                 delta_method_stats_sum.update(bucket_data.data(), _ttest_params.num_variables());
@@ -490,7 +491,17 @@ public:
             return fmt::format("stderr_var({}) is not a finite value, please check your data.", stderr_var);
         }
         double diff_relative = estimate / means[0];
+        std::string prefix;
         double t_stat = estimate / stderr_var;
+        if (std::isnan(t_stat) || std::isinf(t_stat)) {
+            prefix = "Warning: Data are essentially constant (standard error is zero), making t-statistic undefined. "
+                     "Check for variability in your data.\n\n";
+            if (std::abs(estimate) < std::numeric_limits<double>::epsilon()) {
+                t_stat = 0;
+            } else {
+                t_stat = std::numeric_limits<double>::infinity() * (estimate > 0 ? 1 : -1);
+            }
+        }
         double p_value = TtestCommon::calc_pvalue(t_stat, TtestAlternative::TwoSided);
         auto [lower, upper] = TtestCommon::calc_confidence_interval(estimate, stderr_var, counts[0] + counts[1],
                                                                     _ttest_params.alpha(), TtestAlternative::TwoSided);
@@ -502,6 +513,8 @@ public:
         boost::math::normal normal_dist(0, 1);
         double power = 1 - cdf(normal_dist, quantile(normal_dist, 1 - alpha / 2) - fabs(means[0] * mde) / stderr_var) +
                        cdf(normal_dist, quantile(normal_dist, alpha / 2) - fabs(means[0] * mde) / stderr_var);
+        double result_mde = (quantile(normal_dist, 1 - alpha / 2) + quantile(normal_dist, _ttest_params.power())) *
+                            stderr_var / means[0];
         double std_ratio = std_samp_avg[0] / std_samp_avg[1];
         double cnt_ratio = denominators[0] / denominators[1];
         double alpha_power = quantile(normal_dist, 1 - alpha / 2) - quantile(normal_dist, 1 - _ttest_params.power());
@@ -529,9 +542,9 @@ public:
             add_result3("groupname", MathHelpers::to_string_with_precision<false>(group_names[0]),
                         MathHelpers::to_string_with_precision<false>(group_names[1]));
         }
-        add_result3("numerator",
-                    MathHelpers::to_string_with_precision<false>(static_cast<uint64_t>(floor(numerators[0] + 0.5))),
-                    MathHelpers::to_string_with_precision<false>(static_cast<uint64_t>(floor(numerators[1] + 0.5))));
+        // add_result3("numerator",
+        //             MathHelpers::to_string_with_precision<false>(static_cast<uint64_t>(floor(numerators[0] + 0.5))),
+        //             MathHelpers::to_string_with_precision<false>(static_cast<uint64_t>(floor(numerators[1] + 0.5))));
         if (_ttest_params.metric_type() == XexptTtest2SampMetricType::Avg) {
             add_result3(
                     "denominator",
@@ -541,18 +554,18 @@ public:
             add_result3("ratio", MathHelpers::to_string_with_precision<false>(_ttest_params.ratios()[0], 12, 0),
                         MathHelpers::to_string_with_precision<false>(_ttest_params.ratios()[1], 12, 0));
 
+        add_result3("numerator", MathHelpers::to_string_with_precision<false, true>(numerators[0]),
+                    MathHelpers::to_string_with_precision<false, true>(numerators[1]));
+
         if (!denominators_pre.empty()) {
-            add_result3(
-                    "numerator_pre",
-                    MathHelpers::to_string_with_precision<false>(static_cast<uint64_t>(floor(numerators_pre[0] + 0.5))),
-                    MathHelpers::to_string_with_precision<false>(
-                            static_cast<uint64_t>(floor(numerators_pre[1] + 0.5))));
             if (_ttest_params.metric_type() == XexptTtest2SampMetricType::Avg)
                 add_result3("denominator_pre",
                             MathHelpers::to_string_with_precision<false>(
                                     static_cast<uint64_t>(floor(denominators_pre[0] + 0.5))),
                             MathHelpers::to_string_with_precision<false>(
                                     static_cast<uint64_t>(floor(denominators_pre[1] + 0.5))));
+            add_result3("numerator_pre", MathHelpers::to_string_with_precision<false, true>(numerators_pre[0]),
+                        MathHelpers::to_string_with_precision<false, true>(numerators_pre[1]));
         }
 
         if (_ttest_params.metric_type() == XexptTtest2SampMetricType::Avg) {
@@ -589,12 +602,18 @@ public:
             add_result2("diff", MathHelpers::to_string_with_precision<false>(estimate));
             add_result2(ci_prefix + "%_CI", "[" + std::to_string(lower) + "," + std::to_string(upper) + "]");
         }
-        add_result2("power", MathHelpers::to_string_with_precision<false>(power));
+        add_result2("power(MDE=" + std::to_string(_ttest_params.mde()) + ")",
+                    MathHelpers::to_string_with_precision<false>(power));
+
         add_result2("recommend_samples", MathHelpers::to_string_with_precision<false>(
                                                  static_cast<uint64_t>(std::floor(recommend_samples + 0.5))));
+        add_result2("MDE(power=" + std::to_string(_ttest_params.power()) + ")",
+                    MathHelpers::to_string_with_precision<false>(result_mde));
         res += title + '\n' + group + '\n';
-        return res;
+        return prefix + res;
     }
+
+    size_t num_treatment() const { return _all_stats.size(); }
 
 private:
     XexptTtest2SampParams _ttest_params;
@@ -619,18 +638,13 @@ public:
                 size_t row_num) const override {
         // uin, treatment, {numerator, denominator, cuped_data...}[, cuped, {alpha, mde, power}]
         const Column* data_col = columns[2];
-        auto [input, array_size] =
-                FunctionHelper::get_data_of_array<DeltaMethodDataElementColumnType, double>(data_col, row_num);
-        if (input == nullptr) {
-            ctx->set_error("Internal Error: fail to get data.");
+        auto input_opt = FunctionHelper::get_data_of_array(data_col, row_num);
+        if (!input_opt) {
+            // ctx->set_error("Internal Error: fail to get data.");
             return;
         }
 
         if (this->data(state).is_uninitialized()) {
-            if (row_num > 0) {
-                ctx->set_error("Internal Error: state not initialized.");
-                return;
-            }
             size_t num_args = ctx->get_num_args();
             std::optional<std::string> cuped_expression;
             std::optional<XexptTtest2SampMetricType> metric_type;
@@ -667,7 +681,7 @@ public:
                 std::string metric_type_str;
                 if (FunctionHelper::get_data_of_column<XexptTtest2SampMetricColumnType>(columns[7], row_num,
                                                                                         metric_type_str)) {
-                    if (metric_type_str != "avg" || metric_type_str != "sum") {
+                    if (metric_type_str != "avg" && metric_type_str != "sum") {
                         ctx->set_error(
                                 fmt::format("Invalid Argument: alternative({}) is not a valid ttest alternative.",
                                             metric_type_str)
@@ -679,10 +693,17 @@ public:
                 }
             }
             if (num_args >= 9) {
-                auto [ratios_ptr, size] =
-                        FunctionHelper::get_data_of_array<XexptTtest2SampAlphaColumnType, double>(columns[8], 0);
-                if (ratios_ptr != nullptr && size == 2) {
-                    ratios = std::vector<double>(ratios_ptr, ratios_ptr + size);
+                auto ratios_opt = FunctionHelper::get_data_of_array(columns[8], 0);
+                if (!ratios_opt && ratios_opt->size() == 2) {
+                    std::vector<double> ratios_vec;
+                    for (size_t i = 0; i < 2; ++i) {
+                        if ((*ratios_opt)[i].is_null()) {
+                            ctx->set_error("Internal Error: ratios cannot be null.");
+                            return;
+                        }
+                        ratios_vec.emplace_back((*ratios_opt)[i].get_double());
+                    }
+                    ratios = std::move(ratios_vec);
                 }
             }
 
@@ -693,23 +714,36 @@ public:
                     mde.value_or(TtestCommon::kDefaultMDEValue), power.value_or(TtestCommon::kDefaultPowerValue),
                     (int)metric_type.value_or(XexptTtest2SampMetricType::Avg),
                     ratios.value_or(std::vector<double>{1, 1})[0], ratios.value_or(std::vector<double>{1, 1})[1]);
-            this->data(state).init(array_size, cuped_expression, alpha, mde, power, metric_type, ratios);
+            this->data(state).init(input_opt->size(), cuped_expression, alpha, mde, power, metric_type, ratios);
         }
 
         const Column* uin_col = columns[0];
-        int32_t uin;
+        uint64_t uin;
         if (!FunctionHelper::get_data_of_column<XexptTtest2SampUinColumnType>(uin_col, row_num, uin)) {
-            ctx->set_error("Internal Error: tail to get uin.");
+            // ctx->set_error("Internal Error: fail to get uin.");
             return;
         }
         const Column* treatment_col = columns[1];
         TreatmentType treatment;
         if (!FunctionHelper::get_data_of_column<TreatmentColumnType>(treatment_col, row_num, treatment)) {
-            ctx->set_error("Internal Error: tail to get treatment.");
+            // ctx->set_error("Internal Error: fail to get treatment.");
             return;
         }
 
-        this->data(state).update(input, array_size, uin, treatment);
+        std::vector<double> input;
+        input.reserve(input_opt->size());
+        for (size_t i = 0; i < input_opt->size(); ++i) {
+            if ((*input_opt)[i].is_null()) {
+                return;
+            }
+            input.emplace_back((*input_opt)[i].get_double());
+        }
+
+        this->data(state).update(input.data(), input_opt->size(), uin, treatment);
+        if (this->data(state).num_treatment() > 2) {
+            ctx->set_error("Data Error: number of treatment is larger than 2.");
+            return;
+        }
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
@@ -726,6 +760,10 @@ public:
         }
         XexptTtest2SampAggregateState<TreatmentType> other(serialized_data);
         this->data(state).merge(other);
+        if (this->data(state).num_treatment() > 2) {
+            ctx->set_error("Data Error: number of treatment is larger than 2.");
+            return;
+        }
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
