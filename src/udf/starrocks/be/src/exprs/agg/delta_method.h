@@ -103,13 +103,24 @@ private:
 class DeltaMethodStats {
 public:
     DeltaMethodStats() = default;
-    DeltaMethodStats(const DeltaMethodStats&) = delete;
-    DeltaMethodStats(DeltaMethodStats&&) = delete;
+    DeltaMethodStats(DeltaMethodStats const& other) {
+        _num_variables = other._num_variables;
+        _count = other._count;
+        _sum_x = other._sum_x;
+        _sum_xy = other._sum_xy;
+    }
+    DeltaMethodStats(DeltaMethodStats&& other) noexcept {
+        _num_variables = other._num_variables;
+        _count = other._count;
+        _sum_x = std::move(other._sum_x);
+        _sum_xy = std::move(other._sum_xy);
+        other.reset();
+    }
 
     bool is_uninitialized() const { return _num_variables == -1; }
 
     void init(int length) {
-        CHECK(length >= 0);
+        DCHECK(length >= 0);
         _num_variables = length;
         _count = 0;
         _sum_x = ublas::vector<double>(length, 0);
@@ -125,7 +136,7 @@ public:
     }
 
     void update(const double* input, int length) {
-        CHECK_EQ(_num_variables, length);
+        DCHECK_EQ(_num_variables, length);
         for (uint32_t i = 0; i < _num_variables; ++i) {
             _sum_x(i) += input[i];
         }
@@ -147,14 +158,14 @@ public:
     int num_variables() const { return _num_variables; }
 
     const ublas::vector<double> means() const {
-        CHECK(_count > 0);
+        DCHECK(_count > 0);
         return _sum_x / _count;
     }
 
     size_t count() const { return _count; }
 
     ublas::matrix<double> cov_matrix() const {
-        CHECK(_count > 1);
+        DCHECK(_count > 1);
         auto mean = means();
         ublas::matrix<double> cov_matrix(_num_variables, _num_variables);
         for (uint32_t i = 0; i < _num_variables; ++i) {
@@ -167,21 +178,21 @@ public:
     }
 
     void serialize(uint8_t*& data) const {
-        CHECK(!is_uninitialized());
+        DCHECK(!is_uninitialized());
         SerializeHelpers::serialize(&_count, data);
         SerializeHelpers::serialize(_sum_x.data().begin(), data, _num_variables);
         SerializeHelpers::serialize(_sum_xy.data().begin(), data, _num_variables * (_num_variables + 1) / 2);
     }
 
     void deserialize(const uint8_t*& data) {
-        CHECK(!is_uninitialized());
+        DCHECK(!is_uninitialized());
         SerializeHelpers::deserialize(data, &_count);
         SerializeHelpers::deserialize(data, _sum_x.data().begin(), _num_variables);
         SerializeHelpers::deserialize(data, _sum_xy.data().begin(), _num_variables * (_num_variables + 1) / 2);
     }
 
     size_t serialized_size() const {
-        CHECK(!is_uninitialized());
+        DCHECK(!is_uninitialized());
         return sizeof(_count) + sizeof(double) * _num_variables +
                sizeof(double) * _num_variables * (_num_variables + 1) / 2;
     }
@@ -189,7 +200,7 @@ public:
     static double calc_delta_method(ExprTree<double> const& Y_expr_tree, size_t count,
                                     ublas::vector<double> const& means, ublas::matrix<double> const& cov_matrix,
                                     bool is_std) {
-        CHECK(count > 0);
+        DCHECK(count > 0);
         std::vector<uint32_t> const& variables = Y_expr_tree.get_variable_indices();
         ublas::vector<double> pdvalues = Y_expr_tree.pdvalue(means, variables);
         double result = 0;
@@ -284,12 +295,12 @@ public:
     }
 
     void update(const double* input, int num_variables) {
-        CHECK(!is_uninitialized());
+        DCHECK(!is_uninitialized());
         _stats.update(input, num_variables);
     }
 
     bool init(std::string const& expression, bool is_std, int num_cols) {
-        CHECK(num_cols >= 0);
+        DCHECK(num_cols >= 0);
         _params.init(num_cols, expression, is_std);
         _stats.init(num_cols);
         return true;
@@ -300,7 +311,7 @@ public:
             reset();
             return;
         }
-        CHECK(_params == other._params);
+        DCHECK(_params == other._params);
         _stats.merge(other._stats);
     }
 
@@ -342,18 +353,21 @@ public:
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
                 size_t row_num) const override {
         const Column* data_col = columns[2];
-        auto [input, array_size] =
-                FunctionHelper::get_data_of_array<DeltaMethodDataElementColumnType, double>(data_col, row_num);
-        if (input == nullptr) {
-            ctx->set_error("Internal Error: fail to get data.");
+        auto data = FunctionHelper::get_data_of_array(data_col, row_num);
+        if (!data) {
+            // ctx->set_error("Internal Error: fail to get data.");
             return;
+        }
+        std::vector<double> input;
+        for (auto const& x : data.value()) {
+            if (x.is_null()) {
+                // ctx->set_error("Internal Error: data contains null.");
+                return;
+            }
+            input.emplace_back(x.get_double());
         }
 
         if (this->data(state).is_uninitialized()) {
-            if (row_num > 0) {
-                ctx->set_error("Internal Error: state not initialized.");
-                return;
-            }
             const Column* expr_col = columns[0];
             const Column* is_std_col = columns[1];
             const auto* func_expr = down_cast<const DeltaMethodExprColumnType*>(expr_col);
@@ -365,10 +379,10 @@ public:
                 return;
             }
             bool is_std = type_column->get_data()[0];
-            this->data(state).init(expression, is_std, array_size);
+            this->data(state).init(expression, is_std, input.size());
         }
 
-        this->data(state).update(input, array_size);
+        this->data(state).update(input.data(), input.size());
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {

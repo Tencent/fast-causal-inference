@@ -29,6 +29,8 @@ import com.starrocks.catalog.AggregateFunction;
 import com.starrocks.catalog.ArrayType;
 import com.starrocks.catalog.FunctionSet;
 import com.starrocks.catalog.Type;
+import com.starrocks.common.FeConstants;
+import com.starrocks.common.util.ExprUtil;
 import com.starrocks.qe.ConnectContext;
 
 public class FunctionAnalyzer {
@@ -120,31 +122,23 @@ public class FunctionAnalyzer {
             return;
         }
 
+        if (fnName.getFunction().equals(FunctionSet.COUNT_IF) && fnParams.isDistinct()) {
+            throw new SemanticException("COUNT_IF does not support DISTINCT", functionCallExpr.getPos());
+        }
+
         if (fnName.getFunction().equals(FunctionSet.GROUP_CONCAT)) {
-            if (functionCallExpr.getChildren().size() > 2 || functionCallExpr.getChildren().isEmpty()) {
+            if (functionCallExpr.getChildren().size() - fnParams.getOrderByElemNum() < 2) {
                 throw new SemanticException(
-                        "group_concat requires one or two parameters: " + functionCallExpr.toSql(),
+                        "group_concat requires at least one parameter: " + functionCallExpr.toSql(),
                         functionCallExpr.getPos());
             }
 
-            if (fnParams.isDistinct()) {
-                throw new SemanticException("group_concat does not support DISTINCT", functionCallExpr.getPos());
-            }
-
-            Expr arg0 = functionCallExpr.getChild(0);
-            if (!arg0.getType().isStringType() && !arg0.getType().isNull()) {
+            int sepPos = functionCallExpr.getParams().exprs().size() - functionCallExpr.getParams().getOrderByElemNum() - 1;
+            Expr arg1 = functionCallExpr.getChild(sepPos);
+            if (!arg1.getType().isStringType() && !arg1.getType().isNull()) {
                 throw new SemanticException(
-                        "group_concat requires first parameter to be of getType() STRING: " + functionCallExpr.toSql(),
-                        arg0.getPos());
-            }
-
-            if (functionCallExpr.getChildren().size() == 2) {
-                Expr arg1 = functionCallExpr.getChild(1);
-                if (!arg1.getType().isStringType() && !arg1.getType().isNull()) {
-                    throw new SemanticException(
-                            "group_concat requires second parameter to be of getType() STRING: " +
-                                    functionCallExpr.toSql(), arg1.getPos());
-                }
+                        "group_concat requires separator to be of getType() STRING: " +
+                                functionCallExpr.toSql(), arg1.getPos());
             }
             return;
         }
@@ -175,12 +169,6 @@ public class FunctionAnalyzer {
         Expr arg = functionCallExpr.getChild(0);
         if (arg == null) {
             return;
-        }
-
-        if (fnName.getFunction().equals(FunctionSet.ARRAY_AGG)) {
-            if (fnParams.isDistinct()) {
-                throw new SemanticException("array_agg does not support DISTINCT", functionCallExpr.getPos());
-            }
         }
 
         if (fnName.getFunction().equals(FunctionSet.RETENTION)) {
@@ -367,6 +355,47 @@ public class FunctionAnalyzer {
             }
         }
 
+        if (fnName.getFunction().equals(FunctionSet.APPROX_TOP_K)) {
+            Long k = null;
+            Long counterNum = null;
+            Expr kExpr = null;
+            Expr counterNumExpr = null;
+            if (functionCallExpr.hasChild(1)) {
+                kExpr = functionCallExpr.getChild(1);
+                if (!ExprUtil.isPositiveConstantInteger(kExpr)) {
+                    throw new SemanticException(
+                            "The second parameter of APPROX_TOP_K must be a constant positive integer: " +
+                                    functionCallExpr.toSql(), kExpr.getPos());
+                }
+                k = ExprUtil.getIntegerConstant(kExpr);
+            }
+            if (functionCallExpr.hasChild(2)) {
+                counterNumExpr = functionCallExpr.getChild(2);
+                if (!ExprUtil.isPositiveConstantInteger(counterNumExpr)) {
+                    throw new SemanticException(
+                            "The third parameter of APPROX_TOP_K must be a constant positive integer: " +
+                                    functionCallExpr.toSql(), counterNumExpr.getPos());
+                }
+                counterNum = ExprUtil.getIntegerConstant(counterNumExpr);
+            }
+            if (k != null && k > FeConstants.MAX_COUNTER_NUM_OF_TOP_K) {
+                throw new SemanticException("The maximum number of the second parameter is "
+                        + FeConstants.MAX_COUNTER_NUM_OF_TOP_K + ", " + functionCallExpr.toSql(), kExpr.getPos());
+            }
+            if (counterNum != null) {
+                Preconditions.checkNotNull(k);
+                if (counterNum > FeConstants.MAX_COUNTER_NUM_OF_TOP_K) {
+                    throw new SemanticException("The maximum number of the third parameter is "
+                            + FeConstants.MAX_COUNTER_NUM_OF_TOP_K + ", " + functionCallExpr.toSql(), counterNumExpr.getPos());
+                }
+                if (k > counterNum) {
+                    throw new SemanticException(
+                            "The second parameter must be smaller than or equal to the third parameter" +
+                                    functionCallExpr.toSql(), kExpr.getPos());
+                }
+            }
+        }
+
         if (fnName.getFunction().equals(FunctionSet.EXCHANGE_BYTES) ||
                 fnName.getFunction().equals(FunctionSet.EXCHANGE_SPEED)) {
             if (ConnectContext.get().getSessionVariable().getNewPlannerAggStage() != 1) {
@@ -391,6 +420,15 @@ public class FunctionAnalyzer {
             }
         }
 
+        if (fnName.getFunction().equals(FunctionSet.COVAR_POP) || fnName.getFunction().equals(FunctionSet.COVAR_SAMP) ||
+                fnName.getFunction().equals(FunctionSet.CORR)) {
+            if (functionCallExpr.getChildren().size() != 2) {
+                throw new SemanticException(fnName + " function should have two args", functionCallExpr.getPos());
+            }
+            if (functionCallExpr.getChild(0).isConstant() || functionCallExpr.getChild(1).isConstant()) {
+                throw new SemanticException(fnName + " function 's args must be column");
+            }
+        }
         AllInSqlAnalyzer.analyze(functionCallExpr);
     }
 }

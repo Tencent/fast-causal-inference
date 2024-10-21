@@ -141,8 +141,8 @@ public:
         ColumnViewer<TYPE_BIGINT> B_viewer(columns[2]);
         B = B_viewer.value(0);
 
-        if (!(B >= 1 && B <= 1000)) {
-            return Status::InvalidArgument(fmt::format("num_batches({}) should be in [1, 1,000].", B));
+        if (!(B >= 1 && B <= 1'000'000)) {
+            return Status::InvalidArgument(fmt::format("num_batches({}) should be in [1, 1,000,000].", B));
         }
         _num_batches = B;
 
@@ -211,7 +211,8 @@ private:
  */
 class BootStrap final : public TableFunction {
 public:
-    std::pair<Columns, UInt32Column::Ptr> process(TableFunctionState* state) const override {
+    std::pair<Columns, UInt32Column::Ptr> process(RuntimeState* runtime_state,
+                                                          TableFunctionState* state) const override {
         if (state->get_columns().size() < 4) {
             state->set_status(Status::InvalidArgument("boot_strap: num_cols is less than four."));
             return {};
@@ -235,7 +236,7 @@ public:
         }
         state->set_processed_rows(row_count);
 
-        std::vector<ColumnPtr> values;
+        std::vector<ColumnPtr> values{Int32Column::create()};
         for (size_t i = 3; i < columns.size(); ++i) {
             Column* column = columns[i].get();
             ColumnPtr ret_column = column->clone_empty();
@@ -249,8 +250,8 @@ public:
         size_t num_batches = global_state->num_batches();
         size_t seed = global_state->seed();
 
-        std::vector<uint32_t> count_map(row_count);
         for (size_t batch = 0; batch < num_batches; ++batch) {
+            std::vector<uint32_t> count_map(row_count);
             size_t batch_sample_num = global_state->calc_reputation(batch, row_count);
             if (batch_sample_num <= 10000) {
                 std::default_random_engine generator(seed + batch + 1);
@@ -265,19 +266,21 @@ public:
                     x = row_scheduler(1);
                 }
             }
-        }
 
-        for (int row_idx = 0; row_idx < row_count; ++row_idx) {
-            size_t reputation = count_map[row_idx];
-            if (reputation == 0) {
-                continue;
-            }
-            offsets->append(offset + reputation);
-            offset += reputation;
+            for (int row_idx = 0; row_idx < row_count; ++row_idx) {
+                size_t reputation = count_map[row_idx];
+                if (reputation == 0) {
+                    continue;
+                }
+                offsets->append(offset + reputation);
+                offset += reputation;
 
-            for (size_t col_idx = 3; col_idx < columns.size(); ++col_idx) {
-                ColumnPtr column = columns[col_idx];
-                values[col_idx - 3]->append_value_multiple_times(*column, row_idx, reputation, true);
+                Datum idx{batch};
+                values[0]->append_value_multiple_times(&idx, reputation);
+                for (size_t col_idx = 3; col_idx < columns.size(); ++col_idx) {
+                    ColumnPtr column = columns[col_idx];
+                    values[col_idx - 2]->append_value_multiple_times(*column, row_idx, reputation);
+                }
             }
         }
 

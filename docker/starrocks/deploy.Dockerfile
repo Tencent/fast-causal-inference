@@ -2,14 +2,14 @@
 # Please run this command from the git repo root directory to build:
 #
 #   - Use locally build artifacts to package runtime container:
-#     > DOCKER_BUILDKIT=1 docker build --build-arg -f docker/starrocks/deploy.Dockerfile -t allin1-ubuntu:3.1.1 .
+#     > DOCKER_BUILDKIT=1 docker build --build-arg -f docker/starrocks/deploy.Dockerfile -t allin1-ubuntu:3.1.11 .
 #
 # The artifact source used for packing the runtime docker image
 #   image: copy the artifacts from a artifact docker image.
 #   local: copy the artifacts from a local repo. Mainly used for local development and test.
 
 # create a docker build stage that copy locally build artifacts
-FROM artifacts-ubuntu:3.1.1 as artifacts-from-local
+FROM artifacts-ubuntu:3.1.11 as artifacts-from-local
 
 
 FROM artifacts-from-local as artifacts
@@ -19,6 +19,7 @@ RUN rm -f /release/be_artifacts/be/lib/starrocks_be.debuginfo
 FROM ubuntu:22.04 as dependencies-installed
 ARG DEPLOYDIR=/data/deploy
 ENV SR_HOME=${DEPLOYDIR}/starrocks
+COPY docker/starrocks/conf/sources.list /etc/apt/sources.list
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
         binutils-dev default-jdk python2 mysql-client curl vim tree net-tools less tzdata linux-tools-common linux-tools-generic supervisor nginx netcat locales && \

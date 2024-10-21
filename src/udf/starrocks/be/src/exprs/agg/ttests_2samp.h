@@ -314,17 +314,13 @@ public:
                 size_t row_num) const override {
         // expression, side, treatment, data, [cuped, alpha]
         const Column* data_col = columns[3];
-        auto [input, array_size] =
-                FunctionHelper::get_data_of_array<DeltaMethodDataElementColumnType, double>(data_col, row_num);
-        if (input == nullptr) {
+        auto input_opt = FunctionHelper::get_data_of_array(data_col, row_num);
+        if (!input_opt) {
             LOG(WARNING) << "ttests_2samp: fail to get data.";
             return;
         }
 
         if (this->data(state).is_uninitialized()) {
-            if (row_num > 0) {
-                return;
-            }
             const Column* expr_col = columns[0];
             const auto* func_expr = down_cast<const DeltaMethodExprColumnType*>(expr_col);
             Slice expr_slice = func_expr->get_data()[0];
@@ -363,7 +359,7 @@ public:
             LOG(INFO) << fmt::format("ttest args - expression: {}, alternative: {}, cuped_expression: {}, alpha: {}",
                                      expression, (int)alternative, cuped_expression.value_or("null"),
                                      alpha.value_or(TtestCommon::kDefaultAlphaValue));
-            this->data(state).init(alternative, array_size, expression, cuped_expression, alpha);
+            this->data(state).init(alternative, input_opt->size(), expression, cuped_expression, alpha);
         }
 
         const Column* treatment_col = columns[2];
@@ -372,7 +368,17 @@ public:
         CHECK(treatment_col != nullptr);
         double treatment = treatment_column->get_data()[row_num];
 
-        this->data(state).update(input, array_size, treatment);
+        std::vector<double> input;
+        input.reserve(input_opt->size());
+        for (size_t i = 0; i < input_opt->size(); ++i) {
+            if ((*input_opt)[i].is_null()) {
+                // if any element is null, skip this row
+                return;
+            }
+            input.emplace_back((*input_opt)[i].get_double());
+        }
+
+        this->data(state).update(input.data(), input_opt->size(), treatment);
     }
 
     std::optional<std::string> try_parse_cuped(const Column* cuped_expr_col) const {

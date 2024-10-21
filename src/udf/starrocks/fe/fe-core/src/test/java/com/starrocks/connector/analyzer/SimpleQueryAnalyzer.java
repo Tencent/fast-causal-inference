@@ -350,9 +350,10 @@ public class SimpleQueryAnalyzer {
                     List<String> columnNames = new ArrayList<>();
                     for (int i = 0; i < tableFunction.getTableFnReturnTypes().size(); ++i) {
                         columnNames.add("boot_strap");
-
                     }
                     node.setColumnOutputNames(columnNames);
+                } else {
+                    node.setColumnOutputNames(new ArrayList<>(tableFunction.getDefaultColumnNames()));
                 }
             } else {
                 if (node.getColumnOutputNames().size() != tableFunction.getTableFnReturnTypes().size()) {

@@ -85,7 +85,6 @@ public:
         SerializeHelpers::deserialize(data, _ratios.data(), ratio_length);
         uint32_t num_groups = 0;
         SerializeHelpers::deserialize(data, &num_groups);
-        _group2sum.reserve(num_groups);
         for (uint32_t i = 0; i < num_groups; ++i) {
             uint32_t group_name_size = 0;
             SerializeHelpers::deserialize(data, &group_name_size);
@@ -161,7 +160,7 @@ public:
 private:
     bool _is_init{false};
     std::vector<double> _ratios;
-    std::unordered_map<std::string, double> _group2sum;
+    std::map<std::string, double> _group2sum;
 };
 
 class SRMAggFunction : public AggregateFunctionBatchHelper<SRMAggState, SRMAggFunction> {
@@ -171,24 +170,32 @@ public:
         Slice group;
         const Column* group_col = columns[1];
         if (!FunctionHelper::get_data_of_column<BinaryColumn>(group_col, row_num, group)) {
-            ctx->set_error("Internal Error: fail to get `group`.");
+            // ctx->set_error("Internal Error: fail to get `group`.");
             return;
         }
         double value = 0;
         const Column* value_col = columns[0];
         if (!FunctionHelper::get_data_of_column<DoubleColumn>(value_col, row_num, value)) {
-            ctx->set_error("Internal Error: fail to get `value`.");
+            // ctx->set_error("Internal Error: fail to get `value`.");
             return;
         }
         if (this->data(state).is_uninitialized()) {
-            DCHECK(row_num == 0);
             auto ratios_col = columns[2];
-            auto [input, size] = FunctionHelper::get_data_of_array<DoubleColumn, double>(ratios_col, 0);
-            if (input == nullptr) {
+            auto input_opt = FunctionHelper::get_data_of_array(ratios_col, 0);
+            if (!input_opt) {
                 ctx->set_error("Internal Error: fail to get `ratios`.");
                 return;
             }
-            std::vector<double> ratios(input, input + size);
+
+            std::vector<double> ratios;
+            ratios.reserve(input_opt->size());
+            for (const auto& datum : *input_opt) {
+                if (datum.is_null()) {
+                    ctx->set_error("Internal Error: `ratios` should not contain null.");
+                    return;
+                }
+                ratios.emplace_back(datum.get_double());
+            }
             this->data(state).init(std::move(ratios));
         }
         this->data(state).update(group.to_string(), value);

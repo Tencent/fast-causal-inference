@@ -16,6 +16,7 @@
 
 #include "exprs/agg/aggregate_factory.h"
 #include "exprs/agg/caliper_matching_info.h"
+#include "exprs/agg/causal_forest.h"
 #include "exprs/agg/delta_method.h"
 #include "exprs/agg/distributed_node_row_number.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
@@ -77,41 +78,45 @@ void AggregateFuncResolver::register_all_in_sql() {
             std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE}, false,
             std::make_shared<Ttest2SampAggregateFunction>());
 
-    // expression, side, treatment, data, [cuped, alpha]
+    // expression, alternative, treatment, data[, cuped[, alpha[, pse_index, pse_data]]]
     // register for ttest 2 samp
     add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
-            std::string(AllInSqlFunctions::ttests_2samp), std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_INT, TYPE_ARRAY},
+            std::string(AllInSqlFunctions::ttests_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY}, false,
+            std::make_shared<Ttests2SampAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
+            std::string(AllInSqlFunctions::ttests_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR}, false,
+            std::make_shared<Ttests2SampAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
+            std::string(AllInSqlFunctions::ttests_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE}, false,
+            std::make_shared<Ttests2SampAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
+            std::string(AllInSqlFunctions::ttests_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_ARRAY},
             false, std::make_shared<Ttests2SampAggregateFunction>());
 
-    // register for ttest 2 samp
-    add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
-            std::string(AllInSqlFunctions::ttests_2samp),
-            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_INT, TYPE_ARRAY, TYPE_VARCHAR}, false,
-            std::make_shared<Ttests2SampAggregateFunction>());
-
-    // register for ttest 2 samp
-    add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
-            std::string(AllInSqlFunctions::ttests_2samp),
-            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_INT, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE}, false,
-            std::make_shared<Ttests2SampAggregateFunction>());
+    add_aggregate_mapping<TYPE_VARCHAR, XexptTtest2SampAggregateState<std::string>>(
+            std::string(AllInSqlFunctions::xexpt_ttest_2samp), std::vector{TYPE_BIGINT, TYPE_VARCHAR, TYPE_ARRAY},
+            false, std::make_shared<XexptTtest2SampAggregateFunction<std::string>>());
 
     add_aggregate_mapping<TYPE_VARCHAR, XexptTtest2SampAggregateState<std::string>>(
-            std::string(AllInSqlFunctions::xexpt_ttest_2samp), std::vector{TYPE_INT, TYPE_VARCHAR, TYPE_ARRAY}, false,
+            std::string(AllInSqlFunctions::xexpt_ttest_2samp),
+            std::vector{TYPE_BIGINT, TYPE_VARCHAR, TYPE_ARRAY, TYPE_VARCHAR}, false,
             std::make_shared<XexptTtest2SampAggregateFunction<std::string>>());
 
     add_aggregate_mapping<TYPE_VARCHAR, XexptTtest2SampAggregateState<std::string>>(
             std::string(AllInSqlFunctions::xexpt_ttest_2samp),
-            std::vector{TYPE_INT, TYPE_VARCHAR, TYPE_ARRAY, TYPE_VARCHAR}, false,
-            std::make_shared<XexptTtest2SampAggregateFunction<std::string>>());
+            std::vector{TYPE_BIGINT, TYPE_VARCHAR, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE},
+            false, std::make_shared<XexptTtest2SampAggregateFunction<std::string>>());
 
     add_aggregate_mapping<TYPE_VARCHAR, XexptTtest2SampAggregateState<std::string>>(
             std::string(AllInSqlFunctions::xexpt_ttest_2samp),
-            std::vector{TYPE_INT, TYPE_VARCHAR, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE}, false,
-            std::make_shared<XexptTtest2SampAggregateFunction<std::string>>());
-
-    add_aggregate_mapping<TYPE_VARCHAR, XexptTtest2SampAggregateState<std::string>>(
-            std::string(AllInSqlFunctions::xexpt_ttest_2samp),
-            std::vector{TYPE_INT, TYPE_VARCHAR, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE,
+            std::vector{TYPE_BIGINT, TYPE_VARCHAR, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE,
                         TYPE_VARCHAR, TYPE_ARRAY},
             false, std::make_shared<XexptTtest2SampAggregateFunction<std::string>>());
 
@@ -174,17 +179,27 @@ void AggregateFuncResolver::register_all_in_sql() {
                                                      std::make_shared<SRMAggFunction>());
 
     add_aggregate_mapping<TYPE_JSON, GroupSetAggState>(std::string(AllInSqlFunctions::group_set),
-                                                       std::vector{TYPE_DOUBLE, TYPE_BOOLEAN, TYPE_ARRAY}, false,
+                                                       std::vector{TYPE_DOUBLE, TYPE_INT, TYPE_ARRAY}, false,
                                                        std::make_shared<GroupSetAggFunction>());
 
     add_aggregate_mapping<TYPE_JSON, GroupSetAggState>(std::string(AllInSqlFunctions::group_set),
-                                                       std::vector{TYPE_DOUBLE, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_ARRAY},
+                                                       std::vector{TYPE_DOUBLE, TYPE_INT, TYPE_ARRAY, TYPE_ARRAY},
                                                        false, std::make_shared<GroupSetAggFunction>());
 
     add_aggregate_mapping<TYPE_JSON, MannWhitneyAggState>(
             std::string(AllInSqlFunctions::mann_whitney_u_test),
             std::vector{TYPE_DOUBLE, TYPE_BOOLEAN, TYPE_VARCHAR, TYPE_BIGINT}, false,
             std::make_shared<MannWhitneyAggFunction>());
+
+    add_aggregate_mapping<TYPE_JSON, CausalForestData>(
+            std::string(AllInSqlFunctions::causal_forest),
+            std::vector{TYPE_JSON, TYPE_DOUBLE, TYPE_BOOLEAN, TYPE_DOUBLE, TYPE_ARRAY}, false,
+            std::make_shared<AggregateFunctionCausalForest>());
+
+    add_aggregate_mapping<TYPE_JSON, CausalForestData>(
+            std::string(AllInSqlFunctions::causal_forest),
+            std::vector{TYPE_JSON, TYPE_DOUBLE, TYPE_BOOLEAN, TYPE_DOUBLE, TYPE_ARRAY, TYPE_BOOLEAN}, false,
+            std::make_shared<AggregateFunctionCausalForest>());
 }
 
 } // namespace starrocks

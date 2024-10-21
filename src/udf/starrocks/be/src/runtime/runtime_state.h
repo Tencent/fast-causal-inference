@@ -97,6 +97,8 @@ public:
     // RuntimeState for executing expr in fe-support.
     explicit RuntimeState(const TQueryGlobals& query_globals);
 
+    explicit RuntimeState(ExecEnv* exec_env);
+
     // Empty d'tor to avoid issues with std::unique_ptr.
     ~RuntimeState();
 
@@ -123,8 +125,10 @@ public:
     void set_desc_tbl(DescriptorTbl* desc_tbl) { _desc_tbl = desc_tbl; }
     int chunk_size() const { return _query_options.batch_size; }
     void set_chunk_size(int chunk_size) { _query_options.batch_size = chunk_size; }
+    bool use_column_pool() const;
     bool abort_on_default_limit_exceeded() const { return _query_options.abort_on_default_limit_exceeded; }
-    int64_t timestamp_ms() const { return _timestamp_ms; }
+    int64_t timestamp_ms() const { return _timestamp_us / 1000; }
+    int64_t timestamp_us() const { return _timestamp_us; }
     const std::string& timezone() const { return _timezone; }
     const cctz::time_zone& timezone_obj() const { return _timezone_obj; }
     const std::string& user() const { return _user; }
@@ -136,6 +140,9 @@ public:
     MemTracker* instance_mem_tracker() { return _instance_mem_tracker.get(); }
     MemPool* instance_mem_pool() { return _instance_mem_pool.get(); }
     std::shared_ptr<MemTracker> query_mem_tracker_ptr() { return _query_mem_tracker; }
+    void set_query_mem_tracker(const std::shared_ptr<MemTracker>& query_mem_tracker) {
+        _query_mem_tracker = query_mem_tracker;
+    }
     const std::shared_ptr<MemTracker>& query_mem_tracker_ptr() const { return _query_mem_tracker; }
     std::shared_ptr<MemTracker> instance_mem_tracker_ptr() { return _instance_mem_tracker; }
     RuntimeFilterPort* runtime_filter_port() { return _runtime_filter_port; }
@@ -339,6 +346,10 @@ public:
     int64_t spill_operator_max_bytes() const { return _query_options.spill_operator_max_bytes; }
     int32_t spill_encode_level() const { return _query_options.spill_encode_level; }
 
+    bool error_if_overflow() const {
+        return _query_options.__isset.overflow_mode && _query_options.overflow_mode == TOverflowMode::REPORT_ERROR;
+    }
+
     const std::vector<TTabletCommitInfo>& tablet_commit_infos() const { return _tablet_commit_infos; }
 
     std::vector<TTabletCommitInfo>& tablet_commit_infos() { return _tablet_commit_infos; }
@@ -391,7 +402,6 @@ public:
     bool enable_pipeline_engine() const { return _enable_pipeline_engine; }
 
     bool enable_query_statistic() const;
-    std::shared_ptr<QueryStatistics> intermediate_query_statistic();
     std::shared_ptr<QueryStatisticsRecvr> query_recv();
 
     Status reset_epoch();
@@ -405,6 +415,11 @@ public:
     void*& get_query_level_function_state() { return _query_level_function_state; }
 
     std::mutex& get_query_level_function_state_lock() { return _query_level_function_state_lock; }
+    
+    bool enable_collect_table_level_scan_stats() const {
+        return _query_options.__isset.enable_collect_table_level_scan_stats &&
+               _query_options.enable_collect_table_level_scan_stats;
+    }
 
 private:
     // Set per-query state.
@@ -442,7 +457,7 @@ private:
     std::string _user;
 
     //Query-global timestamp_ms
-    int64_t _timestamp_ms = 0;
+    int64_t _timestamp_us = 0;
     std::string _timezone;
     cctz::time_zone _timezone_obj;
 

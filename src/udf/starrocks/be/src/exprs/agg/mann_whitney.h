@@ -120,11 +120,13 @@ public:
                 }
 
                 tie_numenator += std::pow(count_equal, 3) - count_equal;
+                size_t count = 0;
                 for (size_t iter = left; iter < right; ++iter) {
                     if (index[iter] < n1) {
-                        r1 += adjusted;
+                        count += 1;
                     }
                 }
+                r1 += count * adjusted;
                 left = right;
             }
             tie_correction = 1 - (tie_numenator / (std::pow(size, 3) - size));
@@ -192,10 +194,6 @@ public:
     void update(FunctionContext* ctx, const Column** columns, AggDataPtr __restrict state,
                 size_t row_num) const override {
         if (this->data(state).is_uninitialized()) {
-            if (row_num > 0) {
-                ctx->set_error("Internal Error: state not initialized.");
-                return;
-            }
             Slice alternative;
             const Column* alternative_col = columns[2];
             if (!FunctionHelper::get_data_of_column<MannWhitneyAlternativeColumn>(alternative_col, 0, alternative)) {
@@ -221,14 +219,14 @@ public:
         double x;
         const Column* x_col = columns[0];
         if (!FunctionHelper::get_data_of_column<MannWhitneyDataColumn>(x_col, row_num, x)) {
-            ctx->set_error("Internal Error: fail to get `x`.");
+            // ctx->set_error("Internal Error: fail to get `x`.");
             return;
         }
 
         bool treatment;
         const Column* treatment_col = columns[1];
         if (!FunctionHelper::get_data_of_column<MannWhitneyIndexColumn>(treatment_col, row_num, treatment)) {
-            ctx->set_error("Internal Error: fail to get `treatment`.");
+            // ctx->set_error("Internal Error: fail to get `treatment`.");
             return;
         }
 

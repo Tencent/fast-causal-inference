@@ -488,7 +488,6 @@ public:
         }
 
         std::string result;
-        result += "\nCall:\n  lm( formula = y ~";
         std::vector<std::string> argument_names;
         boost::split(argument_names, _params.arg_names(), boost::is_any_of(","));
         for (auto& name : argument_names) {
@@ -506,6 +505,9 @@ public:
             return fmt::format("Size of argument_names should be {}, but get {}", _params.num_variables() + 1,
                                argument_names.size());
         }
+        result += "\nCall:\n  lm( formula = ";
+        result += argument_names[0];
+        result += " ~";
         for (size_t i = 1; i <= _params.num_variables(); ++i) {
             auto const& argument_name = argument_names[i];
             if (i > 1) {
@@ -589,17 +591,15 @@ public:
                 size_t row_num) const override {
         // y, X, weight(?), use_bias, arg_names, XTX, XTX_inv
         const Column* data_col = columns[1];
-        auto [input, array_size] = FunctionHelper::get_data_of_array<OlsXColumnType, double>(data_col, row_num);
-        if (input == nullptr) {
-            ctx->set_error("Internal Error: fail to get X.");
+        auto input_opt = FunctionHelper::get_data_of_array(data_col, row_num);
+        if (!input_opt) {
+            // ctx->set_error("Internal Error: fail to get X.");
             return;
         }
 
+        size_t array_size = input_opt->size();
+
         if (this->data(state).is_uninitialized()) {
-            if (row_num > 0) {
-                ctx->set_error("Internal Error: state not initialized.");
-                return;
-            }
             const Column* use_bias_col = columns[2 + use_weights];
             std::optional<bool> use_bias_opt;
             bool use_bias;
@@ -644,12 +644,19 @@ public:
         const Column* y_col = columns[0];
         double y = 0;
         if (!FunctionHelper::get_data_of_column<OlsYColumnType>(y_col, row_num, y)) {
-            LOG(WARNING) << "ols: fail to get y.";
-            ctx->set_error("Internal Error: fail to get y");
+            // ctx->set_error("Internal Error: fail to get y");
             return;
         }
 
-        std::vector<double> x(input, input + array_size);
+        std::vector<double> x;
+        x.reserve(array_size + this->data(state).use_bias());
+        for (const auto& elem : input_opt.value()) {
+            if (elem.is_null()) {
+                // ctx->set_error("Internal Error: X should be double.");
+                return;
+            }
+            x.emplace_back(elem.get_double());
+        }
         if (this->data(state).use_bias()) {
             x.emplace_back(1);
         }
@@ -658,7 +665,7 @@ public:
             const Column* weight_col = columns[2];
             double weight = 0;
             if (!FunctionHelper::get_data_of_column<OlsWeightColumnType>(weight_col, row_num, weight)) {
-                ctx->set_error("Internal Error: fail to get weight.");
+                // ctx->set_error("Internal Error: fail to get weight.");
                 return;
             }
             if (weight < 0) {

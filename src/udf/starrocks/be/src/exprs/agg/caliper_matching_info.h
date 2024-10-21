@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <velocypack/Builder.h>
 #include <velocypack/Iterator.h>
 #include <velocypack/Value.h>
@@ -111,14 +113,14 @@ public:
 
     void to_json(vpack::Builder& builder) const {
         auto total_info = get_total_info();
-        std::unordered_map<std::tuple<int64_t, size_t>, size_t, TupleHash> end_indices;
+        std::unordered_map<std::tuple<int64_t, size_t>, std::array<size_t, 2>, TupleHash> end_indices;
         std::unordered_map<std::tuple<int64_t, size_t>, std::array<size_t, 2>, TupleHash> remaining_match_counts;
         size_t current_idx = 1;
         for (auto& [key, cnt] : total_info) {
             size_t match = std::min(cnt[0], cnt[1]);
             remaining_match_counts[key] = {match, match};
             current_idx += match;
-            end_indices[key] = current_idx;
+            end_indices[key] = {current_idx, current_idx};
         }
 
         std::unordered_map<int64_t, std::unordered_map<int64_t, std::unordered_map<size_t, std::array<size_t, 4>>>>
@@ -126,16 +128,23 @@ public:
 
         for (auto [info_key, count] : _matching_info) {
             auto [node_key, score, group_hash] = info_key;
-            auto end_index = end_indices[{score, group_hash}];
+            auto& [end_index_0, end_index_1] = end_indices[{score, group_hash}];
             auto& [remaining_match_0, remaining_match_1] = remaining_match_counts[{score, group_hash}];
 
             auto this_match_0 = std::min(remaining_match_0, count[0]);
             auto this_match_1 = std::min(remaining_match_1, count[1]);
 
-            auto begin_0 = end_index - this_match_0;
-            auto begin_1 = end_index - this_match_1;
+            if (this_match_0 == 0 && this_match_1 == 0) {
+                continue;
+            }
+
+            auto begin_0 = end_index_0 - this_match_0;
+            auto begin_1 = end_index_1 - this_match_1;
 
             result_matching_info[node_key][score][group_hash] = {begin_0, this_match_0, begin_1, this_match_1};
+
+            end_index_0 -= this_match_0;
+            end_index_1 -= this_match_1;
 
             remaining_match_0 -= this_match_0;
             remaining_match_1 -= this_match_1;
@@ -220,17 +229,16 @@ public:
         bool treatment = false;
         const Column* treatment_col = columns[0];
         if (!FunctionHelper::get_data_of_column<BooleanColumn>(treatment_col, row_num, treatment)) {
-            ctx->set_error("Internal Error: fail to get `treatment`.");
+            // ctx->set_error("Internal Error: fail to get `treatment`.");
             return;
         }
         double distance = 0;
         const Column* distance_col = columns[1];
         if (!FunctionHelper::get_data_of_column<DoubleColumn>(distance_col, row_num, distance)) {
-            ctx->set_error("Internal Error: fail to get `distance`.");
+            // ctx->set_error("Internal Error: fail to get `distance`.");
             return;
         }
         if (this->data(state).is_uninitialized()) {
-            DCHECK(row_num == 0);
             int64_t node_key = get_backend_id().value_or(-1);
             if (UNLIKELY(node_key == -1)) {
                 ctx->set_error("Internal Error: fail to get be id.");
@@ -251,9 +259,12 @@ public:
         size_t group_hash = 0;
         if (ctx->get_num_args() > 3) {
             const Column* exacts_col = columns[3];
-            auto [exacts, length] = FunctionHelper::get_data_of_array<DoubleColumn, double>(exacts_col, row_num);
-            for (uint32_t i = 0; i < length; ++i) {
-                group_hash ^= std::hash<double>()(exacts[i]);
+            auto exacts = FunctionHelper::get_data_of_array(exacts_col, row_num);
+            for (const auto& i : exacts.value_or(DatumArray{})) {
+                if (i.is_null()) {
+                    return;
+                }
+                group_hash ^= std::hash<std::string>()(i.get_slice().to_string());
             }
         }
         this->data(state).update(treatment, distance, group_hash);

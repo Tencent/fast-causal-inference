@@ -172,11 +172,13 @@ public:
             arg_types = it->second;
         }
         _infos_mapping.emplace(std::make_tuple(name, arg_types, RetType, false, false), fun);
-        _infos_mapping.emplace(std::make_tuple(name, arg_types, RetType, false, true), fun);
+        auto nullable_agg = AggregateFactory::MakeNullableAggregateFunctionVariadic<StateType>(fun);
+        _infos_mapping.emplace(std::make_tuple(name, arg_types, RetType, false, true), nullable_agg);
 
         if (is_window) {
             _infos_mapping.emplace(std::make_tuple(name, arg_types, RetType, true, false), fun);
-            _infos_mapping.emplace(std::make_tuple(name, arg_types, RetType, true, true), fun);
+            auto nullable_agg = AggregateFactory::MakeNullableAggregateFunctionVariadic<StateType>(fun);
+            _infos_mapping.emplace(std::make_tuple(name, arg_types, RetType, true, true), nullable_agg);
         }
     }
 

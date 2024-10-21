@@ -59,18 +59,18 @@ public:
                 _column_names.emplace_back(fmt::format("col{}", i));
             }
         }
-        for (int32_t treatment = 0; treatment < 2; ++treatment) {
-            _stats[treatment].resize(_num_columns);
-        }
     }
 
     bool is_params_same(GroupSetAggState const& other) const {
         return other._num_columns == _num_columns && other._column_names == _column_names;
     }
 
-    void update(double y, bool treatment, std::vector<int32_t> const& group_ids) {
+    void update(double y, int const& treatment, std::vector<std::string> const& group_ids) {
+        if (!_stats.count(treatment)) {
+            _stats[treatment].resize(_num_columns);
+        }
         for (int32_t i = 0; i < _num_columns; ++i) {
-            auto group_id = group_ids[i];
+            auto const& group_id = group_ids[i];
             auto& [cnt, sum, sum2] = _stats[treatment][i][group_id];
             cnt += 1;
             sum += y;
@@ -79,11 +79,28 @@ public:
     }
 
     void merge(GroupSetAggState const& other) {
-        for (int32_t treatment = 0; treatment < 2; ++treatment) {
+        std::set<int> treats;
+        for (auto& [treatment, _] : _stats) {
+            treats.emplace(treatment);
+        }
+        for (auto& [treatment, _] : other._stats) {
+            treats.emplace(treatment);
+        }
+        for (auto&& treat : treats) {
+            auto v = other._stats.find(treat);
+            if (v == other._stats.end()) {
+                continue;
+            }
+            if (!_stats.count(treat)) {
+                _stats[treat].resize(_num_columns);
+            }
+            // now, both _stats[treat] and v->second have the same size of _num_columns
+            DCHECK_EQ(_stats[treat].size(), v->second.size());
+            DCHECK_EQ(_num_columns, _stats[treat].size());
             for (int32_t column_idx = 0; column_idx < _num_columns; ++column_idx) {
-                for (auto [group_id, value_tuple] : other._stats[treatment][column_idx]) {
+                for (auto [group_id, value_tuple] : v->second[column_idx]) {
                     auto [cnt_rhs, sum_rhs, sum2_rhs] = value_tuple;
-                    auto& [cnt, sum, sum2] = _stats[treatment][column_idx][group_id];
+                    auto& [cnt, sum, sum2] = _stats[treat][column_idx][group_id];
                     cnt += cnt_rhs;
                     sum += sum_rhs;
                     sum2 += sum2_rhs;
@@ -104,13 +121,13 @@ public:
 
     void build_result_json(vpack::Builder& builder) const {
         vpack::ArrayBuilder result_builder(&builder);
-        for (int32_t treatment = 0; treatment < 2; ++treatment) {
+        for (auto&& [treat, _] : _stats) {
             for (int32_t column_idx = 0; column_idx < _num_columns; ++column_idx) {
-                for (auto [group_id, value_tuple] : _stats[treatment][column_idx]) {
+                for (auto [group_id, value_tuple] : _stats.find(treat)->second[column_idx]) {
                     auto [cnt, sum, sum2] = value_tuple;
                     vpack::ArrayBuilder tuple_builder(&builder);
                     builder.add(vpack::Value(_column_names[column_idx]));
-                    builder.add(vpack::Value(treatment));
+                    builder.add(vpack::Value(treat));
                     builder.add(vpack::Value(group_id));
                     builder.add(vpack::Value(cnt));
                     builder.add(vpack::Value(sum));
@@ -120,11 +137,15 @@ public:
         }
     }
 
+    size_t num_treats() const { return _stats.size(); }
+
+    size_t num_columns() const { return _num_columns; }
+
 private:
     int32_t _num_columns{-1};
     std::vector<std::string> _column_names;
     // _stats[treatment][column_idx][group_id] -> (cnt, sum, sum2)
-    std::array<std::vector<std::unordered_map<int32_t, std::tuple<size_t, double, double>>>, 2> _stats;
+    std::map<int, std::vector<std::map<std::string, std::tuple<size_t, double, double>>>> _stats;
 };
 
 class GroupSetAggFunction : public AggregateFunctionBatchHelper<GroupSetAggState, GroupSetAggFunction> {
@@ -134,49 +155,66 @@ public:
         double value = 0;
         const Column* value_col = columns[0];
         if (!FunctionHelper::get_data_of_column<DoubleColumn>(value_col, row_num, value)) {
-            ctx->set_error("Internal Error: fail to get `value`.");
+            // ctx->set_error("Internal Error: fail to get `value`.");
             return;
         }
-        bool treatment = false;
+        int treatment;
         const Column* treatment_col = columns[1];
-        if (!FunctionHelper::get_data_of_column<BooleanColumn>(treatment_col, row_num, treatment)) {
-            ctx->set_error("Internal Error: fail to get `treatment`.");
+        if (!FunctionHelper::get_data_of_column<RunTimeColumnType<TYPE_INT>>(treatment_col, row_num, treatment)) {
+            // ctx->set_error("Internal Error: fail to get `treatment`.");
             return;
         }
         auto groups_col = columns[2];
-        auto [group_ptr, group_size] = FunctionHelper::get_data_of_array<Int32Column, int>(groups_col, row_num);
-        if (group_ptr == nullptr) {
-            ctx->set_error("Internal Error: fail to get `groups`.");
+        auto group = FunctionHelper::get_data_of_array(groups_col, row_num);
+        if (!group) {
+            // ctx->set_error("Internal Error: fail to get `groups`.");
             return;
         }
         if (this->data(state).is_uninitialized()) {
-            if (row_num != 0) {
-                return;
-            }
             std::optional<std::vector<std::string>> column_names_opt;
             if (ctx->get_num_args() > 3) {
                 auto column_names_col = columns[3];
-                auto [name_ptr, name_size] =
-                        FunctionHelper::get_data_of_array<BinaryColumn, Slice>(column_names_col, 0);
-                if (name_ptr == nullptr) {
+                auto name = FunctionHelper::get_data_of_array(column_names_col, 0);
+                if (!name) {
                     ctx->set_error("Internal Error: fail to get `column_names`.");
                     return;
                 }
-                if (group_size != name_size) {
-                    ctx->set_error(
-                            fmt::format("num_cols_group({}) is not equal to num_cols_name({}).", group_size, name_size)
-                                    .c_str());
+                if (group->size() != name->size()) {
+                    ctx->set_error(fmt::format("num_cols_group({}) is not equal to num_cols_name({}).", group->size(),
+                                               name->size())
+                                           .c_str());
                     return;
                 }
                 std::vector<std::string> column_names;
-                for (int i = 0; i < name_size; ++i) {
-                    column_names.emplace_back(name_ptr[i].to_string());
+                for (int i = 0; i < name->size(); ++i) {
+                    if ((*name)[i].is_null()) {
+                        ctx->set_error("Internal Error: `column_names` contains null.");
+                        return;
+                    }
+                    column_names.emplace_back((*name)[i].get_slice().to_string());
                 }
                 column_names_opt = std::move(column_names);
             }
-            this->data(state).init(group_size, std::move(column_names_opt));
+            this->data(state).init(group->size(), std::move(column_names_opt));
         }
-        this->data(state).update(value, treatment, std::vector<int32_t>{group_ptr, group_ptr + group_size});
+        std::vector<std::string> groups;
+        for (auto const& g : group.value()) {
+            if (g.is_null()) {
+                // ctx->set_error("Internal Error: fail to get `group_id`.");
+                return;
+            }
+            groups.emplace_back(g.get_slice().to_string());
+        }
+        if (groups.size() != this->data(state).num_columns()) {
+            ctx->set_error(fmt::format("num_cols_group({}) is not equal to num_cols_state({}).", groups.size(),
+                                       this->data(state).num_columns())
+                                   .c_str());
+            return;
+        }
+        this->data(state).update(value, treatment, groups);
+        if (this->data(state).num_treats() > 2) {
+            ctx->set_error("Logical Error: too many treatments.");
+        }
     }
 
     void merge(FunctionContext* ctx, const Column* column, AggDataPtr __restrict state, size_t row_num) const override {
@@ -197,6 +235,9 @@ public:
             return;
         }
         this->data(state).merge(other);
+        if (this->data(state).num_treats() > 2) {
+            ctx->set_error("Logical Error: too many treatments.");
+        }
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {

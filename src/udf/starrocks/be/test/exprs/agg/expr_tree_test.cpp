@@ -12,30 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "all_in_sql_functions.h"
+#include "exprs/helpers/expr_tree.hpp"
+
+#include <gtest/gtest.h>
 
 namespace starrocks {
 
-const std::unordered_set<std::string_view> AllInSqlFunctions::all_in_sql_functions{
-        "delta_method",
-        "ttest_1samp",
-        "ttest_2samp",
-        "ttests_2samp",
-        "xexpt_ttest_2samp",
-        "eval_ml_method",
-        "ols",
-        "ols_train",
-        "wls",
-        "wls_train",
-        "matrix_multiplication",
-        "distributed_node_row_number",
-        "boot_strap",
-        "caliper_matching_info",
-        "caliper_matching",
-        "srm",
-        "group_set",
-        "mann_whitney_u_test",
-        "causal_forest",
+class ExprTreeTest : public testing::Test {
+public:
+    ExprTreeTest() = default;
+
+    void SetUp() override {}
+
+    void TearDown() override {}
+
+private:
 };
+
+TEST_F(ExprTreeTest, ValueTest) {
+    ExprTree<double> expr_tree;
+    ASSERT_TRUE(expr_tree.init("-x/(y*3)", {{"x", 0}, {"y", 1}}));
+    ASSERT_EQ(expr_tree.value({3, 2}), -0.5);
+}
+
+TEST_F(ExprTreeTest, PDValueTest) {
+    ExprTree<double> expr_tree;
+    ASSERT_TRUE(expr_tree.init("-x/(y*3)", {{"x", 0}, {"y", 1}}));
+    ASSERT_EQ(expr_tree.pdvalue({3, 2})[1], 0.25);
+}
 
 } // namespace starrocks
