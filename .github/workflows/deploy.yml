@@ -27,16 +27,6 @@ jobs:
       - name: Install the dependencies
         run: |
             python -m pip install -r requirements.txt
-      - shell: bash
-        run: |
-          sed -i "s|\(starrocks_launch_host:\s*\).*|\1${{ secrets.starrocks_host }}|g" ./conf/package_conf.yaml
-          sed -i "s|\(starrocks_port:\s*\).*|\1${{ secrets.starrocks_port }}|g" ./conf/package_conf.yaml
-          sed -i "s|\(starrocks_http_port:\s*\).*|\1${{ secrets.starrocks_http_port }}|g" ./conf/package_conf.yaml
-          sed -i "s|\(starrocks_user:\s*\).*|\1${{ secrets.starrocks_user }}|g" ./conf/package_conf.yaml
-          sed -i "s|\(starrocks_password:\s*\).*|\1${{ secrets.starrocks_password }}|g" ./conf/package_conf.yaml
-          sed -i "s|\(url:\s*\).*|\1${{ secrets.sqlgateway_url }}|g" ./conf/package_conf.yaml
-          mkdir -p ./docs/ipynbs/ipynbs_config/
-          cp ./conf/package_conf.yaml ./docs/ipynbs/ipynbs_config/conf.yaml
       - name: Build the JupyterLite site
         shell: bash -l {0}
         run: |
