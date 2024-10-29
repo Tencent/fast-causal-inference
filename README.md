@@ -4,8 +4,6 @@
 [![Release Version](https://img.shields.io/badge/release-0.1.0-red.svg)](https://github.com/Tencent/fast-causal-inference/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Tencent/fast-causal-inference/pulls)
 ### Fast-Causal-Inference Docs: https://tencent.github.io/fast-causal-inference/docs/
-### Fast-Causal-Inferenve Jupyter Demo: http://1.13.154.85:8000/
-(User:admin and No Password)
 ### Introduction
 Fast Causal Inference is Tencent's first open-source causal inference project. 
 It is an OLAP-based high-performance causal inference (statistical model) computing library, 
