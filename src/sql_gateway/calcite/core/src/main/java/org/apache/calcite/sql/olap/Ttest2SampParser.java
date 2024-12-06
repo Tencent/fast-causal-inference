@@ -18,26 +18,23 @@ package org.apache.calcite.sql.olap;
 
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParserPos;
-import org.apache.calcite.util.Pair;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.sort;
 
 public class Ttest2SampParser extends SqlCallCausal {
   private ArrayList<String> map, map_cuped;
   private String func, func_cuped, index, altertive;
+  boolean edegeworth;
 
   private ArrayList<String> pses;
 
-  public Ttest2SampParser(SqlParserPos pos) {
-    super(pos);
-  }
 
-  public Ttest2SampParser(SqlParserPos pos, ArrayList<String> map, String func, String index, String altertive, ArrayList<String> map_cuped, String func_cuped, ArrayList<String> pses) {
-    super(pos);
+  public Ttest2SampParser(SqlParserPos pos, ArrayList<String> map, String func, String index, String altertive, ArrayList<String> map_cuped, String func_cuped, ArrayList<String> pses, boolean edegeworth, EngineType engineType) {
+    super(pos, engineType);
     this.map = map;
     this.func = func;
     this.func_cuped = func_cuped;
@@ -47,6 +44,7 @@ public class Ttest2SampParser extends SqlCallCausal {
     this.altertive = altertive.replaceAll("'", "").replaceAll("\"", "");
     this.causal_function_name = "ttest_2samp";
     this.pses = pses;
+    this.edegeworth = edegeworth;
   }
 
   @Override public SqlOperator getOperator() {
@@ -67,7 +65,7 @@ public class Ttest2SampParser extends SqlCallCausal {
     return func;
   }
 
-  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+  @Override public void unparseClickHouse(SqlWriter writer, int leftPrec, int rightPrec) {
     writer.print("Ttest_2samp");
     writer.print("(\'" + func + "\',");
     writer.print("\'" + altertive + "\'");
@@ -76,6 +74,9 @@ public class Ttest2SampParser extends SqlCallCausal {
     }
     if (func_cuped.length() != 0) {
       writer.print(",\'X=" + exchangeFunc(func_cuped, map.size()) + "\'");
+    }
+    if (edegeworth) {
+      writer.print(",true");
     }
     writer.print(")(");
 
@@ -92,6 +93,33 @@ public class Ttest2SampParser extends SqlCallCausal {
       writer.print("," + pses.get(i));
     }
     writer.print("," + index + ")");
+  }
+
+  @Override public void unparseStarRocks(SqlWriter writer, int leftPrec, int rightPrec) {
+    // TODO(xjx): add pse
+    writer.print("ttest_2samp");
+    writer.print("(");
+
+    ArrayList<String> params = new ArrayList<>();
+
+    map.replaceAll(s -> s.replaceAll("`", ""));
+    map_cuped.replaceAll(s -> s.replaceAll("`", ""));
+    ArrayList<String> dataColumns = new ArrayList<>();
+    dataColumns.addAll(map);
+    dataColumns.addAll(map_cuped);
+    String data = dataColumns.stream().collect(Collectors.joining(",", "[", "]"));
+
+    params.add("'" + func + "'");
+    params.add("'" + altertive + "'");
+    params.add(index);
+    params.add(data);
+
+    if (!func_cuped.isEmpty()) {
+      params.add("'X=" + exchangeFunc(func_cuped, map.size()) + "'");
+    }
+
+    writer.print(String.join(",", params));
+    writer.print(")");
   }
 
   @Override public List<SqlNode> getOperandList() {

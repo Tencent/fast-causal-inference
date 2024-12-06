@@ -47,6 +47,7 @@ import org.apache.calcite.sql.dialect.PrestoSqlDialect;
 import org.apache.calcite.sql.dialect.RedshiftSqlDialect;
 import org.apache.calcite.sql.dialect.SnowflakeSqlDialect;
 import org.apache.calcite.sql.dialect.SparkSqlDialect;
+import org.apache.calcite.sql.dialect.StarRocksSqlDialect;
 import org.apache.calcite.sql.dialect.SybaseSqlDialect;
 import org.apache.calcite.sql.dialect.TeradataSqlDialect;
 import org.apache.calcite.sql.dialect.VerticaSqlDialect;
@@ -86,6 +87,8 @@ public class SqlDialectFactoryImpl implements SqlDialectFactory {
       return new DerbySqlDialect(c);
     case "CLICKHOUSE":
       return new ClickHouseSqlDialect(c);
+    case "STARROCKS":
+      return new StarRocksSqlDialect(c);
     case "DBMS:CLOUDSCAPE":
       return new DerbySqlDialect(c);
     case "EXASOL":
@@ -178,6 +181,8 @@ public class SqlDialectFactoryImpl implements SqlDialectFactory {
       return CalciteSqlDialect.DEFAULT;
     case CLICKHOUSE:
       return ClickHouseSqlDialect.DEFAULT;
+    case STARROCKS:
+      return StarRocksSqlDialect.DEFAULT;
     case DB2:
       return Db2SqlDialect.DEFAULT;
     case DERBY:

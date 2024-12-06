@@ -5,10 +5,11 @@ import com.google.common.base.Strings;
 import com.tencent.weixin.example.DocExample;
 import com.tencent.weixin.model.SqlDetailModel;
 import com.tencent.weixin.model.SqlUdfModel;
-import com.tencent.weixin.service.ClickhouseExecuteService;
+import com.tencent.weixin.service.OlapExecuteService;
 import com.tencent.weixin.service.SqlDetailService;
 import com.tencent.weixin.service.SqlUdfService;
 import com.tencent.weixin.utils.*;
+import com.tencent.weixin.utils.olap.EngineType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -18,6 +19,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.apache.calcite.sql.olap.SqlForward;
 import org.apache.calcite.sql.parser.SqlParseException;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,7 +51,10 @@ public class SqlRunController {
     private SqlUdfService sqlUdfService;
 
     @Autowired
-    private ClickhouseExecuteService clickhouseExecuteService;
+    private OlapExecuteService olapExecuteService;
+
+    @Autowired
+    private AuditUtil auditUtil;
 
     private static final String MODEL_DESC = "sql-run desc";
 
@@ -106,7 +111,7 @@ public class SqlRunController {
     public ResponseData post(@RequestBody @Valid SqlDetailModel sqlDetailModel) {
         try {
             String rtx = sqlDetailModel.getCreator();
-            String rawSql = sqlDetailModel.getRawSql();
+            String rawSql = sqlDetailModel.getRawSql().trim();
             if (Strings.isNullOrEmpty(rtx)) {
                 return ResponseData.error(400, "操作失败, 用户传参rtx为空");
             } else if (Strings.isNullOrEmpty(rawSql)) {
@@ -114,13 +119,22 @@ public class SqlRunController {
             } else {
                 // 初始化
                 long totalStartTime = System.currentTimeMillis();
-                String executeSql = rawSql.replaceAll(";", "");
+                String executeSql = rawSql;
+                if (rawSql.endsWith(";")) {
+                    executeSql = rawSql.replaceAll(";$", ""); // 去掉尾部的分号
+                }
                 sqlDetailModel.setExecuteSql(executeSql);
                 sqlDetailModel.setRetcode(SqlRetCode.INIT.getCode());
                 sqlDetailService.insert(sqlDetailModel);
 
                 if (sqlDetailModel.getIsCalciteParse() == null || ! sqlDetailModel.getIsCalciteParse()) {
-                    executeSql = clickhouseExecuteService.sqlPretreatment(executeSql);
+                    executeSql = olapExecuteService.sqlPretreatment(executeSql);
+                }
+                if (executeSql.toLowerCase().contains("show") && executeSql.toLowerCase().contains("tables")) {
+                    auditUtil.audit(rtx, "sql-run", sqlDetailModel.getEngineType(), sqlDetailModel.getDatabase(),
+                            sqlDetailModel.getRawSql(), "", "", 0, "fail",
+                            "使用 show tables 操作, 请使用元数据查询", "");
+                    return ResponseData.error(400, "您没有权限执行该操作");
                 }
                 //sql rebuild后, 改为执行状态
                 long calciteSqlCostTime = 0;
@@ -129,6 +143,10 @@ public class SqlRunController {
                         if (udfName.getIsDisable()) {
                             sqlDetailModel.setRetcode(SqlRetCode.FAIL.getCode());
                             sqlDetailService.update(sqlDetailModel);
+                            auditUtil.audit(rtx, "sql-run", sqlDetailModel.getEngineType(),
+                                    sqlDetailModel.getDatabase(),
+                                    sqlDetailModel.getRawSql(), "", "", 0, "fail",
+                                    udfName.getUdf() + " 已经被管理员禁用", "");
                             return ResponseData.error(500, udfName.getUdf() + " 已经被管理员禁用");
                         }
                         logger.info("hit all in sql udf :" + udfName.getUdf());
@@ -136,8 +154,16 @@ public class SqlRunController {
                         sqlUdfService.insert(udfName.getId(), sqlDetailModel.getId());
                         try {
                             logger.info("sql parse rawSql :" + executeSql);
-                            SqlForward sqlForward = new SqlForward(executeSql);
-                            executeSql = sqlForward.getForwardSql();
+                            EngineType engineType = EngineType.Clickhouse;
+                            if (sqlDetailModel.getEngineType() != null && sqlDetailModel.getEngineType().equalsIgnoreCase("starrocks")) {
+                                engineType = EngineType.Starrocks;
+                            }
+                            if (sqlDetailModel.getSkipCalcite() != null && sqlDetailModel.getSkipCalcite()) {
+                                logger.info("skip calcite parse");
+                            } else {
+                                SqlForward sqlForward = new SqlForward(executeSql, engineType.toCalciteEngineType());
+                                executeSql = sqlForward.getForwardSql();
+                            }
                             calciteSqlCostTime = System.currentTimeMillis() - startTime;
                             logger.info("sql parse executeSql :" + executeSql + ", calcite sql cost time :" + calciteSqlCostTime + " ms");
                         } catch (SqlParseException e) {
@@ -145,6 +171,10 @@ public class SqlRunController {
                             e.printStackTrace();
                             sqlDetailModel.setRetcode(SqlRetCode.FAIL.getCode());
                             sqlDetailService.update(sqlDetailModel);
+                            auditUtil.audit(rtx, "sql-run", sqlDetailModel.getEngineType(),
+                                    sqlDetailModel.getDatabase(),
+                                    sqlDetailModel.getRawSql(), "", "", 0, "fail",
+                                    "sql解析异常, 请检查sql, " + e.getMessage(), "");
                             return ResponseData.error(500, "sql解析异常, 请检查sql, " + e.getMessage());
                         }
 //                        if (!executeSql.toUpperCase().contains("WITH ")) {
@@ -165,6 +195,10 @@ public class SqlRunController {
                     sqlDetailService.update(sqlDetailModel);
                     String finalRawSql = rawSql;
                     String finalExecuteSql = executeSql;
+                    auditUtil.audit(rtx, "sql-run", sqlDetailModel.getEngineType(),
+                            sqlDetailModel.getDatabase(),
+                            sqlDetailModel.getRawSql(), finalExecuteSql, "", (int) totalCostTime, "succ",
+                            "calcite解析成功", "");
                     return ResponseData.success(RetCode.API_YES, new HashMap<String, Object>() {{
                         put("rawSql", finalRawSql);
                         put("executeSql", finalExecuteSql);
@@ -172,13 +206,22 @@ public class SqlRunController {
                     }});
                 } else {
                     logger.info("change status running");
+                    // if start with select and not contain limit, add limit 200
                     sqlDetailModel.setExecuteSql(executeSql);
                     sqlDetailModel.setRetcode(SqlRetCode.RUNNING.getCode());
                     sqlDetailService.update(sqlDetailModel);
                     //execute后, 改为最终状态
                     try {
                         long startTime = System.currentTimeMillis();
-                        JSON retJson = clickhouseExecuteService.execute(sqlDetailModel.getDeviceId(), sqlDetailModel.getDatabase(), executeSql, sqlDetailModel.getLauncherIp(), sqlDetailModel.getIsDataframeOutput());
+                        EngineType engineType = EngineType.Clickhouse;
+                        if (sqlDetailModel.getEngineType() != null && sqlDetailModel.getEngineType().equalsIgnoreCase("starrocks")) {
+                            engineType = EngineType.Starrocks;
+                        }
+                        boolean isQuery = sqlDetailModel.getIsQuery() == null ? true : sqlDetailModel.getIsQuery();
+                        int maxQueryTime = sqlDetailModel.getMaxQueryTime() == null ? 300 : sqlDetailModel.getMaxQueryTime();
+                        JSON retJson = olapExecuteService.execute(sqlDetailModel.getDeviceId(),
+                                sqlDetailModel.getDatabase(), executeSql, sqlDetailModel.getLauncherIp(),
+                                sqlDetailModel.getIsDataframeOutput(), engineType, rtx, null, null, isQuery, maxQueryTime);
                         long executeSqlCostTime = System.currentTimeMillis() - startTime;
                         logger.info("rawSql :" + rawSql + ", executeSql :" + executeSql);
                         JSON finalRetJson = retJson;
@@ -192,6 +235,10 @@ public class SqlRunController {
                         logger.info("change status success");
                         String finalRawSql = rawSql;
                         String finalExecuteSql = executeSql;
+                        auditUtil.audit(rtx, "sql-run", sqlDetailModel.getEngineType(),
+                                sqlDetailModel.getDatabase(),
+                                sqlDetailModel.getRawSql(), finalExecuteSql, "", (int) totalCostTime, "succ",
+                                finalRetJson.toJSONString(), "");
                         return ResponseData.success(RetCode.API_YES, new HashMap<String, Object>() {{
                             put("rawSql", finalRawSql);
                             put("executeSql", finalExecuteSql);
@@ -202,6 +249,10 @@ public class SqlRunController {
                         e.printStackTrace();
                         sqlDetailModel.setRetcode(SqlRetCode.FAIL.getCode());
                         sqlDetailService.update(sqlDetailModel);
+                        auditUtil.audit(rtx, "sql-run", sqlDetailModel.getEngineType(),
+                            sqlDetailModel.getDatabase(),
+                            sqlDetailModel.getRawSql(), "", "", 0, "fail",
+                            "sql执行异常, 请检查sql, " + e.getMessage(), "");
                         return ResponseData.error(500, "sql执行异常, 请检查sql, " + e.getMessage());
                     }
                 }
@@ -222,6 +273,10 @@ public class SqlRunController {
                 printWriter.close();
             } catch (IOException e1) {
             }
+            auditUtil.audit(sqlDetailModel.getCreator(), "sql-run", sqlDetailModel.getEngineType(),
+                sqlDetailModel.getDatabase(),
+                sqlDetailModel.getRawSql(), "", "", 0, "fail",
+                responseData == null ? "UNKNOWN-ERROR" : responseData.getMessage(), "");
             return responseData;
         }
     }

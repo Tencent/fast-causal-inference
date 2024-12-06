@@ -16,25 +16,46 @@
  */
 package org.apache.calcite.sql;
 
+import org.apache.calcite.sql.olap.EngineType;
 import org.apache.calcite.sql.parser.SqlParserPos;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class SqlCallCausal extends SqlCall {
+public abstract class SqlCallCausal extends SqlCall {
   public String causal_function_name = "";
-
   public String replace_sql = "";
+
+  public EngineType engineType = EngineType.ClickHouse;
 
   public String replace_table = "";
   public ArrayList<String> withs = new ArrayList<String>();
 
-  protected SqlCallCausal(SqlParserPos pos) {
+  protected SqlCallCausal(SqlParserPos pos, EngineType engineType) {
     super(pos);
+    this.engineType = engineType;
   }
 
   @Override public SqlOperator getOperator() {
     return null;
+  }
+
+  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+    if (engineType == EngineType.ClickHouse) {
+      unparseClickHouse(writer, leftPrec, rightPrec);
+    } else if (engineType == EngineType.StarRocks) {
+      unparseStarRocks(writer, leftPrec, rightPrec);
+    } else {
+      throw new RuntimeException("Unsupported engine type: " + engineType);
+    }
+  }
+
+  public void unparseClickHouse(SqlWriter writer, int leftPrec, int rightPrec) {
+    throw new RuntimeException("Unsupported engine type: " + engineType);
+  }
+
+  public void unparseStarRocks(SqlWriter writer, int leftPrec, int rightPrec) {
+    throw new RuntimeException("Unsupported engine type: " + engineType);
   }
 
   @Override public List<SqlNode> getOperandList() {

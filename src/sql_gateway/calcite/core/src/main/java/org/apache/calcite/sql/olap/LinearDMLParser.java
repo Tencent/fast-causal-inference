@@ -75,12 +75,9 @@ public class LinearDMLParser extends SqlCallCausal {
   static String with_each_union = "SELECT *, @PH_T - evalMLMethod(mm_models.2.@PH_INDEX_1 @PH_X @PH_W) as mm_t, @PH_Y - evalMLMethod(mm_models.1.@PH_INDEX_1 @PH_X @PH_W) as mm_y from @TBL where rowNumberInAllBlocks()%@PH_CV = @PH_INDEX\n";
   static String func_template = "select final_model";
 
-  public LinearDMLParser(SqlParserPos pos) {
-    super(pos);
-  }
 
-  public LinearDMLParser(SqlParserPos pos, String Y, String T, String model_y, String model_t, String cv, ArrayList<String> xs, ArrayList<String> ws) {
-    super(pos);
+  public LinearDMLParser(SqlParserPos pos, String Y, String T, String model_y, String model_t, String cv, ArrayList<String> xs, ArrayList<String> ws, EngineType engineType) {
+    super(pos, engineType);
     this.Y = SqlForwardUtil.exchangIdentity(Y);
     this.T = SqlForwardUtil.exchangIdentity(T);
     this.model_y = SqlForwardUtil.exchangIdentity(model_y);

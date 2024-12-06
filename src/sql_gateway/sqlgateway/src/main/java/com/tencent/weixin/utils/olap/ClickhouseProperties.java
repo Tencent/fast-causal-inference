@@ -10,7 +10,7 @@ import java.util.List;
 @Component
 @Getter
 @Setter
-@ConfigurationProperties("olap.clickhouse")
+@ConfigurationProperties(prefix = "olap.clickhouse")
 public class ClickhouseProperties implements OlapProperties {
     private String driver;
     private List<Device> devices;

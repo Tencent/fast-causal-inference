@@ -116,6 +116,7 @@ import org.apache.calcite.sql.parser.SqlParserUtil;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
+import org.apache.calcite.sql.olap.EngineType;
 import org.apache.calcite.sql.olap.DeltaMethodParser;
 import org.apache.calcite.sql.olap.IvRegressionParser;
 import org.apache.calcite.sql.olap.OlsParser;
@@ -132,6 +133,10 @@ import org.apache.calcite.sql.olap.NonParamDMLParser;
 import org.apache.calcite.sql.olap.CutBinsParser;
 import org.apache.calcite.sql.olap.CaliperMatchingParser;
 import org.apache.calcite.sql.olap.ExactMatchingParser;
+import org.apache.calcite.sql.olap.BootStrapParser;
+import org.apache.calcite.sql.olap.PermutationParser;
+import org.apache.calcite.sql.olap.QuantileTestBucketParser;
+import org.apache.calcite.sql.olap.MannWhitneyUTestParser;
 import org.apache.calcite.util.Glossary;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.SourceStringReader;
@@ -178,6 +183,7 @@ public class ${parser.class} extends SqlAbstractParserImpl
     private static Metadata metadata;
 
     private Casing unquotedCasing;
+    private EngineType engineType;
     private Casing quotedCasing;
     private int identifierMaxLength;
     private SqlConformance conformance;
@@ -235,6 +241,10 @@ public class ${parser.class} extends SqlAbstractParserImpl
 
     public void setUnquotedCasing(Casing unquotedCasing) {
         this.unquotedCasing = unquotedCasing;
+    }
+
+    public void setEngineType(EngineType engineType) {
+        this.engineType = engineType;
     }
 
     public void setIdentifierMaxLength(int identifierMaxLength) {
@@ -1979,17 +1989,22 @@ SqlNode DeltaMethod() :
 {
     SqlParserPos pos;
     ArrayList<String> map = new ArrayList<String>();
-
     String func;
+    String is_std = "True";
 }
 {
     <LPAREN>
     {
         func = AvgFuncParser(map);
     }
+    (
+        <COMMA> {
+            is_std = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+    )?
     <RPAREN>
     {
-        return new DeltaMethodParser(getPos(), map, func);
+        return new DeltaMethodParser(getPos(), map, func, is_std, engineType);
     }
 }
 
@@ -2034,12 +2049,19 @@ SqlNode Ols() :
         }
     )*
     (
+        <MINUS> {
+            String res = ExpressionWithOutPlus();
+            if (res.equals("1"))
+                params.add(SqlLiteral.createBoolean(false, getPos()));
+        }
+    )?
+    (
         <COMMA>
             {params.add(Expression3(ExprContext.ACCEPT_SUB_QUERY));}
     )*
     <RPAREN>
     {
-        return new OlsParser(pos, args, params, false);
+        return new OlsParser(pos, args, params, false, engineType);
     }
 }
 
@@ -2060,7 +2082,7 @@ SqlNode Predict() :
     )*
     <RPAREN>
     {
-        return new PredictParser(pos, model, params);
+        return new PredictParser(pos, model, params, engineType);
     }
 }
 
@@ -2088,7 +2110,7 @@ SqlNode Wls() :
     )*
     <RPAREN>
     {
-        return new WlsParser(pos, args, params);
+        return new WlsParser(pos, args, params, engineType);
     }
 }
 
@@ -2125,7 +2147,7 @@ SqlNode Ttest1Samp() :
     )?
     <RPAREN>
     {
-        return new Ttest1SampParser(getPos(), map, func, altertive, mu, map_cuped, func_cuped);
+        return new Ttest1SampParser(getPos(), map, func, altertive, mu, map_cuped, func_cuped, engineType);
     }
 }
 
@@ -2141,6 +2163,7 @@ SqlNode Ttest2Samp() :
     //HashMap<String, String> map_cuped = new HashMap<String, String>();
     ArrayList<String> map_cuped = new ArrayList<String>();
     ArrayList<String> pses = new ArrayList<String>();
+    boolean edgeworth = false;
 }
 {
     <LPAREN> {
@@ -2150,12 +2173,14 @@ SqlNode Ttest2Samp() :
         <COMMA> {
             index = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
         }
-    )?
+    )
+    /*
     (
         <COMMA> {
             altertive = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
         }
     )?
+     */
 
     (
         <COMMA> {
@@ -2171,12 +2196,19 @@ SqlNode Ttest2Samp() :
             <PLUS>
                 {pses.add(Expression3(ExprContext.ACCEPT_SUB_QUERY).toString());}
         )*
+        |
+        <EDGEWORTHTEST>
+        {
+            edgeworth = true;
+        }
+    |
+        {altertive = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();}
         )
     )*
 
     <RPAREN>
     {
-        return new Ttest2SampParser(getPos(), map, func, index, altertive, map_cuped, func_cuped, pses);
+        return new Ttest2SampParser(getPos(), map, func, index, altertive, map_cuped, func_cuped, pses, edgeworth, engineType);
     }
 }
 
@@ -2195,11 +2227,13 @@ SqlNode DID():
     <COMMA> {
         args.add(Expression3(ExprContext.ACCEPT_SUB_QUERY).toString());
     }
+    (
     <COMMA> {
         args.add(Expression3(ExprContext.ACCEPT_SUB_QUERY).toString());
     }
+    )*
     <RPAREN> {
-        return new DIDParser(getPos(), args);
+        return new DIDParser(getPos(), args, engineType);
     }
 }
 
@@ -2214,6 +2248,8 @@ SqlNode XexptTtest2Samp():
     String func_cuped = "";
     ArrayList<String> args = new ArrayList<String>();
     SqlNode e;
+    boolean is_avg = true;
+    String ratio0 = "1", ratio1 = "1";
 }
 {
     <LPAREN> {
@@ -2234,14 +2270,28 @@ SqlNode XexptTtest2Samp():
         (
         func_cuped = AvgFuncParser(map_cuped)
     |
-        e = Expression(ExprContext.ACCEPT_SUB_QUERY)
-        {args.add(e.toString());}
+        <SUM> {
+            is_avg = false;
+        }
+    |
+        <LBRACKET> {
+            ratio0 = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+        <COMMA> {
+            ratio1 = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+        <RBRACKET> {
+        }
+    |
+        e = Expression(ExprContext.ACCEPT_SUB_QUERY) {
+            args.add(e.toString());
+        }
         )
     )*
 
     <RPAREN>
     {
-        return new XexptTtest2SampParser(getPos(), numerator, denominator, uin, index, func_cuped, map_cuped, args);
+        return new XexptTtest2SampParser(getPos(), numerator, denominator, uin, index, func_cuped, map_cuped, args, is_avg, ratio0, ratio1, engineType);
     }
 }
 
@@ -2266,7 +2316,7 @@ SqlNode Lift() :
         flag = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
     }
     <RPAREN> {
-        return new LiftParser(getPos(), ite, Y, T, k, flag);
+        return new LiftParser(getPos(), ite, Y, T, k, flag, engineType);
     }
 }
 
@@ -2325,7 +2375,7 @@ SqlNode LinearDML() :
 
     <RPAREN> {
         System.out.println("Y:" + Y + " T:" + T + " xs:" + xs + " ws:" + ws + " cv:" + cv + " modely:" + model_y + " modelt:" + model_t + " \n");
-        return new LinearDMLParser(getPos(), Y, T, model_y, model_t, cv, xs, ws);
+        return new LinearDMLParser(getPos(), Y, T, model_y, model_t, cv, xs, ws, engineType);
     }
 }
 
@@ -2383,7 +2433,7 @@ SqlNode NonParamDML() :
 
     <RPAREN> {
         System.out.println("Y:" + Y + " T:" + T + " xs:" + xs + " ws:" + ws + " cv:" + cv + " modely:" + model_y + " modelt:" + model_t + " \n");
-        return new NonParamDMLParser(getPos(), Y, T, model_y, model_t, cv, xs, ws);
+        return new NonParamDMLParser(getPos(), Y, T, model_y, model_t, cv, xs, ws, engineType);
     }
 }
 
@@ -2412,7 +2462,7 @@ SqlNode CutBins() :
         }
     )?
     <RPAREN> {
-        return new CutBinsParser(getPos(), target, buckets, use_string);
+        return new CutBinsParser(getPos(), target, buckets, use_string, engineType);
     }
 }
 
@@ -2433,7 +2483,91 @@ SqlNode CaliperMatching() :
         split_value = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
     }
     <RPAREN> {
-        return new CaliperMatchingParser(getPos(), treatment, target, split_value);
+        return new CaliperMatchingParser(getPos(), treatment, target, split_value, engineType);
+    }
+}
+
+SqlNode QuantileTestBucket() :
+{
+    String Y;
+    String T;
+    ArrayList<String> percentiles = new ArrayList<String>();
+    String uin = "uin";
+    String bootstrapNum = "500";
+    String alpha = "0.05";
+    String power = "0.8";
+    String mde = "0.01";
+}
+{
+    <LPAREN> {
+        Y = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    <COMMA> {
+        T = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    <COMMA> <LBRACKET> {
+       percentiles.add(Expression(ExprContext.ACCEPT_SUB_QUERY).toString());
+    }
+    (
+        <COMMA> {
+            percentiles.add(Expression(ExprContext.ACCEPT_SUB_QUERY).toString());
+        }
+    )*
+    <RBRACKET>
+    (
+        <COMMA> {
+            uin = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+    )?
+    (
+        <COMMA> {
+            bootstrapNum = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+    )?
+    (
+        <COMMA> {
+            alpha = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+    )?
+    (
+        <COMMA> {
+            power = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+    )?
+    (
+        <COMMA> {
+            mde = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+    )?
+    <RPAREN> {
+        return new QuantileTestBucketParser(getPos(), Y, T, percentiles, uin, bootstrapNum, alpha, power, mde, engineType);
+    }
+}
+
+SqlNode MannWhitneyUTestNode() :
+{
+    String alternative = "two-sided";
+    String Y;
+    String T;
+    String continuity_correction = "1";
+}
+{
+    <LPAREN> {
+        Y = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    <COMMA> {
+        T = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    } (
+        <COMMA> {
+            alternative = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+    )?  (
+        <COMMA> {
+            continuity_correction = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        }
+    )?
+    <RPAREN> {
+        return new MannWhitneyUTestParser(getPos(), Y, T, alternative, continuity_correction, engineType);
     }
 }
 
@@ -2455,9 +2589,60 @@ SqlNode ExactMatching() :
         }
     )*
     <RPAREN> {
-        return new ExactMatchingParser(getPos(), treatment, labels);
+        return new ExactMatchingParser(getPos(), treatment, labels, engineType);
     }
 }
+
+SqlNode BootStrap() :
+{
+    String bootStrapFunc = "";
+    String sampleNum = "";
+    String bsNum = "";
+}
+{
+    <LPAREN> {
+        bootStrapFunc = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    <COMMA> {
+        sampleNum = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    <COMMA> {
+        bsNum = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    <RPAREN> {
+        return new BootStrapParser(getPos(), bootStrapFunc, sampleNum, bsNum, engineType);
+    }
+}
+
+SqlNode Permutation() :
+{
+    String permutationFunc = "";
+    String permutationNum = "";
+    String mde = "0";
+    String mdeType = "1";
+}
+{
+    <LPAREN> {
+        permutationFunc = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    <COMMA> {
+        permutationNum = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    (
+    <COMMA> {
+        mde = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    )?
+    (
+    <COMMA> {
+        mdeType = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+    }
+    )?
+    <RPAREN> {
+        return new PermutationParser(getPos(), permutationFunc, permutationNum, mde, mdeType, engineType);
+    }
+}
+
 
 SqlNode IvRegression() :
 {
@@ -2493,7 +2678,7 @@ SqlNode IvRegression() :
     )*
 
     <RPAREN> {
-        return new IvRegressionParser(getPos(), y, iv, ds, xs);
+        return new IvRegressionParser(getPos(), y, iv, ds, xs, engineType);
     }
 }
 
@@ -2507,8 +2692,8 @@ SqlNode RecursiveForcasting() :
     String group;
     String model;
     String bs_param;
-    String sample_num;
-    String bs_num;
+    String sampleNum;
+    String bsNum;
 }
 {
     <LPAREN> <LBRACKET> {
@@ -2572,14 +2757,14 @@ SqlNode RecursiveForcasting() :
         bs_param = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
     }
     <COMMA> {
-        sample_num = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        sampleNum = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
     }
     <COMMA> {
-        bs_num = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
+        bsNum = Expression(ExprContext.ACCEPT_SUB_QUERY).toString();
     }
 
     <RPAREN> {
-        return new RecursiveForcasting(getPos(), surrogates, formula, predict, y, group, model, bs_param, sample_num, bs_num);
+        return new RecursiveForcasting(getPos(), surrogates, formula, predict, y, group, model, bs_param, sampleNum, bsNum, engineType);
     }
 }
 
@@ -2626,6 +2811,14 @@ SqlNode SelectCausalFunction() :
     e = CaliperMatching()
 |   <EXACTMATCHING>
     e = ExactMatching()
+|   <BOOTSTRAP>
+    e = BootStrap()
+|   <PERMUTATION>
+    e = Permutation()
+|   <QUANTILETESTBUCKET>
+    e = QuantileTestBucket()
+|   <MANNWHITNEYUTEST>
+    e = MannWhitneyUTestNode()
 )
     { return e; }
 }
@@ -9085,7 +9278,7 @@ SqlPostfixOperator PostfixRowOperator() :
 |   < SCOPE_NAME: "SCOPE_NAME" >
 |   < SCOPE_SCHEMA: "SCOPE_SCHEMA" >
 |   < SCROLL: "SCROLL" >
-|   < SEARCH: "SEARCH" >
+//|   < SEARCH: "SEARCH" >
 |   < SECOND: "SECOND" >
 |   < SECONDS: "SECONDS" >
 |   < SECTION: "SECTION" >
@@ -9292,6 +9485,7 @@ SqlPostfixOperator PostfixRowOperator() :
 |   < OLS: "ols" >
 |   < IVREGRESSION: "ivRegression" >
 |   < PSE: "pse" >
+|   < EDGEWORTHTEST: "edgeworthTest" >
 //|   < OLSSTATE: "olsState" >
 |   < PREDICT: "predict" >
 |   < WLS: "wls" >
@@ -9311,6 +9505,10 @@ SqlPostfixOperator PostfixRowOperator() :
 |   < CV: "cv" >
 |   < CALIPERMATCHING: "caliperMatching" >
 |   < EXACTMATCHING: "exactMatching" >
+|   < BOOTSTRAP: "bootStrap" >
+|   < PERMUTATION: "permutation" >
+|   < QUANTILETESTBUCKET: "quantileTestBucket" >
+|   < MANNWHITNEYUTEST: "mann_whitney_u_test" >
 <#-- additional parser keywords are included here -->
 <#list (parser.keywords!default.parser.keywords) as keyword>
 |   < ${keyword}: "${keyword}" >

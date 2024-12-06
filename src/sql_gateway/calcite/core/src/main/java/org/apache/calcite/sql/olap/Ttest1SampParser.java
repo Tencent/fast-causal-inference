@@ -30,12 +30,9 @@ public class Ttest1SampParser extends SqlCallCausal {
   private ArrayList<String> map, map_cuped;
   private String func, func_cuped, mu, altertive;
 
-  public Ttest1SampParser(SqlParserPos pos) {
-    super(pos);
-  }
 
-  public Ttest1SampParser(SqlParserPos pos, ArrayList<String> map, String func, String altertive, String mu, ArrayList<String> map_cuped, String func_cuped) {
-    super(pos);
+  public Ttest1SampParser(SqlParserPos pos, ArrayList<String> map, String func, String altertive, String mu, ArrayList<String> map_cuped, String func_cuped, EngineType engineType) {
+    super(pos, engineType);
     this.map = map;
     this.func = func;
     this.func_cuped = func_cuped;
@@ -63,7 +60,7 @@ public class Ttest1SampParser extends SqlCallCausal {
     return func;
   }
 
-  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+  @Override  public void unparseClickHouse(SqlWriter writer, int leftPrec, int rightPrec) {
     writer.print("Ttest_1samp");
     writer.print("(\'" + func + "\',");
     writer.print("\'" + altertive + "\',");
@@ -82,6 +79,31 @@ public class Ttest1SampParser extends SqlCallCausal {
       writer.print(",");
       writer.print(map_cuped.get(i).replaceAll("`", "").replaceAll(" ", ""));
     }
+    writer.print(")");
+  }
+
+  @Override  public void unparseStarRocks(SqlWriter writer, int leftPrec, int rightPrec) {
+    writer.print("ttest_1samp");
+    writer.print("(\'" + func + "\',");
+    writer.print("\'" + altertive + "\',");
+    writer.print(mu + ",[");
+
+    for (int i = 0; i < map.size(); i++) {
+      if (i != 0) writer.print(",");
+      writer.print(map.get(i).replaceAll("`", "").replaceAll(" ", ""));
+    }
+
+    for (int i = 0; i < map_cuped.size(); i++) {
+      writer.print(",");
+      writer.print(map_cuped.get(i).replaceAll("`", "").replaceAll(" ", ""));
+    }
+
+    writer.print("]");
+
+    if (func_cuped.length() != 0) {
+      writer.print(",\'X=" + exchangeFunc(func_cuped, map.size()) + "\'");
+    }
+    
     writer.print(")");
   }
 

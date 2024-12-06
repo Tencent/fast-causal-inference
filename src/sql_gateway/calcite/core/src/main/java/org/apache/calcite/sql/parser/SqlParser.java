@@ -31,6 +31,7 @@ import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.sql.validate.SqlDelegatingConformance;
 import org.apache.calcite.util.SourceStringReader;
+import org.apache.calcite.sql.olap.EngineType;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -49,7 +50,7 @@ import java.util.Set;
 @Value.Enclosing
 @SuppressWarnings("deprecation")
 public class SqlParser {
-  public static final int DEFAULT_IDENTIFIER_MAX_LENGTH = 128;
+  public static final int DEFAULT_IDENTIFIER_MAX_LENGTH = 256;
 
   /** Default value of {@link Config#timeUnitCodes()}.
    * The map is empty, which means that there are no abbreviations other than
@@ -72,6 +73,7 @@ public class SqlParser {
     parser.setTabSize(1);
     parser.setQuotedCasing(config.quotedCasing());
     parser.setUnquotedCasing(config.unquotedCasing());
+    parser.setEngineType(config.engineType());
     parser.setIdentifierMaxLength(config.identifierMaxLength());
     parser.setTimeUnitCodes(config.timeUnitCodes());
     parser.setConformance(config.conformance());
@@ -258,6 +260,7 @@ public class SqlParser {
     return new ConfigBuilder().setConfig(config);
   }
 
+
   /**
    * Interface to define the configuration for a SQL parser.
    */
@@ -283,6 +286,12 @@ public class SqlParser {
 
     @Value.Default default Casing unquotedCasing() {
       return Casing.TO_UPPER;
+    }
+
+    Config withEngineType(EngineType engineType);
+
+    @Value.Default default EngineType engineType() {
+      return EngineType.ClickHouse;
     }
 
     /** Sets {@link #unquotedCasing()}. */

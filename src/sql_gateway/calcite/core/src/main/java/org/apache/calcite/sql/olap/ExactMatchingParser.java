@@ -120,12 +120,8 @@ public class ExactMatchingParser extends SqlCallCausal {
   +
       "    )";
 
-  public ExactMatchingParser(SqlParserPos pos) {
-    super(pos);
-  }
-
-  public ExactMatchingParser(SqlParserPos pos, String treatment, ArrayList<String> labels) {
-    super(pos);
+  public ExactMatchingParser(SqlParserPos pos, String treatment, ArrayList<String> labels, EngineType engineType) {
+    super(pos, engineType);
     this.treatment = SqlForwardUtil.exchangIdentity(treatment);
     this.labels = labels;
     this.causal_function_name = "exactMatching";
@@ -141,9 +137,6 @@ public class ExactMatchingParser extends SqlCallCausal {
     for (int i = 1; i <= labels.size(); i++) {
       PHLabels += "l" + String.valueOf(i);
       PHLabels += (i == labels.size() ? " " : ",");
-      if (i == labels.size())
-        PHLabels += " ";
-      else PHLabels += ",";
     }
 
     String PHends = "";
@@ -164,7 +157,7 @@ public class ExactMatchingParser extends SqlCallCausal {
     }
 
     String with = with_template;
-    with = with.replaceAll("@PH1", treatment);
+    with = with.replaceAll("@PH1", "if(" + treatment + "=1, 1, -1)");
     with = with.replaceAll("@PHLabels", PHLabels);
     with = with.replaceAll("@PHends", PHends);
     with = with.replaceAll("@PHLabelA", PHLabelsA);

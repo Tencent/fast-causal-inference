@@ -27,12 +27,9 @@ public class PredictParser extends SqlCallCausal {
 
   private String model = "";
 
-  public PredictParser(SqlParserPos pos) {
-    super(pos);
-  }
 
-  public PredictParser(SqlParserPos pos, String model, ArrayList<String> params) {
-    super(pos);
+  public PredictParser(SqlParserPos pos, String model, ArrayList<String> params, EngineType engineType) {
+    super(pos, engineType);
     this.model = model;
     this.causal_function_name = "predict";
     this.params = params;
@@ -42,13 +39,44 @@ public class PredictParser extends SqlCallCausal {
     return null;
   }
 
-  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+  @Override public void unparseClickHouse(SqlWriter writer, int leftPrec, int rightPrec) {
     withs.add("(select " + model.replaceAll("olsState", "OlsState").replaceAll("\\+",",").replaceAll("~", ",") + " from @TBL) as model");
     writer.print("evalMLMethod(model");
     for (int i = 0; i < params.size(); ++i) {
       writer.print("," + params.get(i));
     }
     writer.print(")");
+  }
+
+  @Override public void unparseStarRocks(SqlWriter writer, int leftPrec, int rightPrec) {
+    model = model.replaceAll("olsState", "ols_train").replaceAll("\\+",",").replaceAll("~", ",");
+    String[] cols = model.substring(model.indexOf('(') + 1, model.indexOf(")")).split(",");
+    String y = cols[0];
+    ArrayList<String> X = new ArrayList<String>();
+    String useBias = "true";
+
+    for (int i = 1; i < cols.length; ++i) {
+      if (i == cols.length - 1 && (cols[i].equals("TRUE") || cols[i].equals("true") || cols[i].equals("FALSE") || cols[i].equals("false"))) {
+        useBias = cols[i];
+      } else {
+        X.add(cols[i]);
+      }
+    }
+    withs.add(String.format("__eval_ml_tmp_tbl__ as (select ols_train(%s,[%s],%s) as model from @TBL)", y, String.join(",", X), useBias));
+    this.replace_table = "@TBL, __eval_ml_tmp_tbl__";
+    writer.print("eval_ml_method(model,");
+    writer.print(String.format("[%s]", String.join(",", params)));
+    writer.print(")");
+  }
+
+  static Boolean isBooleanStr(String str) {
+    if (str.equals("TRUE") || str.equals("true")) {
+      return true;
+    }
+    if (str.equals("FALSE") || str.equals("false")) {
+      return false;
+    }
+    return null;
   }
 
   @Override public List<SqlNode> getOperandList() {

@@ -36,6 +36,9 @@ public class HttpUtils {
 
 
         Request.Builder builder = new Request.Builder().url(path);
+        if (headers == null) {
+            headers = new HashMap<>();
+        }
         for (String key : headers.keySet()) {
             builder.addHeader(key, headers.get(key));
         }
@@ -46,7 +49,7 @@ public class HttpUtils {
             Response response = client.newCall(request).execute();
             if (response.isSuccessful()) {
                 String resBodyStr = response.body().string();
-                logger.info("response=" + resBodyStr);
+                //logger.info("response=" + resBodyStr);
                 return JsonParser.parseString(resBodyStr).getAsJsonObject();
             } else {
                 return null;

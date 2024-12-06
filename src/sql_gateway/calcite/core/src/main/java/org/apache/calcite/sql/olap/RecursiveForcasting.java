@@ -52,13 +52,10 @@ public class RecursiveForcasting extends SqlCallCausal {
   String bs_num;
 
 
-  public RecursiveForcasting(SqlParserPos pos) {
-    super(pos);
-  }
 
   public RecursiveForcasting(SqlParserPos pos, ArrayList<ArrayList<String>> surrogates, String formula, String predict, String y, String group,
-      String model, String bs_param, String sample_num, String bs_num) {
-    super(pos);
+      String model, String bs_param, String sample_num, String bs_num, EngineType engineType) {
+    super(pos, engineType);
     this.causal_function_name = "recursiveForcasting";
     this.surrogates = surrogates;
     this.formula = new ArrayList<String> (Arrays.asList(formula.split("\\+")));
@@ -90,7 +87,8 @@ public class RecursiveForcasting extends SqlCallCausal {
     boolean use_bs = true;
 
     if (use_bs) {
-      this.model = "BootStrapOlsState('" + model + "', " + sample_num + "," + "1," + bs_param + ")";
+      //this.model = "BootStrapOlsState('" + model + "', " + sample_num + "," + "1," + bs_param + ")";
+      this.model = "OlsState(True)";
     }
 
     String PH_MODEL;
@@ -125,70 +123,59 @@ public class RecursiveForcasting extends SqlCallCausal {
     String PH_PREDICT0 = "";
     String PH_PREDICT1 = "";
     int l = 1, r = surrogates.size();
-      for (int i = predict_start; i <= predict_end; i++) {
-        for (int j = 1; j <= model_num; j++) {
-          String tmp0 = "evalMLMethod(";
-          String tmp1 = "evalMLMethod(";
-          tmp0 +=  "model0." + String.valueOf(j);
-          tmp1 +=  "model1." + String.valueOf(j);
-          String tmp = "";
-          for (int k = x_num; k >= 1; k--) {
-            for (int z = 0; z < model_num; z++) {
-              if (i - k >= l && i - k <= r)
-                tmp += "," + surrogates.get(i-k-1).get(z);
-              else tmp += ", x" + String.valueOf(i - k) + String.valueOf(z  + 1);
-            }
+    for (int i = predict_start; i <= predict_end; i++) {
+      for (int j = 1; j <= model_num; j++) {
+        String tmp0 = "evalMLMethod(";
+        String tmp1 = "evalMLMethod(";
+        tmp0 +=  "model0." + String.valueOf(j);
+        tmp1 +=  "model1." + String.valueOf(j);
+        String tmp = "";
+        for (int k = x_num; k >= 1; k--) {
+          for (int z = 0; z < model_num; z++) {
+            if (i - k >= l && i - k <= r)
+              tmp += "," + surrogates.get(i-k-1).get(z);
+            else tmp += ", x" + String.valueOf(i - k) + String.valueOf(z  + 1);
           }
-          if (use_bs)
-            tmp += XS + ") as x" + String.valueOf(i) + String.valueOf(j) + ",\n";
+        }
+        if (use_bs)
+          tmp += XS + ") as x" + String.valueOf(i) + String.valueOf(j) + ",\n";
         else
           tmp += XS + ") as x" + String.valueOf(i) + String.valueOf(j) + ",\n";
-          PH_PREDICT0 += tmp0 + tmp;
-          PH_PREDICT1 += tmp1 + tmp;
-        }
+        PH_PREDICT0 += tmp0 + tmp;
+        PH_PREDICT1 += tmp1 + tmp;
       }
+    }
 
-      PH_PREDICT0 = PH_PREDICT0.substring(0, PH_PREDICT0.length() - 2);
-      PH_PREDICT1 = PH_PREDICT1.substring(0, PH_PREDICT1.length() - 2);
+    PH_PREDICT0 = PH_PREDICT0.substring(0, PH_PREDICT0.length() - 2);
+    PH_PREDICT1 = PH_PREDICT1.substring(0, PH_PREDICT1.length() - 2);
 
     String tmp_tbl0 = template_tbl;
     tmp_tbl0 = tmp_tbl0.replaceAll("@PH_PREDICT", PH_PREDICT0);
     String tmp_tbl1 = template_tbl;
     tmp_tbl1 = tmp_tbl1.replaceAll("@PH_PREDICT", PH_PREDICT1);
 
-    String PH_TBLS = tmp_tbl0 + " 0 " + " union all " + tmp_tbl1 + " 1 ";
+    String PH_TBLS = tmp_tbl0 + " 0 \n" + " union all " + tmp_tbl1 + " 1 \n";
+    PH_TBLS = PH_TBLS.replaceAll("@PH_GROUP", group);
+
+
+    with += ",\n (select DistributedNodeRowNumber(0) from ( " + PH_TBLS + ")) as pa";
+
+    String prefix = "SELECT \n";
     if (use_bs) {
       tmp_tbl0 += "0";
       tmp_tbl1 += "1";
-      String prefix = "SELECT \n";
       for (int i = predict_start; i <= predict_end; i++) {
-        String tmp = "BootStrapState(\'Ttest_2samp(\"x1\", \"two-sided\")\'," + sample_num +  ", " + bs_num +  ",  " + bs_param +  ")(@PH_X, group) as s" + String.valueOf(i) + ",";
+        String tmp = "BootStrap(\'Ttest_2samp(\"x1\", \"two-sided\")\'," + sample_num +  ", " + bs_num +  ",  pa)(@PH_X, group) as s" + String.valueOf(i) + ",";
         tmp = tmp.replaceAll("@PH_X", "x" + String.valueOf(i) + String.valueOf(this.y));
         prefix += tmp;
       }
       prefix = prefix.substring(0, prefix.length() - 1) + ' ';
-      prefix += "FROM (";
-      PH_TBLS = prefix + tmp_tbl0 + ") union all " + prefix + tmp_tbl1 + ")";
+      prefix += "FROM (" + PH_TBLS + ")";
     }
 
-    String PH_TTESTS = "";
-
-    for (int i = predict_start; i <= predict_end; i++) {
-      String tmp = useTtest ? template_ttest : template_no_ttest;
-      if (use_bs) {
-        tmp = "BootStrapMerge(\'Ttest_2samp(\"x1\", \"two-sided\")\'," + sample_num +  ", " + bs_num +  ",  " + bs_param +  ")(s" + String.valueOf(i) + ")";
-      }
-      tmp = tmp.replaceAll("@PH_INDEX", String.valueOf(i));
-      tmp = tmp.replaceAll("@PH_X", "x" + String.valueOf(i) + String.valueOf(y));
-      PH_TTESTS += tmp + ",";
-    }
-    PH_TTESTS = PH_TTESTS.substring(0, PH_TTESTS.length() - 1) + ' ';
 
     this.withs.add(with);
-    func_template = func_template.replaceAll("@PH_TBLS", PH_TBLS);
-    func_template = func_template.replaceAll("@PH_TTESTS", PH_TTESTS);
-    func_template = func_template.replaceAll("@PH_GROUP", group);
-    this.replace_sql = " select " + func_template;
+    this.replace_sql = prefix;
   }
 
   @Override public List<SqlNode> getOperandList() {

@@ -30,34 +30,49 @@ public class DeltaMethodParser extends SqlCallCausal {
   private ArrayList<String> map;
   private String func;
 
-  public DeltaMethodParser(SqlParserPos pos) {
-    super(pos);
-  }
+  private String is_std;
 
-  public DeltaMethodParser(SqlParserPos pos, ArrayList<String> map, String func) {
-    super(pos);
+  public DeltaMethodParser(SqlParserPos pos, ArrayList<String> map, String func, String is_std, EngineType engineType) {
+    super(pos, engineType);
     this.map = map;
     this.func = func;
+    this.is_std = is_std;
+    this.causal_function_name = "deltamethod";
+    this.engineType = engineType;
   }
 
   @Override public SqlOperator getOperator() {
     return null;
   }
 
-  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+  @Override  public void unparseClickHouse(SqlWriter writer, int leftPrec, int rightPrec) {
     writer.print("Deltamethod");
     writer.print("(\'");
     writer.print(func);
-    writer.print("\')(");
+    writer.print("\'," + is_std + ")(");
     for (int i = 0; i < map.size(); i++) {
       if (i != 0) writer.print(",");
       writer.print(map.get(i).replaceAll("`", ""));
     }
     writer.print(")");
-    this.causal_function_name = "deltamethod";
+  }
+
+  @Override  public void unparseStarRocks(SqlWriter writer, int leftPrec, int rightPrec) {
+    writer.print("delta_method");
+    writer.print("(\'");
+    writer.print(func);
+    writer.print("\', " + is_std + ", [");
+    for (int i = 0; i < map.size(); i++) {
+      if (i > 0) {
+        writer.print(",");
+      }
+      writer.print(map.get(i).replaceAll("`", ""));
+    }
+    writer.print("])");
   }
 
   @Override public List<SqlNode> getOperandList() {
     return null;
   }
 }
+

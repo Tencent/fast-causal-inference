@@ -28,12 +28,9 @@ public class CutBinsParser extends SqlCallCausal {
   private ArrayList<String> buckets;
   private boolean use_string;
 
-  public CutBinsParser(SqlParserPos pos) {
-    super(pos);
-  }
 
-  public CutBinsParser(SqlParserPos pos, String target, ArrayList<String> buckets, String use_string) {
-    super(pos);
+  public CutBinsParser(SqlParserPos pos, String target, ArrayList<String> buckets, String use_string, EngineType engineType) {
+    super(pos, engineType);
     causal_function_name = "cutBins";
     this.target = SqlForwardUtil.exchangIdentity(target);
     this.buckets = buckets;
@@ -44,7 +41,7 @@ public class CutBinsParser extends SqlCallCausal {
     return null;
   }
 
-  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+  @Override public void unparseClickHouse(SqlWriter writer, int leftPrec, int rightPrec) {
     writer.print("multiIf(");
     writer.print(target + "<" + buckets.get(0));
     if (use_string)
@@ -63,6 +60,31 @@ public class CutBinsParser extends SqlCallCausal {
       writer.print(", '>=" + buckets.get(buckets.size() - 1) + "'");
     else
       writer.print(", " + String.valueOf(buckets.size() + 1));
+    writer.print(")");
+  }
+
+  @Override public void unparseStarRocks(SqlWriter writer, int leftPrec, int rightPrec) {
+    writer.print("if(");
+    writer.print(target + "<" + buckets.get(0));
+    if (use_string)
+      writer.print(", '" + buckets.get(0) + "'");
+    else
+      writer.print(", 1");
+
+    for (int i = 0; i < buckets.size() - 1; i++) {
+      writer.print(", if(" + target + ">=" + buckets.get(i) + " and " + target + "<" + buckets.get(i+1));
+      if (use_string)
+        writer.print(", '[" + buckets.get(i) + "," + buckets.get(i+1) + ")'");
+      else
+        writer.print(", " + String.valueOf(i + 2));
+    }
+    if (use_string)
+      writer.print(", '>=" + buckets.get(buckets.size() - 1) + "'");
+    else
+      writer.print(", " + String.valueOf(buckets.size() + 1));
+    for (int i = 0; i < buckets.size() - 1; ++i) {
+      writer.print(")");
+    }
     writer.print(")");
   }
 

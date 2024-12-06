@@ -12,8 +12,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.rmi.server.ServerNotActiveException;
 import java.sql.*;
 import java.text.DecimalFormat;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,20 +32,51 @@ public class OlapUtil {
 
     public Connection getConnection(String database, Integer deviceId, String launcherIp, EngineType engineType)
             throws ClassNotFoundException, SQLException {
+        return getConnection(database, deviceId, launcherIp, engineType, null, null);
+    }
+
+    public Connection getConnection(String database, Integer deviceId, String launcherIp, EngineType engineType, String user, String password)
+            throws ClassNotFoundException, SQLException {
         if (deviceId == null) {
-            throw new RuntimeException("Unknown deviceId.");
+            throw new RuntimeException("deviceId cannot be null.");
         }
         OlapProperties olapProperties = allOlapProperties.getOlapProperties(engineType);
         Class.forName(olapProperties.getDriver());
         for (Device deviceInfo : olapProperties.getDevices()) {
-            if (deviceInfo.getId() == deviceId) {
+            if (deviceInfo.getId().equals(deviceId)) {
                 String olapUrl = getOlapUrl(database, launcherIp, deviceInfo);
-                String olapUser = deviceInfo.getUser();
-                String olapPassword = deviceInfo.getPassword();
+                String olapUser = user != null ? user : deviceInfo.getUser();
+                String olapPassword = password != null ? password : deviceInfo.getPassword();
+                //logger.info("olapUrl=" + olapUrl);
                 return DriverManager.getConnection(olapUrl, olapUser, olapPassword);
             }
         }
         throw new RuntimeException("Unknown deviceId.");
+    }
+
+    public boolean tryConnect(String user, String password, Device deviceInfo) throws ServerNotActiveException {
+        try {
+            Connection connection = DriverManager.getConnection(getOlapUrl("information_schema", null, deviceInfo),
+                    user, password);
+            connection.close();
+            return true;
+        } catch (Exception e) {
+            if (e.getMessage().contains("Access denied")) {
+                return false;
+            }
+            throw new ServerNotActiveException("Starrocks server is not active.");
+        }
+    }
+
+    public Device getRandomDevice(EngineType engineType) throws ClassNotFoundException, SQLException {
+        OlapProperties olapProperties = allOlapProperties.getOlapProperties(engineType);
+        Class.forName(olapProperties.getDriver());
+        List<Device> devices = olapProperties.getDevices();
+        if (devices.size() == 0) {
+            throw new RuntimeException("No device available.");
+        }
+        Device deviceInfo = devices.get((int) (Math.random() * devices.size()));
+        return deviceInfo;
     }
 
     private static String getOlapUrl(String database, String launcherIp, Device deviceInfo) {

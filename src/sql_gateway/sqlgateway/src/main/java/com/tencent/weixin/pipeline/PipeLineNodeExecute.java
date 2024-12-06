@@ -1,9 +1,11 @@
 package com.tencent.weixin.pipeline;
 
 import com.alibaba.fastjson.JSON;
+import com.tencent.weixin.model.SqlDetailModel;
 import com.tencent.weixin.model.SqlUdfModel;
 import com.tencent.weixin.proto.AisDataframe;
 import com.tencent.weixin.service.OlapExecuteService;
+import com.tencent.weixin.service.SqlDetailService;
 import com.tencent.weixin.service.SqlUdfService;
 import com.tencent.weixin.utils.DataFrameUtil;
 import com.tencent.weixin.utils.olap.EngineType;
@@ -17,17 +19,28 @@ public class PipeLineNodeExecute extends PipeLineNode<AisDataframe.DataFrame> {
 
     private final SqlUdfService sqlUdfService;
 
+    private final SqlDetailService sqlDetailService;
+
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     static private Integer MAX_LIMIT = 1000000;
 
     public PipeLineNodeExecute(String dataBase, int deviceId, OlapExecuteService olapExecuteService,
-                               SqlUdfService sqlUdfService, EngineType engineType) {
+                               SqlUdfService sqlUdfService, SqlDetailService sqlDetailService, EngineType engineType, String rtx, String user, String password) {
         this.dataBase = dataBase;
         this.deviceId = deviceId;
         this.olapExecuteService = olapExecuteService;
         this.sqlUdfService = sqlUdfService;
+        this.sqlDetailService = sqlDetailService;
         this.engineType = engineType;
+        this.rtx = rtx;
+        this.user = user;
+        this.password = password;
+    }
+
+    public PipeLineNodeExecute(String dataBase, int deviceId, OlapExecuteService olapExecuteService,
+                               SqlUdfService sqlUdfService, SqlDetailService sqlDetailService, EngineType engineType, String rtx) {
+        this(dataBase, deviceId, olapExecuteService, sqlUdfService, sqlDetailService, engineType, rtx, null, null);
     }
 
     @Override
@@ -35,16 +48,29 @@ public class PipeLineNodeExecute extends PipeLineNode<AisDataframe.DataFrame> {
         return "Select";
     }
 
+    public SqlDetailModel generateDetailOutput(String sql) {
+        SqlDetailModel detail =  new SqlDetailModel();
+        detail.setCreator("allinsql");
+        detail.setRawSql(sql);
+        detail.setExecuteSql(sql);
+        detail.setDeviceId(100001);
+        detail.setDatabase("allinsql");
+        return detail;
+    }
+
     @Override
     public void workImpl() throws Exception {
         logger.info("Select workImpl, dataBase: " + dataBase + ", deviceId: " + deviceId + " data: " + data);
         try {
+
             String executeSql = DataFrameUtil.transformDataFrameToSql(data);
             logger.info("Select workImpl, sql: " + executeSql);
+            //记录原始sql
+            sqlDetailService.insert(generateDetailOutput(executeSql));
             long calciteSqlCostTime = 0;
 
             for (SqlUdfModel udfName : sqlUdfService.select()) {
-                if (executeSql.toUpperCase().contains(udfName.getUdf().toUpperCase() + "(")) {
+                if (executeSql.toUpperCase().contains(udfName.getUdf().toUpperCase())) {
                     if (udfName.getIsDisable()) {
                         throw new Exception("udf " + udfName.getUdf() + " is disable");
                     }
@@ -73,7 +99,7 @@ public class PipeLineNodeExecute extends PipeLineNode<AisDataframe.DataFrame> {
                         ", result_overflow_mode = 'break', max_block_size=2000, distributed_ddl_task_timeout = 1800, max_execution_time = 1800, max_parser_depth = 3000";
             }
 
-            JSON result = olapExecuteService.execute(deviceId, dataBase, executeSql, null, true, engineType);
+            JSON result = olapExecuteService.execute(deviceId, dataBase, executeSql, null, true, engineType, this.rtx, user, password, true, 600);
             logger.info("Query Olap Finish, Result: " + result);
             AisDataframe.DataFrame.Builder dataBuilder = data.toBuilder();
             // fill data's result
@@ -89,4 +115,7 @@ public class PipeLineNodeExecute extends PipeLineNode<AisDataframe.DataFrame> {
     private final String dataBase;
     private final int deviceId;
     private final EngineType engineType;
+    private final String rtx;
+    private final String user;
+    private final String password;
 }

@@ -38,4 +38,9 @@ public class SqlDetailModel {
     private String launcherIp;
     private Boolean isCalciteParse;
     private Boolean isDataframeOutput;
+    private String engineType;
+    private String encryptedUgi;
+    private Boolean isQuery;
+    private Boolean skipCalcite;
+    private Integer maxQueryTime;
 }

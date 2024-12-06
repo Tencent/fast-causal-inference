@@ -41,7 +41,10 @@ public class SqlUdfService {
             new SqlUdfModel(12, "nonParamDML", "nonParamDML", false),
             new SqlUdfModel(13, "cutbins", "cutbins", false),
             new SqlUdfModel(14, "caliperMatching", "caliperMatching", false),
-            new SqlUdfModel(15, "exactMatching", "exactMatching", false));
+            new SqlUdfModel(15, "exactMatching", "exactMatching", false),
+            new SqlUdfModel(16, "bootStrap", "bootStrap", false),
+            new SqlUdfModel(17, "quantileTestBucket", "quantileTestBucket", false)
+    );
 
     public List<SqlUdfModel> select() {
         if (!isDatasourceOpen) {
