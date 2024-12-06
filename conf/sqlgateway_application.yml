@@ -1,37 +1,40 @@
 server:
   port: 9099
   address: 0.0.0.0
-  tomcat:
-    threads:
-      max: 800         # Maximum number of worker threads, default 200
-      min-spare: 100     # Minimum number of idle worker threads, default 10
 
 spring:
   datasource:
-    is-open: false
+    is-open: true
+    cdb:
+      username: 
+      password: 
+      jdbc-url: jdbc:mysql://...:3306/mmexptrule?characterEncoding=utf-8
+      driver-class-name: com.mysql.cj.jdbc.Driver
     mysql:
-      username: root
-      password: allinsql666
-      jdbc-url: jdbc:mysql://172.22.0.2:3306/mmexptdataplatform?characterEncoding=utf-8
+      username: 
+      password: 
+      jdbc-url: jdbc:mysql://...:3306/mmexptdataplatform?characterEncoding=utf-8
       driver-class-name: com.mysql.cj.jdbc.Driver
       # hikari 数据库连接池配置
       type: com.zaxxer.hikari.HikariDataSource
       pool-name: SqlGateway-MysqlHiKariPool
       minimum-idle: 10 # 最小空闲连接，默认值10
-      maximum-pool-size: 200 # 最大连接数，默认值10
+      maximum-pool-size: 500 # 最大连接数，默认值10
       idle-timeout: 500000 # 池中空闲连接超时时间, 默认值600000(10分钟), 大于等于max-lifetime且max-lifetime>0, 会被重置为0
       max-lifetime: 540000 # 池中连接最大存活时间, 不等于0且小于30秒, 会被重置为默认值30分钟.设置应该比mysql设置的超时时间短
       connection-timeout: 60000 # 连接超时时间, 默认值30000毫秒(5分钟)
     clickhouse:
-      username: default
-      password: allinsql666
-      jdbc-url: jdbc:clickhouse://172.22.0.3:8123/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
-      driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
-    starrocks:
-      username: root
+      username: 
       password: 
-      jdbc-url: jdbc:clickhouse://172.22.0.6:9030/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
-      driver-class-name: com.mysql.cj.jdbc.Driver
+      jdbc-url: jdbc:clickhouse://...:8123/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
+      driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+      type: com.zaxxer.hikari.HikariDataSource
+      pool-name: SqlGateway-ClickhouseHiKariPool
+      minimum-idle: 10
+      maximum-pool-size: 20 
+      idle-timeout: 500000 
+      max-lifetime: 540000 
+      connection-timeout: 60000
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
@@ -40,57 +43,48 @@ olap:
   clickhouse:
     driver: com.clickhouse.jdbc.ClickHouseDriver
     devices:
-      - id: 1
-        url: jdbc:clickhouse://172.22.0.3:8123/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
-        user: default
-        password: allinsql666
+      - id: 2
+        url: jdbc:clickhouse://...:8123/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
+        user: 
+        password: 
+        ip:     
+          - ...
+          - ...
+          - ...
+      - id: 3
+        url: jdbc:clickhouse://...:8123/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
+        user: 
+        password: 
         ip:
-          - 172.22.0.3
+          - ...
+          - ...
+          - ...
   starrocks:
     driver: com.mysql.cj.jdbc.Driver
     devices:
-      - id: 2
-        url: jdbc:mysql://172.22.0.6:9030/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
-        user: root
+      - id: 1
+        url: jdbc:mysql://...:9030/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
+        user: 
         password: 
         ip:
-          - 172.22.0.6
-
-clickhouse:
-  driver: com.clickhouse.jdbc.ClickHouseDriver
-  devices:
-    - id: 1
-      url: jdbc:clickhouse://172.22.0.3:8123/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
-      user: default
-      password: allinsql666
-      ip:
-        - 172.22.0.3
-
-starrocks:
-  driver: com.mysql.cj.jdbc.Driver
-  devices:
-    - id: 2
-      url: jdbc:mysql://172.22.0.6:9030/all_in_sql?socket_timeout=3603000&max_execution_time=3602&compress=0
-      user: root
-      password: 
-      ip:
-        - 172.22.0.6
-
+          - ...
+          - ...
+          - ...
 
 mybatis:
   configuration:
-    map-underscore-to-camel-case: true
+    map-underscore-to-camel-case: true  # Bean类驼峰命名转换
 
 pagehelper:
-  reasonable: true
+  reasonable: true  # 分页合理化参数，默认值为 false 当该参数设置为 true 时,pageNum<=0 时会查询第一页,pageNum>pages(超过总数时)，会查询最后一页
   supportMethodsArguments: true
 
 springdoc:
   swagger-ui:
-    path: /api
+    path: /api   # 修改Swagger UI页面的请求路径
   api-docs:
-    path: /api/api-json-docs
-  paths-to-match: /api/**
+    path: /api/api-json-docs      # 修改api-docs路径
+  paths-to-match: /api/**    # 配置需要生成接口文档的接口路径
 
 logging:
   level:

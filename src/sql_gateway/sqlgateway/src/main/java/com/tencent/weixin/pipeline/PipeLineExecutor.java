@@ -1,9 +1,11 @@
 package com.tencent.weixin.pipeline;
 
+import com.google.common.collect.ForwardingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.LinkedList;
+import java.util.Queue;
 
 // TODO 多线程改造
 public class PipeLineExecutor<T> {
@@ -29,11 +31,8 @@ public class PipeLineExecutor<T> {
                     return;
                 }
 
-                System.out.println("start work:" + node.toString());
                 node.work();
                 node.transfromData();
-
-                System.out.println("end work:" + node.toString());
 
                 for (PipeLineNode<T> outputNode : node.output) {
                     if (outputNode.status == PipeLineNodeStatus.Ready) {

@@ -3,9 +3,16 @@ package com.tencent.weixin.service;
 import com.google.protobuf.util.JsonFormat;
 import com.tencent.weixin.dao.mysql.SqlDetailMapper;
 import com.tencent.weixin.model.SqlDetailModel;
-import com.tencent.weixin.pipeline.*;
+import com.tencent.weixin.pipeline.PipeLineExecutor;
+import com.tencent.weixin.pipeline.PipeLineNode;
+import com.tencent.weixin.pipeline.PipeLineNodeExecute;
+import com.tencent.weixin.pipeline.PipeLineNodeFillSchema;
+import com.tencent.weixin.pipeline.PipeLineNodeSink;
+import com.tencent.weixin.pipeline.PipeLineNodeSource;
 import com.tencent.weixin.proto.AisDataframe;
+import com.tencent.weixin.utils.AuditUtil;
 import com.tencent.weixin.utils.olap.EngineType;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +30,12 @@ public class DataFrameService {
 
     @Autowired
     private SqlDetailMapper sqlDetailMapper;
+
+    @Autowired
+    private SqlDetailService sqlDetailService;
+
+    @Autowired
+    private AuditUtil auditUtil;
 
     public AisDataframe.DataFrameRequest parseDataFrameRequestFromBase64String(String base64String) {
         try {
@@ -80,7 +93,6 @@ public class DataFrameService {
         sqlDetailModel.setCreator(df_req.getRtx());
         long startTime = System.currentTimeMillis();
 
-        System.out.println(df_req);
         AisDataframe.DataFrameResponse.Builder df_resp_builder = AisDataframe.DataFrameResponse.newBuilder();
         df_resp_builder.setStatus(AisDataframe.RetStatus.SUCC);
 
@@ -91,7 +103,9 @@ public class DataFrameService {
         } else if (sourceType == AisDataframe.SourceType.StarRocks) {
             engineType = EngineType.Starrocks;
         }
+        sqlDetailModel.setEngineType(engineType.toString().toLowerCase());
 
+        String user = null, password = null;
         try {
             PipeLineNode<AisDataframe.DataFrame> pipeLineNodeSource = new PipeLineNodeSource();
             pipeLineNodeSource.setData(df_req.getDf());
@@ -104,13 +118,13 @@ public class DataFrameService {
                 }
                 PipeLineNode<AisDataframe.DataFrame> pipeLineNodeFillSchema =
                         new PipeLineNodeFillSchema(df_req.getDatabase(), df_req.getDeviceId(),
-                                olapExecuteService, engineType);
+                                olapExecuteService, engineType, df_req.getRtx(), user, password);
                 pipeLineNodeSource.addOutput(pipeLineNodeFillSchema);
                 pipeLineNodeFillSchema.addOutput(pipeLineNodeSink);
             } else if (df_req.getTaskType() == AisDataframe.TaskType.EXECUTE) {
                 PipeLineNode<AisDataframe.DataFrame> pipeLineNodeExecute =
                         new PipeLineNodeExecute(df_req.getDatabase(), df_req.getDeviceId(), olapExecuteService,
-                                sqlUdfService, engineType);
+                                sqlUdfService, sqlDetailService, engineType, df_req.getRtx(), user, password);
                 pipeLineNodeSource.addOutput(pipeLineNodeExecute);
                 pipeLineNodeExecute.addOutput(pipeLineNodeSink);
             }
@@ -132,9 +146,18 @@ public class DataFrameService {
             sqlDetailModel.setExecuteSql(df.getExecuteSql());
             sqlDetailModel.setRetcode(5);
             sqlDetailModel.setRawSql(df.getResult().substring(0, Math.min(df.getResult().length(), 256)));
+            sqlDetailMapper.insert(sqlDetailModel);
+            auditUtil.audit(sqlDetailModel.getCreator(), "dataframe-run", sqlDetailModel.getEngineType(),
+                    sqlDetailModel.getDatabase(),
+                    df.getExecuteSql(), df.getExecuteSql(), "", (int) totalTime, "succ",
+                    df.getResult(), "");
             return df_resp_builder.build();
         } catch (Exception e) {
             logger.error("dataFrameExecuteImpl error: {}", e);
+            auditUtil.audit(sqlDetailModel.getCreator(), "dataframe-run", sqlDetailModel.getEngineType(),
+                    sqlDetailModel.getDatabase(),
+                    df_req.toString(), "", "", 0, "succ",
+                    e.getMessage(), "");
             return retError(e.getMessage(), df_resp_builder);
         }
     }

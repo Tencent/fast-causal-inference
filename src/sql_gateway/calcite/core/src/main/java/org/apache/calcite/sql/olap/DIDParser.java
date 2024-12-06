@@ -25,12 +25,9 @@ import java.util.List;
 public class DIDParser extends SqlCallCausal {
   private ArrayList<String> args;
 
-  public DIDParser(SqlParserPos pos) {
-    super(pos);
-  }
 
-  public DIDParser(SqlParserPos pos, ArrayList<String> args) {
-    super(pos);
+  public DIDParser(SqlParserPos pos, ArrayList<String> args, EngineType engineType) {
+    super(pos, engineType);
     this.args = args;
     this.causal_function_name = "did";
   }
@@ -39,15 +36,32 @@ public class DIDParser extends SqlCallCausal {
     return null;
   }
 
-  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+  @Override public void unparseClickHouse(SqlWriter writer, int leftPrec, int rightPrec) {
     writer.print("Ols(");
-    for (int i = 0; i < args.size(); i++) {
-      if (i != 0) writer.print(",");
-      if (i == 3)
-        writer.print(args.get(1) + "*" + args.get(2) + ",");
-      writer.print(args.get(i));
+    args.add(3, args.get(1) + "*" + args.get(2));
+    String arguments = String.join(",", args);
+    writer.print('\'' + arguments + "')");
+    writer.print("(" + arguments + ")");
+  }
+
+  @Override public void unparseStarRocks(SqlWriter writer, int leftPrec, int rightPrec) {
+    if (args.size() < 3) {
+      throw new RuntimeException("number of args is less than three.");
     }
-    writer.print(")");
+    String Y = args.get(0);
+    ArrayList<String> X = new ArrayList<>();
+    X.add(args.get(1));
+    X.add(args.get(2));
+    X.add(String.format("%s*%s", args.get(1), args.get(2)));
+    for (int i = 3; i < args.size(); ++i) {
+      X.add(args.get(i));
+    }
+    StringBuilder names = new StringBuilder("'" + Y);
+    for (String x : X) {
+      names.append(",").append(x);
+    }
+    names.append("'");
+    writer.print(String.format("ols(%s,[%s],true,%s)", Y, String.join(",", X), names));
   }
 
   @Override public List<SqlNode> getOperandList() {

@@ -10,7 +10,7 @@ import java.util.List;
 @Component
 @Getter
 @Setter
-@ConfigurationProperties("olap.starrocks")
+@ConfigurationProperties(prefix = "olap.starrocks")
 public class StarrocksProperties implements OlapProperties {
     private String driver;
     private List<Device> devices;

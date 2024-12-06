@@ -17,11 +17,19 @@ public class PipeLineNodeFillSchema extends PipeLineNode<AisDataframe.DataFrame>
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     public PipeLineNodeFillSchema(String dataBase, int deviceId, OlapExecuteService olapExecuteService,
-                                  EngineType engineType) {
+                                  EngineType engineType, String rtx, String user, String password) {
         this.dataBase = dataBase;
         this.deviceId = deviceId;
         this.olapExecuteService = olapExecuteService;
         this.engineType = engineType;
+        this.rtx = rtx;
+        this.user = user;
+        this.password = password;
+    }
+
+    public PipeLineNodeFillSchema(String dataBase, int deviceId, OlapExecuteService olapExecuteService,
+                                  EngineType engineType, String rtx) {
+        this(dataBase, deviceId, olapExecuteService, engineType, rtx, null, null);
     }
 
     @Override
@@ -37,6 +45,7 @@ public class PipeLineNodeFillSchema extends PipeLineNode<AisDataframe.DataFrame>
                 throw new Exception("FillSchema workImpl, data source type is not supported.");
             }
             String table_name;
+
             if (engineType == EngineType.Clickhouse) {
                 table_name = data.getSource().getClickhouse().getTableName();
             } else {
@@ -45,8 +54,9 @@ public class PipeLineNodeFillSchema extends PipeLineNode<AisDataframe.DataFrame>
             if (table_name.isEmpty()) {
                 throw new Exception("FillSchema workImpl, data source clickhouse table name is empty");
             }
+
             logger.info("FillSchema workImpl, data source clickhouse table name: " + table_name);
-            JSON result = olapExecuteService.execute(deviceId, dataBase, "desc " + table_name, null, true, engineType);
+            JSON result = olapExecuteService.execute(deviceId, dataBase, "desc " + table_name, null, true, engineType, this.rtx, this.user, this.password, true, 600);
             logger.info("Query ClickHouse Finish, Result: " + result);
             AisDataframe.DataFrame.Builder dataBuilder = data.toBuilder();
 
@@ -66,4 +76,7 @@ public class PipeLineNodeFillSchema extends PipeLineNode<AisDataframe.DataFrame>
     private final String dataBase;
     private final int deviceId;
     private final EngineType engineType;
+    private final String rtx;
+    private final String user;
+    private final String password;
 }

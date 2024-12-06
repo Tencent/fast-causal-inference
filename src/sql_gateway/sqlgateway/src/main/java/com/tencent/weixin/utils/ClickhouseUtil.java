@@ -143,6 +143,7 @@ public class ClickhouseUtil {
     }
 
     public JSON resultSetToJsonDataFrame(ResultSet resultSet) {
+        logger.info("resultSetToJsonDataFrame");
         JSONArray jsonArray = new JSONArray();
         try {
             ResultSetMetaData rsmd = resultSet.getMetaData();
@@ -152,6 +153,7 @@ public class ClickhouseUtil {
                 for (int i = 1; i <= columnCount; i++) {
                     String columnName = rsmd.getColumnName(i);
                     String value = resultSet.getString(columnName);
+                    logger.info("columnName=" + columnName + ", value=" + value);
                     rowObj.put(columnName, value);
                 }
                 jsonArray.add(new JSONObject(rowObj));

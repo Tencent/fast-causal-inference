@@ -22,8 +22,8 @@
         <append>true</append>
 
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_HOME}/sqlgateway.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <maxHistory>30</maxHistory>
+            <fileNamePattern>%d{yyyyMMddHH}.log</fileNamePattern>
+            <maxHistory>168</maxHistory>
         </rollingPolicy>
 
         <encoder>
@@ -32,7 +32,7 @@
         </encoder>
         
         <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
-            <MaxFileSize>10MB</MaxFileSize>
+            <MaxFileSize>50MB</MaxFileSize>
         </triggeringPolicy>
     </appender>
 

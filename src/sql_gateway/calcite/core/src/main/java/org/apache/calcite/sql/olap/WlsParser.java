@@ -25,12 +25,9 @@ public class WlsParser extends SqlCallCausal {
   private ArrayList<SqlNode> args;
   private ArrayList<SqlNode> params;
 
-  public WlsParser(SqlParserPos pos) {
-    super(pos);
-  }
 
-  public WlsParser(SqlParserPos pos, ArrayList<SqlNode> args, ArrayList<SqlNode> params) {
-    super(pos);
+  public WlsParser(SqlParserPos pos, ArrayList<SqlNode> args, ArrayList<SqlNode> params, EngineType engineType) {
+    super(pos, engineType);
     this.args = args;
     this.params = params;
     this.causal_function_name = "wls";
@@ -40,16 +37,37 @@ public class WlsParser extends SqlCallCausal {
     return null;
   }
 
-  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+  @Override public void unparseClickHouse(SqlWriter writer, int leftPrec, int rightPrec) {
     writer.print("Wls(");
+    args.add(params.get(0));
+    if (params.size() == 2) {
+      writer.print(params.get(1) + ")(");
+    }
     for (int i = 0; i < args.size(); i++) {
       if (i != 0)
         writer.print(",");
       args.get(i).unparse(writer, leftPrec, rightPrec);
     }
+    writer.print(")");
+  }
+
+  @Override public void unparseStarRocks(SqlWriter writer, int leftPrec, int rightPrec) {
+    writer.print("wls(");
+    args.get(0).unparse(writer, leftPrec, rightPrec);
+    writer.print(",[");
+    for (int i = 1; i < args.size(); i++) {
+      if (i > 1){
+        writer.print(",");
+      }
+      args.get(i).unparse(writer, leftPrec, rightPrec);
+    }
+    writer.print("]");
     for (SqlNode param : params) {
       writer.print(",");
       param.unparse(writer, leftPrec, rightPrec);
+    }
+    if (params.size() == 1) {
+      writer.print(",true");
     }
     writer.print(")");
   }

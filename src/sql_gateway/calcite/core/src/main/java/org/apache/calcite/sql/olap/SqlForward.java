@@ -22,8 +22,12 @@ import org.apache.calcite.sql.dialect.MysqlSqlDialect;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 
+import org.apache.commons.lang.NotImplementedException;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class SqlForward {
 
@@ -36,6 +40,8 @@ public class SqlForward {
   String replace_sql = "";
 
   String replace_table = "";
+
+  boolean disableGroupBy = false;
 
   public void parseNode(SqlNode node) {
     if (!(node instanceof SqlCallCausal)) {
@@ -52,20 +58,56 @@ public class SqlForward {
     if (replace_table.equals("") && !causalNode.replace_table.equals("")) {
       replace_table = causalNode.replace_table;
     }
+    disableGroupBy |= causalNode.disableGroupBy();
   }
-  // Config
-  /* TODO : Distinguish between different engines: clickhouse, starrocks...*/
+
+  static private ArrayList<String> system_keywords = new ArrayList<String>() {{
+    add("treat");
+    add("value");
+    add("values");
+    add("old");
+    add("user");
+    add("usr");
+    add("name");
+    add("names");
+    add("last");
+    add("size");
+    add("result");
+    add("corr");
+    add("period");
+  }};
+
+  static private String avoid_system_keywords_suffix = "to_avoid_occupied_by_the_system";
+
   public SqlForward(String sql) throws SqlParseException {
+    this(sql, EngineType.ClickHouse);
+  }
+
+  public SqlForward(String sql, EngineType engineType) throws SqlParseException {
+    if (Pattern.compile("(?i)\\s*create\\s+(table|view)\\s+.*", Pattern.CASE_INSENSITIVE).matcher(sql).find()) {
+      this.forwardSql = sql;
+      return;
+    }
 
     String parse_sql = sql.replaceAll("==", "=");
-    parse_sql = sql.replaceAll("treat", "treat_to_solve_treat_occupied_by_the_system");
+    if (!parse_sql.contains("bootStrap"))
+        parse_sql = parse_sql.replaceAll("\\)\\(", ",PH_FOR_CLICKHOUSE_PARAM,");
+    for (String system_keyword : system_keywords) {
+      parse_sql = parse_sql.replaceAll(system_keyword, system_keyword + avoid_system_keywords_suffix);
+    }
 
-    if (parse_sql.contains("predict")) {
+    if (parse_sql.contains("predict(")) {
       // 对于 predict 函数，需要添加 State 后缀表示为聚合函数中间状态
-      parse_sql = parse_sql.replaceAll("ols\\(", "OlsState\\(").replaceAll("~", "+");
+      if (engineType.equals(EngineType.ClickHouse)) {
+        parse_sql = parse_sql.replaceAll("ols\\(", "OlsState(").replaceAll("~", "+");
+      } else {
+        parse_sql = parse_sql.replaceAll("ols\\(", "ols_train(").replaceAll("~", "+");
+      }
       // 对于带有置信区间的 predict， 需改为 OlsIntervalState 算子
       if (parse_sql.contains("confidence") || parse_sql.contains("prediction")) {
-        System.out.println("confidence!");
+        if (engineType.equals(EngineType.StarRocks)) {
+          throw new NotImplementedException("SR doesn't support interval prediction for not.");
+        }
         parse_sql = parse_sql.replaceAll("OlsState", "OlsIntervalState");
       }
     }
@@ -75,7 +117,8 @@ public class SqlForward {
     SqlParser parser = SqlParser.create(parse_sql, SqlParser.Config.DEFAULT
         .withUnquotedCasing(Casing.UNCHANGED)
         .withCaseSensitive(false)
-        .withQuotedCasing(Casing.UNCHANGED));
+        .withQuotedCasing(Casing.UNCHANGED)
+        .withEngineType(engineType));
 
     String with_sql = "with ";
     SqlNode sqlNode = null;
@@ -83,7 +126,7 @@ public class SqlForward {
     try {
       sqlNode = parser.parseStmt();
     } catch(Exception e) {
-      if (e.toString().contains("BRACKET_QUOTED_IDENTIFIER") && e.toString().contains("QUOTED_IDENTIFIER")) {
+      if (sql.toLowerCase().contains("with") && e.toString().contains("BRACKET_QUOTED_IDENTIFIER") && e.toString().contains("QUOTED_IDENTIFIER")) {
         this.forwardSql = sql;
         return;
       }
@@ -116,6 +159,10 @@ public class SqlForward {
     if (sqlFrom != null)
       table_name = sqlFrom.toString();
 
+    table_name = table_name.replace("`","");
+    if (table_name.toLowerCase().contains("select") && table_name.toLowerCase().contains("from") && engineType != EngineType.StarRocks)
+        table_name = "(" + table_name + ")";
+
     SqlNodeList selectList = (SqlNodeList)sqlSelect.getSelectList();
     for (SqlNode node : selectList) {
       parseNode(node);
@@ -124,6 +171,11 @@ public class SqlForward {
         parseNode(((SqlBasicCall) node).getOperandList().get(0));
       }
     }
+
+    if (disableGroupBy && sqlSelect.getGroup() != null && sqlSelect.getGroup().size() > 0) {
+      throw new SqlParseException("GroupBy clause is not allowed in this UDF", null, null, null, new Exception(""));
+    }
+
     for (int i = 0; i < withs.size(); ++i) {
       if (!with_sql.equals("with ")) {
         with_sql += ",\n";
@@ -138,9 +190,8 @@ public class SqlForward {
       forwardSql += unparserSql;
     else
       forwardSql += replace_sql;
-    if (!table_name.equals(""))
-      forwardSql = forwardSql.replace("@TBL", table_name);
 
+    forwardSql = forwardSql.replaceAll("`", "");
     if (!replace_table.equals("")) {
       int lastIndex = forwardSql.lastIndexOf(table_name);
       if (lastIndex != -1) {
@@ -148,8 +199,19 @@ public class SqlForward {
       }
     }
 
-    forwardSql = forwardSql.replaceAll("treat_to_solve_treat_occupied_by_the_system", "treat");
-    this.forwardSql = forwardSql.replaceAll("`", "");
+    if (!table_name.equals(""))
+      forwardSql = forwardSql.replace("@TBL", table_name);
+
+    for (String system_keyword : system_keywords) {
+      forwardSql = forwardSql.replaceAll( system_keyword + avoid_system_keywords_suffix, system_keyword);
+    }
+    forwardSql = forwardSql.replaceAll(", PH_FOR_CLICKHOUSE_PARAM,", ")(");
+    this.forwardSql = forwardSql.replaceAll("`", "").replaceAll("ASYMMETRIC", " ");
+    try {
+      this.forwardSql = decodeUnicodeSequences(this.forwardSql);
+    } catch (Exception e) {
+      // do nothing
+    }
   }
 
   public String getForwardSql() {
@@ -201,4 +263,38 @@ public class SqlForward {
 
     return tables;
   }
+
+   public static String decodeUnicodeSequences(String str) {
+    Pattern pattern = Pattern.compile("u&'((\\\\[0-9a-fA-F]{4,})+)'");
+
+    StringBuilder decoded = new StringBuilder();
+    int lastEnd = 0;
+
+    Matcher matcher = pattern.matcher(str);
+    while (matcher.find()) {
+      // 将匹配到的Unicode转义序列解码为字符
+      String unicodeSequence = matcher.group(1);
+      String[] codePoints = unicodeSequence.split("\\\\");
+      StringBuilder decodedSequence = new StringBuilder();
+      for (String codePoint : codePoints) {
+        if (codePoint.length() < 4) {
+          continue;
+        }
+        String tail = codePoint.substring(4);
+        codePoint = codePoint.substring(0, 4);
+        if (!codePoint.isEmpty()) {
+          int codePointValue = Integer.parseInt(codePoint, 16);
+          decodedSequence.append(Character.toChars(codePointValue));
+        }
+        decodedSequence.append(tail);
+      }
+      decoded.append(str, lastEnd, matcher.start());
+      decoded.append('\'').append(decodedSequence.toString()).append('\'');
+      lastEnd = matcher.end();
+    }
+    decoded.append(str.substring(lastEnd));
+
+    return decoded.toString();
+  }
+
 }

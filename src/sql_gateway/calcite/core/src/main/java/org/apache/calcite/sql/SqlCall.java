@@ -239,4 +239,9 @@ public abstract class SqlCall extends SqlNode {
   public @Nullable SqlLiteral getFunctionQuantifier() {
     return null;
   }
+
+  @Pure 
+  public boolean disableGroupBy() {
+    return false;
+  }
 }

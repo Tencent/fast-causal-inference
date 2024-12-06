@@ -84,12 +84,9 @@ public class NonParamDMLParser extends SqlCallCausal {
 
   static String func_template = "select final_model";
 
-  public NonParamDMLParser(SqlParserPos pos) {
-    super(pos);
-  }
 
-  public NonParamDMLParser(SqlParserPos pos, String Y, String T, String model_y, String model_t, String cv, ArrayList<String> xs, ArrayList<String> ws) {
-    super(pos);
+  public NonParamDMLParser(SqlParserPos pos, String Y, String T, String model_y, String model_t, String cv, ArrayList<String> xs, ArrayList<String> ws, EngineType engineType) {
+    super(pos, engineType);
     this.Y = SqlForwardUtil.exchangIdentity(Y);
     this.T = SqlForwardUtil.exchangIdentity(T);
     this.model_y = SqlForwardUtil.exchangIdentity(model_y);

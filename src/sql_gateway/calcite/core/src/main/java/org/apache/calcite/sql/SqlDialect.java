@@ -272,6 +272,8 @@ public class SqlDialect {
       return DatabaseProduct.DERBY;
     case "CLICKHOUSE":
       return DatabaseProduct.CLICKHOUSE;
+    case "STARROCKS":
+      return DatabaseProduct.STARROCKS;
     case "DBMS:CLOUDSCAPE":
       return DatabaseProduct.DERBY;
     case "EXASOL":
@@ -1320,6 +1322,7 @@ public class SqlDialect {
     BIG_QUERY("Google BigQuery", "`", NullCollation.LOW),
     CALCITE("Apache Calcite", "\"", NullCollation.HIGH),
     CLICKHOUSE("ClickHouse", "`", NullCollation.LOW),
+    STARROCKS("StarRocks", "`", NullCollation.LOW),
     MSSQL("Microsoft SQL Server", "[", NullCollation.HIGH),
     MYSQL("MySQL", "`", NullCollation.LOW),
     ORACLE("Oracle", "\"", NullCollation.HIGH),

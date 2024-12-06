@@ -47,14 +47,31 @@ public class IvRegressionParser extends SqlCallCausal {
       "evalMLMethod(model_final, @D1@X))) from @TBL \n" +
       "    )  as xx_weighted ";
 
-  static String func_template_1 = "Ols(true, false, toString(xx_inverse), toString(xx_weighted))(@Y,evalMLMethod(model1, @IV1@X)@X)";
+  static String with_template_starrocks = "\n" +
+      "    model1_tbl AS ( \n" +
+      "        SELECT ols_train(@D1,[@IV1@X],true) as model1\n" +
+      "        FROM @TBL \n" +
+      "    ), \n" +
+      "    model_final_tbl AS ( \n" +
+      "        SELECT ols_train(@Y,[eval_ml_method(model1, [@IV1@X])@X],true) as model_final\n" +
+      "        FROM @TBL,model1_tbl \n" +
+      "    ), \n" +
+      "    xx_inverse_tbl AS ( \n" +
+      "      select  \n" +
+      "      matrix_multiplication([1,eval_ml_method(model1,[@IV1@X])@X],true,false) as xx_inverse from @TBL,model1_tbl \n" +
+      "    ), \n" +
+      "    xx_weighted_tbl AS ( \n" +
+      "      select  \n" +
+      "      matrix_multiplication([1,eval_ml_method(model1,[@IV1@X])@X,ABS(@Y-" +
+      "eval_ml_method(model_final,[@D1@X]))],false,true) as xx_weighted from @TBL,model1_tbl,model_final_tbl \n" +
+      "    )";
 
-  public IvRegressionParser(SqlParserPos pos) {
-    super(pos);
-  }
+  static String func_template_1 = "Ols('@ORIGIN_Y,predict(@PREDICT_PARAM) @X',  true, false, toString(xx_inverse), toString(xx_weighted))(@Y,evalMLMethod(model1, @IV1@X)@X)";
 
-  public IvRegressionParser(SqlParserPos pos, String y, String iv, String ds, ArrayList<String> xs) {
-    super(pos);
+  static String func_template_starrocks = "ols(@Y,[eval_ml_method(model1,[@IV1@X])@X],true,'@ORIGIN_Y,predict(@PREDICT_PARAM) @X',xx_inverse,xx_weighted)";
+
+  public IvRegressionParser(SqlParserPos pos, String y, String iv, String ds, ArrayList<String> xs, EngineType engineType) {
+    super(pos, engineType);
     this.y = y;
     this.iv = iv;
     this.ds = ds;
@@ -66,7 +83,7 @@ public class IvRegressionParser extends SqlCallCausal {
     return null;
   }
 
-  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+  @Override public void unparseClickHouse(SqlWriter writer, int leftPrec, int rightPrec) {
     // parse : Y ~ (D1 ~ IV1) + (D2 ~ IV2) + ...
 
     this.ds = "toFloat64(" + this.ds + ")";
@@ -90,6 +107,40 @@ public class IvRegressionParser extends SqlCallCausal {
     func = func.replaceAll("@D1", this.ds);
     func = func.replaceAll("@IV1", this.iv);
     func = func.replaceAll("@X", ph_xs);
+    String PREDICT_PARAM = String.format(this.iv + ph_xs).replaceAll(",", "+");
+    func = func.replaceAll("@PREDICT_PARAM", PREDICT_PARAM.replaceAll("toFloat64", ""));
+    func = func.replaceAll("@ORIGIN_Y", this.y.substring(0, this.y.length() - 1).replaceAll("toFloat64\\(", ""));
+    writer.print(func);
+  }
+
+  @Override public void unparseStarRocks(SqlWriter writer, int leftPrec, int rightPrec) {
+    // parse : Y ~ (D1 ~ IV1) + (D2 ~ IV2) + ...
+
+    this.replace_table = "@TBL, model1_tbl, model_final_tbl, xx_inverse_tbl, xx_weighted_tbl";
+
+    this.ds = String.format("cast(%s as double)", this.ds);
+    StringBuilder ph_xs = new StringBuilder();
+    for (String x : xs)
+      ph_xs.append(",").append(x.replaceAll("\\+", ","));
+    String X = ph_xs.toString();
+    String PREDICT_PARAM = String.format("(" + this.iv + ")" + ph_xs).replaceAll(",", "+");
+    this.iv = String.format("cast(%s as double)", this.iv);
+    this.y = String.format("cast(%s as double)", this.y);
+
+    String with = with_template_starrocks;
+    with = with.replaceAll("@Y", this.y);
+    with = with.replaceAll("@D1", this.ds);
+    with = with.replaceAll("@IV1", this.iv);
+    with = with.replaceAll("@X", X);
+    withs.add(with);
+
+    String func = func_template_starrocks;
+    func = func.replaceAll("@Y", this.y);
+    func = func.replaceAll("@D1", this.ds);
+    func = func.replaceAll("@IV1", this.iv);
+    func = func.replaceAll("@X", X);
+    func = func.replaceAll("@PREDICT_PARAM", PREDICT_PARAM);
+    func = func.replaceAll("@ORIGIN_Y", this.y.substring(0, this.y.length() - 1).replaceAll("toFloat64\\(", ""));
     writer.print(func);
   }
 

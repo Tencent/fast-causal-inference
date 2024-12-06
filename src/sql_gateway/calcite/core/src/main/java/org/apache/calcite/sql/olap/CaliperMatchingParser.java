@@ -122,12 +122,9 @@ public class CaliperMatchingParser extends SqlCallCausal {
   +
       "    )";
 
-  public CaliperMatchingParser(SqlParserPos pos) {
-    super(pos);
-  }
 
-  public CaliperMatchingParser(SqlParserPos pos, String treatment, String target, String split_value) {
-    super(pos);
+  public CaliperMatchingParser(SqlParserPos pos, String treatment, String target, String split_value, EngineType engineType) {
+    super(pos, engineType);
     this.treatment = SqlForwardUtil.exchangIdentity(treatment);
     this.target = SqlForwardUtil.exchangIdentity(target);
     this.split_value = SqlForwardUtil.exchangIdentity(split_value);
@@ -141,7 +138,8 @@ public class CaliperMatchingParser extends SqlCallCausal {
 
   @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
     String with = with_template;
-    with = with.replaceAll("@PHt", treatment);
+    //with = with.replaceAll("@PHt", treatment);
+    with = with.replaceAll("@PHt", "if(" + treatment + "=1, 1, -1)");
     with = with.replaceAll("@PHv", target);
     with = with.replaceAll("@PHSplictNum", split_value);
     withs.add(with);

@@ -28,27 +28,31 @@ public class OlsParser extends SqlCallCausal {
 
   private boolean use_state;
 
-  public OlsParser(SqlParserPos pos) {
-    super(pos);
-  }
 
-  public OlsParser(SqlParserPos pos, ArrayList<String> args, ArrayList<SqlNode> params, boolean use_state) {
-    super(pos);
+  public OlsParser(SqlParserPos pos, ArrayList<String> args, ArrayList<SqlNode> params, boolean use_state, EngineType engineType) {
+    super(pos, engineType);
     this.args = args;
     this.params = params;
     this.causal_function_name = "ols";
     this.use_state = use_state;
+    if (args.get(args.size() - 1).equals("0")) {
+      params.add(SqlLiteral.createBoolean(false, SqlParserPos.ZERO));
+      args.remove(args.size() - 1);
+    }
   }
 
   @Override public SqlOperator getOperator() {
     return null;
   }
 
-  @Override public void unparse(SqlWriter writer, int leftPrec, int rightPrec) {
+  @Override public void unparseClickHouse(SqlWriter writer, int leftPrec, int rightPrec) {
     if (this.use_state)
       writer.print("OlsState(");
     else
       writer.print("Ols(");
+    // args to String with comma
+    writer.print('\'' + String.join(",", args) + "',");
+
     for (SqlNode param : params) {
       param.unparse(writer, leftPrec, rightPrec);
     }
@@ -60,8 +64,32 @@ public class OlsParser extends SqlCallCausal {
       if (i != 0)
         writer.print(",");
       writer.print(args.get(i));
-      //args.get(i).unparse(writer, leftPrec, rightPrec);
     }
+    writer.print(")");
+  }
+
+  @Override public void unparseStarRocks(SqlWriter writer, int leftPrec, int rightPrec) {
+    if (this.use_state) {
+      writer.print("ols_train(");
+    }
+    else {
+      writer.print("ols(");
+    }
+
+    ArrayList<String> cols = new ArrayList<>();
+    cols.add(args.get(0));
+    cols.add(String.format("[%s]", String.join(",", args.subList(1, args.size()))));
+    writer.print(String.join(",", cols));
+
+    for (SqlNode param : params) {
+      writer.print(",");
+      param.unparse(writer, leftPrec, rightPrec);
+    }
+
+    if (params.isEmpty()){
+      writer.print(",true");
+    }
+    writer.print(String.format(",'%s'", String.join(",", args)));
     writer.print(")");
   }
 

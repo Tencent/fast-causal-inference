@@ -30,6 +30,7 @@ import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlUnresolvedFunction;
 import org.apache.calcite.sql.SqlUtil;
+import org.apache.calcite.sql.olap.EngineType;
 import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.util.Glossary;
 
@@ -536,6 +537,8 @@ public abstract class SqlAbstractParserImpl {
    * @param unquotedCasing Casing to set.
    */
   public abstract void setUnquotedCasing(Casing unquotedCasing);
+
+  public abstract void setEngineType(EngineType engineType);
 
   /**
    * Sets the maximum length for sql identifier.
