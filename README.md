@@ -3,6 +3,7 @@
 [![license](https://img.shields.io/badge/license-BSD-brightgreen.svg?style=flat)](https://github.com/Tencent/fast-causal-inference/blob/master/LICENSE)
 [![Release Version](https://img.shields.io/badge/release-0.1.0-red.svg)](https://github.com/Tencent/fast-causal-inference/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Tencent/fast-causal-inference/pulls)
+### Try Fast-Causal-Inference: [Causal Playground](http://xiongjx.cn:8000)
 ### Fast-Causal-Inference Docs: https://tencent.github.io/fast-causal-inference/docs/
 ### Introduction
 Fast Causal Inference is Tencent's first open-source causal inference project. 
