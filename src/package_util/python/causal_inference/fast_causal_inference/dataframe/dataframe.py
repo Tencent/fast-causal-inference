@@ -1517,6 +1517,47 @@ class DataFrame:
         return result
 
     def boot_strap(self, func, resample_frac=1, n_resamples=100):
+        if self.engine == OlapEngineType.STARROCKS:
+            df = self.materializedView()
+            table = df.getTableName()
+            cols = df.columns
+            count = df.count()
+            n_samples = int(resample_frac * count)
+            sql_instance = df.sql_conn
+            res = (
+                sql_instance.sql(
+                f"""
+                WITH 
+                _bs_param AS (
+                    SELECT 
+                        distributed_node_row_number(0) as _param
+                    FROM {table}
+                )
+                select ARRAY_AGG(res)
+                from (
+                    select __group_id__, {func} as res
+                    from (
+                        SELECT 
+                            __group_id__,
+                            {",".join(map(lambda x: f"_bs.{x} as {x}", cols))}
+                        FROM 
+                            {table}, 
+                            _bs_param, 
+                            boot_strap(
+                                _bs_param._param, 
+                                {n_samples}, 
+                                {n_resamples}, 
+                                {",".join(cols)}
+                            ) as _bs(__group_id__, {",".join(cols)})
+                    ) t1
+                    group by __group_id__
+                )t2
+                ;
+                """, skip_calcite=True)
+            )
+            if isinstance(res, str):
+                raise RuntimeError(res)
+            return eval(res.iloc[0, 0])
         return self._handle_boot_strap(self._apply_func(AisStatisticsF.boot_strap(func, resample_frac, n_resamples)))
 
     def permutation(self, func, permutation_num, *col):

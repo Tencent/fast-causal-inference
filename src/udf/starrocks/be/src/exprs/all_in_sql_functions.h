@@ -41,6 +41,7 @@ public:
     constexpr static std::string_view group_set = "group_set";
     constexpr static std::string_view mann_whitney_u_test = "mann_whitney_u_test";
     constexpr static std::string_view causal_forest = "causal_forest";
+    constexpr static std::string_view kolmogorov_smirnov_test = "kolmogorov_smirnov_test";
     static bool is_all_in_sql_function(std::string_view func_name) { return all_in_sql_functions.count(func_name); }
 
 private:

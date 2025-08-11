@@ -21,6 +21,7 @@
 #include "exprs/agg/distributed_node_row_number.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/factory/aggregate_resolver.hpp"
+#include "exprs/agg/kolmogorov_smirnov_test.h"
 #include "exprs/agg/group_set.h"
 #include "exprs/agg/mann_whitney.h"
 #include "exprs/agg/matrix_multiplication.h"
@@ -200,6 +201,11 @@ void AggregateFuncResolver::register_all_in_sql() {
             std::string(AllInSqlFunctions::causal_forest),
             std::vector{TYPE_JSON, TYPE_DOUBLE, TYPE_BOOLEAN, TYPE_DOUBLE, TYPE_ARRAY, TYPE_BOOLEAN}, false,
             std::make_shared<AggregateFunctionCausalForest>());
+
+    add_aggregate_mapping<TYPE_JSON, KolmogorovSmirnovAggState>(
+            std::string(AllInSqlFunctions::kolmogorov_smirnov_test),
+            std::vector{TYPE_DOUBLE, TYPE_BOOLEAN, TYPE_VARCHAR, TYPE_VARCHAR}, false,
+            std::make_shared<KolmogorovSmirnovAggFunction>());
 }
 
 } // namespace starrocks
