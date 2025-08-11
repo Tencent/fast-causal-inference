@@ -72,3 +72,16 @@ github: https://github.com/Tencent/fast-causal-inference
 > cd fast-causal-inference && sh bin/deploy.sh   
 > http://127.0.0.1
 >>  To start causal analysis, please refer to the built-in demo.ipynb
+
+## References
+
+Athey, Susan, and Guido Imbens. "Recursive partitioning for heterogeneous causal effects." *Proceedings of the National Academy of Sciences* 113.27 (2016): 7353-7360.
+
+Huang, Shan, Chen Wang, Yuan Yuan, Jinglong Zhao, and Jingjing Zhang. **Estimating effects of long-term treatments.** [*arXiv preprint arXiv:2308.08152*](https://arxiv.org/abs/2308.08152), 2023.
+
+Athey, Susan, Julie Tibshirani, and Stefan Wager. **Generalized random forests.** [*Annals of Statistics, 47, no. 2, 1148--1178*](https://projecteuclid.org/euclid.aos/1547197251), 2019.
+
+V. Chernozhukov, D. Chetverikov, M. Demirer, E. Duflo, C. Hansen, and a. W. Newey. **Double/Debiased Machine Learning for Treatment and Causal Parameters.** [*ArXiv preprint arXiv:1608.00060*](https://arxiv.org/abs/1608.00060), 2016.
+
+
+
