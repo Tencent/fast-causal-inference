@@ -52,7 +52,7 @@ String getNodeKey()
             std::replace(hostname.begin(), hostname.end(), '.', '_');
             return hostname;
         }
-    } 
+    }
     catch (...)
     {
         return "unknown";
@@ -69,11 +69,12 @@ String to_string_with_precision(const T& value, UInt32 len = 12, UInt32 precisio
             ss << std::fixed << std::setprecision(precision);
         ss << value;
         String temp = ss.str();
-        if (Scientific && ss.str().size() > len)
+        Float64 abs_v = std::fabs(static_cast<double>(value));
+        if (Scientific && (ss.str().size() > len || (abs_v > 0.0 && abs_v < std::pow(10.0, -static_cast<int>(precision)))))
         {
             ss.str("");
-            ss << std::scientific << std::setprecision(4) << value;
-        } 
+            ss << std::scientific << std::setprecision(5) << value;
+        }
         else if (remove_fractional_zero)
         {
             while (temp.size() > 1 && temp.back() == '0')
@@ -83,7 +84,7 @@ String to_string_with_precision(const T& value, UInt32 len = 12, UInt32 precisio
             ss.str("");
             ss << temp;
         }
-    } 
+    }
     else
         ss << value;
     std::string str = ss.str();
@@ -175,7 +176,7 @@ Matrix tMatrix(const ublas::matrix<T>& m)
 
 // LU decomposition to invert a matrix
 template<class T>
-bool invertMatrix(const ublas::matrix<T>& input, ublas::matrix<T>& inverse, std::vector<size_t> & nan_index) 
+bool invertMatrix(const ublas::matrix<T>& input, ublas::matrix<T>& inverse, std::vector<size_t> & nan_index)
 {
     nan_index.clear();
     std::vector<size_t> index;
@@ -204,7 +205,7 @@ bool invertMatrix(const ublas::matrix<T>& input, ublas::matrix<T>& inverse, std:
       m = new_input;
     }
 
-    try 
+    try
     {
         ublas::matrix<T> l_ma(m);
         pmatrix pm(l_ma.size1());
@@ -214,8 +215,8 @@ bool invertMatrix(const ublas::matrix<T>& input, ublas::matrix<T>& inverse, std:
         inverse.assign(ublas::identity_matrix<T>(l_ma.size1()));
         lu_substitute(l_ma, pm, inverse);
         Matrix inverse_new(input.size1(), input.size2(), std::numeric_limits<T>::quiet_NaN());
-        if (input.size1() != nan_index.size() + inverse.size1()) 
-          throw Exception("InvertMatrix failed, size error", ErrorCodes::BAD_ARGUMENTS);
+        if (input.size1() != nan_index.size() + inverse.size1())
+          throw Exception(ErrorCodes::BAD_ARGUMENTS, "InvertMatrix failed, size error");
 
         size_t num_i = 0;
         for (size_t i = 0; i < input.size1(); i++) {
@@ -229,12 +230,12 @@ bool invertMatrix(const ublas::matrix<T>& input, ublas::matrix<T>& inverse, std:
           num_i++;
         }
         inverse = inverse_new;
-        
+
         return true;
-    } 
-    catch (...) 
+    }
+    catch (...)
     {
-        throw Exception("InvertMatrix failed. some variables in the table are perfectly collinear.", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "InvertMatrix failed. some variables in the table are perfectly collinear.");
     }
 }
 
@@ -287,14 +288,14 @@ public:
         readBinary(sumxy, buf);
     }
 
-    T getResult() const 
-    { 
-        return sumxy; 
+    T getResult() const
+    {
+        return sumxy;
     }
 
-    UInt64 getCount() const 
+    UInt64 getCount() const
     {
-        return count; 
+        return count;
     }
 
 private:
@@ -303,7 +304,7 @@ private:
 };
 
 template <typename T>
-class CovarianceSimpleData 
+class CovarianceSimpleData
 {
 public:
     void add(const IColumn & column_left, const IColumn & column_right, size_t row_num)
@@ -352,7 +353,7 @@ public:
     {
         if (count < 2)
             return std::numeric_limits<Float64>::infinity();
-        else 
+        else
         {
           Float64 meanx = sumx / count;
           Float64 meany = sumy / count;
@@ -365,12 +366,12 @@ public:
     {
         if (count < 2)
             return std::numeric_limits<Float64>::infinity();
-        else 
+        else
         {
-          Float64 meanx = sumx / count;
-          Float64 meany = sumy / count;
-          Float64 cov = (sumxy - sumx * meany - sumy * meanx + meanx * meany * count) / (count - 1);
-          return cov;
+            Float64 meanx = sumx / count;
+            Float64 meany = sumy / count;
+            Float64 cov = (sumxy - sumx * meany - sumy * meanx + meanx * meany * count) / (count - 1);
+            return cov;
         }
     }
 
@@ -389,6 +390,21 @@ public:
         return count;
     }
 
+    Float64 getSumXY() const
+    {
+        return sumxy;
+    }
+
+    Float64 getSumX() const
+    {
+        return sumx;
+    }
+
+    Float64 getSumY() const
+    {
+        return sumy;
+    }
+
     void setCount(const UInt64 & count_)
     {
         count = count_;
@@ -402,7 +418,7 @@ private:
 };
 
 template <typename Op, bool use_bias, bool use_weights = false>
-class ColMatrix 
+class ColMatrix
 {
     using Data = std::vector<std::vector<Op>>;
 public:
@@ -420,14 +436,19 @@ public:
             row.resize(col_size2 + use_bias);
     }
 
-    explicit ColMatrix(size_t col_size1_) 
+    explicit ColMatrix(size_t col_size1_, bool use_third_order_ = false)
         : ColMatrix(col_size1_, col_size1_)
     {
         single_col = true;
+        use_third_order = use_third_order_;
+        if (use_third_order)
+        {
+            third_order.resize(col_size1);
+        }
     }
-    
+
     void add(const IColumn ** columns_left, const IColumn ** columns_right, size_t row_num)
-    { 
+    {
         for (size_t i = 0; i < col_size1; ++i)
         {
             for (size_t j = single_col ? i : 0; j < col_size2; ++j)
@@ -439,11 +460,13 @@ public:
                     data[i][j].add(columns_left[i]->getFloat64(row_num)*sqrt(weight_left),
                                       columns_right[j]->getFloat64(row_num)*sqrt(weight_right));
                     if (weight_left < 0 || weight_right < 0)
-                        throw Exception("Weights must be non-negative", ErrorCodes::BAD_ARGUMENTS);
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Weights must be non-negative");
                 }
-                else 
+                else
                     data[i][j].add(columns_left[i]->getFloat64(row_num), columns_right[j]->getFloat64(row_num));
             }
+            if (unlikely(use_third_order))
+                third_order[i] += pow(columns_left[i]->getFloat64(row_num), 3);
         }
         if (likely(use_bias))
         {
@@ -452,7 +475,7 @@ public:
                 if constexpr (use_weights)
                     data[col_size1][j].add(sqrt(columns_left[col_size1]->getFloat64(row_num)),
                         columns_right[j]->getFloat64(row_num)*sqrt(columns_right[col_size2]->getFloat64(row_num)));
-                else 
+                else
                     data[col_size1][j].add(1, columns_right[j]->getFloat64(row_num));
             }
             for (size_t i = 0; i < col_size1; ++i)
@@ -460,13 +483,13 @@ public:
                 if constexpr (use_weights)
                     data[i][col_size2].add(columns_left[i]->getFloat64(row_num)*sqrt(columns_left[col_size1]->getFloat64(row_num)),
                         sqrt(columns_right[col_size2]->getFloat64(row_num)));
-                else 
+                else
                     data[i][col_size2].add(columns_left[i]->getFloat64(row_num), 1);
             }
             if constexpr (use_weights)
                 data[col_size1][col_size2].add(sqrt(columns_left[col_size1]->getFloat64(row_num)),
                     sqrt(columns_right[col_size2]->getFloat64(row_num)));
-            else 
+            else
                 data[col_size1][col_size2].add(1, 1);
         }
     }
@@ -493,6 +516,15 @@ public:
         for (size_t i = 0; i < data.size(); ++i)
             for (size_t j = single_col ? i : 0; j < data[0].size(); ++j)
                 data[i][j].merge(source.data[i][j]);
+
+        if (use_third_order)
+        {
+            if (third_order.size() != source.third_order.size())
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot merge matrices with different sizes {} {}", third_order.size(), source.third_order.size());
+            size_t third_order_size = third_order.size();
+            for (size_t i = 0; i < third_order_size; ++i)
+                third_order[i] += source.third_order[i];
+        }
     }
 
     void serialize(WriteBuffer & buf) const
@@ -500,6 +532,10 @@ public:
         for (auto & row : data)
             for (auto & col : row)
                 col.serialize(buf);
+        writeBinary(use_third_order, buf);
+        writeVarUInt(third_order.size(), buf);
+        for (const auto & val : third_order)
+            writeBinary(val, buf);
     }
 
     void deserialize(ReadBuffer & buf)
@@ -507,6 +543,12 @@ public:
         for (auto & row : data)
             for (auto & col : row)
                 col.deserialize(buf);
+        readBinary(use_third_order, buf);
+        size_t size;
+        readVarUInt(size, buf);
+        third_order.resize(size);
+        for (auto & val : third_order)
+            readBinary(val, buf);
     }
 
     Matrix getMatrix() const
@@ -528,11 +570,11 @@ public:
         return matrix;
     }
 
-    Matrix getSubMatrix(std::vector<size_t> & index) const 
+    Matrix getSubMatrix(std::vector<size_t> & index) const
     {
         Matrix matrix(index.size(), index.size());
         if (*std::max_element(index.begin(), index.end()) >= data.size())
-            throw Exception("Index is out of bounds", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Index is out of bounds");
 
         for (size_t i = 0; i < index.size(); ++i)
             for (size_t j = 0; j < index.size(); ++j)
@@ -560,13 +602,13 @@ public:
     {
         std::vector<Float64> means(index.size());
         if (*std::max_element(index.begin(), index.end()) >= data.size())
-            throw Exception("Index is out of bounds", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Index is out of bounds");
         for (size_t j = 0; j < index.size(); ++j)
             means[j] = data[0][index[j]].getYMean();
         return means;
     }
 
-    UInt64 getCount() const 
+    UInt64 getCount() const
     {
         if (data.empty())
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Data is empty when get count");
@@ -580,6 +622,36 @@ public:
                 col2.setCount(count);
     }
 
+    Float64 getk3() const 
+    {
+        if (data.size() < 2)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "col_size1 must be greater than 1");
+        UInt64 count = getCount();
+        auto means = getMeans();
+        Float64 bucket_mean = means[0] / means[1];
+        Float64 k3 = 0;
+        k3 += third_order[0] - 3 * bucket_mean * data[0][0].getSumXY() + 3 * data[0][0].getSumY() * pow(bucket_mean, 2) - count * pow(bucket_mean, 3);
+        k3 /= data[0][1].getSumY();
+        return k3;
+    }
+
+    Float64 getVar() const 
+    {
+        if (data.size() < 2)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "col_size1 must be greater than 1");
+        auto count = getCount();
+        auto origin_var = data[0][0].publish() * (count - 1) / count;
+        auto bucket = data[0][1].getSumY();
+        return origin_var * count /  bucket;
+    }
+
+    Float64 getBucketNum() const
+    {
+        if (data.size() < 2)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "col_size1 must be greater than 1");
+        return data[0][1].getSumY();
+    }
+
     bool isEmpty() const
     {
         return data.size() == 0;
@@ -589,51 +661,28 @@ private:
     Data data;
     size_t col_size1, col_size2;
     bool single_col = false;
+    bool use_third_order = false;
+    std::vector<Float64> third_order;
 };
 
-class HashBase : private boost::noncopyable
+class MurmurHash3
 {
 public:
-    explicit HashBase(const UInt64 & seed_ = 0) : seed(seed_) {}
-
-    virtual ~HashBase() = default;
-
-    virtual UInt32 operator()(const Int32 &) const
-    {
-        throw Exception("Hash function for 32bit not implemented.", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    virtual UInt32 operator()(const Int64 &) const
-    {
-        throw Exception("Hash function for 64bit not implemented.", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-private:
-    [[maybe_unused]] const uint64_t seed = 0;
-};
-
-template <typename T>
-class MurmurHash3;
-
-template <>
-class MurmurHash3<Int32> : public HashBase
-{
-public:
-    using hash_type = Int32;
     explicit MurmurHash3(const UInt32 & seed_ = 0) : seed(seed_) {}
 
     // use murmurhash x86 32bit
-    std::make_unsigned_t<hash_type> operator()(const hash_type & key) const override
+    template <typename T>
+    UInt32 operator()(const T & key) const
     {
         size_t len = sizeof(key);
         const uint8_t *data = reinterpret_cast<const uint8_t *>(&key);
-        const int nblocks = len / 4;
+        const int nblocks = static_cast<int>(len / 4);
         int i;
         uint32_t h1 = seed;
         uint32_t c1 = 0xcc9e2d51;
         uint32_t c2 = 0x1b873593;
         const uint32_t *blocks = reinterpret_cast<const uint32_t *>(data + nblocks * 4);
-        for (i = -nblocks; i; i++) 
+        for (i = -nblocks; i; i++)
         {
             uint32_t k1 = blocks[i];
             k1 *= c1;
@@ -645,12 +694,12 @@ public:
         }
         const uint8_t *tail = static_cast<const uint8_t *>(data + nblocks * 4);
         uint32_t k1 = 0;
-        switch (len & 3) 
+        switch (len & 3)
         {
             case 3:
               k1 ^= tail[2] << 16;
               [[fallthrough]];
-            case 2: 
+            case 2:
               k1 ^= tail[1] << 8;
               [[fallthrough]];
             case 1:

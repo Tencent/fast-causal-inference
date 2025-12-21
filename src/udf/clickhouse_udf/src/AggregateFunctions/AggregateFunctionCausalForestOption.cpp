@@ -7,6 +7,7 @@ struct Settings;
 TreeOptions::TreeOptions(UInt32 mtry_,
                          size_t quantile_size_,
                          UInt32 min_node_size_,
+                         bool causal_tree_,
                          bool honesty_,
                          double honesty_fraction_,
                          bool honesty_prune_leaves_,
@@ -15,6 +16,7 @@ TreeOptions::TreeOptions(UInt32 mtry_,
   mtry(mtry_),
   quantile_size(quantile_size_),
   min_node_size(min_node_size_),
+  causal_tree(causal_tree_), 
   honesty(honesty_),
   honesty_fraction(honesty_fraction_),
   honesty_prune_leaves(honesty_prune_leaves_),
@@ -27,6 +29,7 @@ String TreeOptions::toString() const
     ss << "mtry: " << mtry << std::endl 
       << "quantile_size: " << quantile_size << std::endl
       << "min_node_size: " << min_node_size << std::endl 
+      << "causal_tree: " << (causal_tree ? "true" : "false") << std::endl
       << "honesty: " << honesty << std::endl 
       << "honesty_fraction: " << honesty_fraction << std::endl 
       << "honesty_prune_leaves: " << honesty_prune_leaves << std::endl 
@@ -40,6 +43,7 @@ void TreeOptions::serialize(WriteBuffer & buf) const
     writeVarUInt(mtry, buf);
     writeVarUInt(quantile_size, buf);
     writeVarUInt(min_node_size, buf);
+    writeBinary(causal_tree, buf);
     writeBinary(honesty, buf);
     writeFloatBinary(honesty_fraction, buf);
     writeBinary(honesty_prune_leaves, buf);
@@ -52,6 +56,7 @@ void TreeOptions::deserialize(ReadBuffer & buf)
     readVarUInt(mtry, buf);
     readVarUInt(quantile_size, buf);
     readVarUInt(min_node_size, buf);
+    readBinary(causal_tree, buf);
     readBinary(honesty, buf);
     readFloatBinary(honesty_fraction, buf);
     readBinary(honesty_prune_leaves, buf);

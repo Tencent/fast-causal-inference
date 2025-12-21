@@ -89,13 +89,23 @@ public:
           tree.afterTrain(forest_options, tree_options);
 
         if (state == CausalForestState::Init)
-          state = CausalForestState::CalcNumerAndDenom;
+        {
+          if (tree_options.causal_tree)
+              state = CausalForestState::FindBestSplitPre;
+          else
+              state = CausalForestState::CalcNumerAndDenom;
+        }
         else if (state == CausalForestState::CalcNumerAndDenom)
           state = CausalForestState::FindBestSplitPre;
         else if (state == CausalForestState::FindBestSplitPre)
           state = CausalForestState::FindBestSplit;
         else if (state == CausalForestState::FindBestSplit)
-          state = CausalForestState::CalcNumerAndDenom;
+        {
+          if (tree_options.causal_tree)
+              state = CausalForestState::FindBestSplitPre;
+          else
+              state = CausalForestState::CalcNumerAndDenom;
+        }
     }
 
     void merge(const ForestTrainer & other) 
@@ -117,6 +127,51 @@ public:
     void predict(const ColumnsWithTypeAndName & arguments, UInt64 row_num, PaddedPODArray<Float64> & average_value) const;
 
     void initHonesty();
+
+    std::vector<std::vector<UInt32>> getVariableImportance() const
+    {
+        std::vector<std::vector<UInt32>> res; // [depth][feature] = importance
+        UInt64 arguments_size = forest_options.arguments_size;
+        for (const auto & tree : trees)
+        {
+            std::vector<UInt64> level{0}; // push root
+            UInt64 depth = 0;
+            while (!level.empty()) 
+            {
+                std::vector<UInt64> next_level;
+                for (const auto & node : level)
+                {
+                    if (node >= tree.nodes.size())
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "node out of range");
+
+                    if (tree.nodes[node].is_leaf)
+                        continue;
+
+                    UInt64 split_var = tree.nodes[node].split_var;
+                    if (split_var >= arguments_size)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "split_var out of range");
+
+                    if (depth >= res.size())
+                        res.emplace_back(arguments_size, 0);
+                    res[depth][split_var] += 1;
+                    next_level.push_back(tree.nodes[node].left_child);
+                    next_level.push_back(tree.nodes[node].right_child);
+                }
+                depth++;
+                level.swap(next_level);
+            }
+        }
+        return res;
+    }
+
+    String getForestStruct() const
+    {
+        if (!tree_options.causal_tree)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "getForestStruct is only available for causal trees");
+        if (trees.size() != 1)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "getForestStruct is only available for single tree causal forest");
+        return trees[0].getTreeStruct();
+    }
 
 private:
 

@@ -28,6 +28,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <Common/PODArray_fwd.h>
 
+
 namespace DB
 {
 struct Settings;
@@ -87,7 +88,7 @@ private:
 
 public:
     explicit AggregateFunctionCausalForest(const DataTypes & arguments, const Array & params)
-        :IAggregateFunctionDataHelper<CausalForestData, AggregateFunctionCausalForest> ({arguments}, {}) 
+        :IAggregateFunctionDataHelper<CausalForestData, AggregateFunctionCausalForest> ({arguments}, {}, getReturnType()) 
     {
         if (params.empty())
             throw Exception(ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH, "Aggregate function CausalForest requires params.");
@@ -102,7 +103,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr getReturnType()
     {
         return std::make_shared<DataTypeString>();
     }
@@ -263,7 +264,7 @@ private:
 
 public:
     explicit AggregateFunctionCausalForestPredict(const DataTypes & arguments, const Array & params)
-        :IAggregateFunctionDataHelper<CausalForestPredictData, AggregateFunctionCausalForestPredict> ({arguments}, {}) 
+        :IAggregateFunctionDataHelper<CausalForestPredictData, AggregateFunctionCausalForestPredict> ({arguments}, {}, getReturnType()) 
     {
         for (size_t i = 0; i < params.size(); ++i)
         {
@@ -298,7 +299,7 @@ public:
         this->data(place).predict(to, arguments, offset, limit);
     }
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr getReturnType()
     {
         return std::make_shared<DataTypeString>();
     }

@@ -25,6 +25,9 @@
 #include <pqxx/params.hxx>
 #include <Common/PODArray_fwd.h>
 #include <regex>
+#include <Poco/JSON/Parser.h>
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Array.h>
 
 namespace DB
 {
@@ -178,10 +181,16 @@ public:
                 auto & calc_node = nodes[j].calc_node.value(); // NOLINT
                 size_t best_var = 0;
                 double best_value = 0;
-                double best_decrease = 0.0;
+                double best_decrease = -1;
                 bool best_send_missing_left = true;
 
                 for (size_t i = 0; i < calc_node.possible_split_vars.size(); ++i) // 对于每个可能的分裂变量
+                /*
+                   calc_node.find_best_split_value(i, best_var, best_value, best_decrease, best_send_missing_left, tree_options);
+                    */
+                  if (tree_options.causal_tree)
+                    calc_node.find_best_split_value_cf(i, best_var, best_value, best_decrease, best_send_missing_left, tree_options);
+                  else
                     calc_node.find_best_split_value(i, best_var, best_value, best_decrease, best_send_missing_left, tree_options);
                 if (best_decrease <= 0.0 || calc_node.is_stop)
                 {
@@ -209,7 +218,160 @@ public:
 
         if (forest_options.state == CausalForestState::Honesty)
             pureNode();
+
     }
+
+    String getTreeStruct() const
+    {
+        String res;
+        if (nodes.empty())
+            return "";
+        UInt64 total_samples = nodes[0].calc_node.value().num_samples;
+        Float64 ate = 0;
+        std::map<size_t, size_t> node_father;
+        std::map<size_t, Int32> depth;
+        Poco::JSON::Array res_json;
+        for (size_t i = 0; i < nodes.size(); ++i)
+        {
+            auto tree_id = i;
+            bool is_leaf = nodes[i].is_leaf;
+            UInt64 treatment_count = nodes[i].calc_node.value().cnt1();
+            UInt64 control_count = nodes[i].calc_node.value().cnt0();
+            Float64 y0_column = nodes[i].calc_node.value().y0();
+            Float64 y1_column = nodes[i].calc_node.value().y1();
+            Float64 treated_label_avg = y1_column / treatment_count;
+            Float64 control_label_avg = y0_column / control_count;
+            // calc treated_label_var and control_label_var, is a varsamp
+            Float64 treated_label_var = nodes[i].calc_node.value().y1_squared / treatment_count - treated_label_avg * treated_label_avg;
+            Float64 control_label_var = nodes[i].calc_node.value().y0_squared / control_count - control_label_avg * control_label_avg;
+            Float64 prediction = treated_label_avg - control_label_avg;
+            if (i == 0)
+                ate = prediction;
+            Float64 ratio = (treatment_count + control_count) / static_cast<Float64>(total_samples);
+
+            Float64 est_point1 = prediction;
+            Float64 std1 = std::sqrt(treated_label_var / treatment_count + control_label_var / control_count);
+            Float64 z_value1 = est_point1 / std1;
+            Float64 p_value1 = 2 * (1 - boost::math::cdf(boost::math::normal(), std::abs(z_value1)));
+            Float64 lower_ci1 = prediction - 1.96 * std1;
+            Float64 upper_ci1 = prediction + 1.96 * std1;
+
+            Float64 est_point2 = prediction - ate;
+            Float64 std2 = std1;
+            Float64 z_value2 = est_point2 / std2;
+            Float64 p_value2 = 2 * (1 - boost::math::cdf(boost::math::normal(), std::abs(z_value2)));
+            Float64 lower_ci2 = est_point2 - 1.96 * std2;
+            Float64 upper_ci2 = est_point2 + 1.96 * std2;
+
+            Float64 est_point3 = treated_label_avg / control_label_avg - 1;
+            Float64 std3 = std1;
+            Float64 z_value3 = z_value1;
+            Float64 p_value3 = p_value1;
+            Float64 lower_ci3 = est_point3 - 1.96 * std1 * est_point3 / est_point1;
+            Float64 upper_ci3 = est_point3 + 1.96 * std1 * est_point3 / est_point1;
+
+            Float64 est_point4 = (treated_label_avg - ate) / control_label_avg - 1;
+            Float64 std4 = std2;
+            Float64 z_value4 = z_value2;
+            Float64 p_value4 = p_value2;
+
+
+            Float64 lower_ci4 = 0;
+            Float64 upper_ci4 = 0;
+            if (tree_id == 0)
+            {
+                est_point2 = 0;
+                est_point4 = 0;
+                lower_ci4 = 0;
+                upper_ci4 = 0;
+            }
+            else
+            {
+                lower_ci4 = est_point4 - 1.96 * std2 * est_point4 / est_point2;
+                upper_ci4 = est_point4 + 1.96 * std2 * est_point4 / est_point2;
+            }
+            
+            Int32 split_var = nodes[i].split_var;
+            Float64 split_value = nodes[i].split_value;
+            Int32 left_child = nodes[i].left_child;
+            Int32 right_child = nodes[i].right_child;
+            if (!is_leaf && left_child) 
+                node_father[left_child] = i;
+            if (!is_leaf && right_child)
+                node_father[right_child] = i;
+
+            Int32 fahter = -1;
+            if (i)
+            {
+                auto it = node_father.find(i);
+                if (it != node_father.end())
+                    fahter = static_cast<Int32>(it->second);
+                depth[i] = 1 + depth[fahter];
+            }
+
+
+            Poco::JSON::Object node_json;
+            node_json.set("node_id", static_cast<Int64>(i));
+            node_json.set("nodeType", is_leaf ? "leaf" : "internal");
+            node_json.set("split_var", split_var);
+            node_json.set("split_value", split_value);
+            node_json.set("count_ratio", ratio * 100);
+            node_json.set("controlCount", static_cast<Int64>(control_count));
+            node_json.set("treatedCount", static_cast<Int64>(treatment_count));
+            node_json.set("controlAvg", control_label_avg);
+            node_json.set("treatedAvg", treated_label_avg);
+            Poco::JSON::Array pvalues_json;
+            pvalues_json.add(p_value1);
+            pvalues_json.add(p_value2);
+            pvalues_json.add(p_value3);
+            pvalues_json.add(p_value4);
+            node_json.set("pvalues", pvalues_json);
+            node_json.set("tau_i", prediction);
+            Poco::JSON::Array tau_i_new_json;
+            tau_i_new_json.add(est_point1);
+            tau_i_new_json.add(est_point2);
+            tau_i_new_json.add(est_point3);
+            tau_i_new_json.add(est_point4);
+            node_json.set("tau_i_new", tau_i_new_json);
+            node_json.set("father", fahter);
+            if (is_leaf)
+                node_json.set("left_child", -1);
+            else 
+                node_json.set("left_child", left_child);
+            if (is_leaf)
+                node_json.set("right_child", -1);
+            else
+                node_json.set("right_child", right_child);
+            node_json.set("est_point1", est_point1);
+            node_json.set("est_point2", est_point2);
+            node_json.set("est_point3", est_point3);
+            node_json.set("est_point4", est_point4);
+            node_json.set("std1", std1);
+            node_json.set("std2", std2);
+            node_json.set("std3", std3);
+            node_json.set("std4", std4);
+            node_json.set("z_value1", z_value1);
+            node_json.set("z_value2", z_value2);
+            node_json.set("z_value3", z_value3);
+            node_json.set("z_value4", z_value4);
+            node_json.set("lower_ci1", lower_ci1);
+            node_json.set("upper_ci1", upper_ci1);
+            node_json.set("lower_ci2", lower_ci2);
+            node_json.set("upper_ci2", upper_ci2);
+            node_json.set("lower_ci3", lower_ci3);
+            node_json.set("upper_ci3", upper_ci3);
+            node_json.set("lower_ci4", lower_ci4);
+            node_json.set("upper_ci4", upper_ci4);
+            node_json.set("prediction", prediction);
+            node_json.set("ratio", ratio);
+            node_json.set("level", depth[i]);
+            res_json.add(node_json);
+        }
+        std::ostringstream json_stream;
+        res_json.stringify(json_stream);
+        return json_stream.str();
+    }
+
     struct NodeInfo;
 
     static void transformToLeaf(NodeInfo & node)
@@ -251,6 +413,8 @@ public:
                 new_calc_node.sum_weight += calc_node.split_nodes[best_var][i].weight_sums;
                 new_calc_node.num_samples += calc_node.split_nodes[best_var][i].counter;
                 new_calc_node.sum_node_z_squared += calc_node.split_nodes[best_var][i].sums_z_squared;
+                new_calc_node.y0_squared += calc_node.split_nodes[best_var][i].y0_squared;
+                new_calc_node.y1_squared += calc_node.split_nodes[best_var][i].y1_squared;
                 new_calc_node.total_instrument += calc_node.split_nodes[best_var][i].sums_z;
                 new_calc_node.total_outcome += calc_node.split_nodes[best_var][i].total_outcome;
                 new_calc_node.total_treatment += calc_node.split_nodes[best_var][i].total_treatment;
@@ -262,13 +426,16 @@ public:
                 new_calc_node.sum_weight += calc_node.split_nodes[best_var][i].weight_sums;
                 new_calc_node.num_samples += calc_node.split_nodes[best_var][i].counter;
                 new_calc_node.sum_node_z_squared += calc_node.split_nodes[best_var][i].sums_z_squared;
+                new_calc_node.y0_squared += calc_node.split_nodes[best_var][i].y0_squared;
+                new_calc_node.y1_squared += calc_node.split_nodes[best_var][i].y1_squared;
                 new_calc_node.total_instrument += calc_node.split_nodes[best_var][i].sums_z;
                 new_calc_node.total_outcome += calc_node.split_nodes[best_var][i].total_outcome;
                 new_calc_node.total_treatment += calc_node.split_nodes[best_var][i].total_treatment;
                 new_calc_node.total_outcome_treatment += calc_node.split_nodes[best_var][i].total_outcome_treatment;
             }
         }
-        node.calc_node.reset();
+        if (!tree_options.causal_tree)
+            node.calc_node.reset();
         node.left_child = nodes.size();
         node.right_child = nodes.size() + 1;
         left_node.calc_node.value().possible_split_vars = createSplitVariable(forest_options, tree_options);
@@ -285,10 +452,13 @@ public:
         UInt64 num_small_z = 0.0;
         Float64 sums_z = 0.0;
         Float64 sums_z_squared = 0.0;
+        Float64 y0_squared = 0.0;
+        Float64 y1_squared = 0.0;
 
         Float64 total_outcome = 0.0;
         Float64 total_treatment = 0.0;
         Float64 total_outcome_treatment = 0.0;
+
 
         String toString() const
         {
@@ -299,6 +469,8 @@ public:
             res += "num_small_z: " + std::to_string(num_small_z) + "\n";
             res += "sums_z: " + std::to_string(sums_z) + "\n";
             res += "sums_z_squared: " + std::to_string(sums_z_squared) + "\n";
+            res += "y0_squared: " + std::to_string(y0_squared) + "\n";
+            res += "y1_squared: " + std::to_string(y1_squared) + "\n";
             res += "total_outcome: " + std::to_string(total_outcome) + "\n";
             res += "total_treatment: " + std::to_string(total_treatment) + "\n";
             res += "total_outcome_treatment: " + std::to_string(total_outcome_treatment) + "\n";
@@ -313,6 +485,8 @@ public:
             writeBinary(num_small_z, buf);
             writeBinary(sums_z, buf);
             writeBinary(sums_z_squared, buf);
+            writeBinary(y0_squared, buf);
+            writeBinary(y1_squared, buf);
             writeBinary(total_outcome, buf);
             writeBinary(total_treatment, buf);
             writeBinary(total_outcome_treatment, buf);
@@ -326,6 +500,8 @@ public:
             readBinary(num_small_z, buf);
             readBinary(sums_z, buf);
             readBinary(sums_z_squared, buf);
+            readBinary(y0_squared, buf);
+            readBinary(y1_squared, buf);
             readBinary(total_outcome, buf);
             readBinary(total_treatment, buf);
             readBinary(total_outcome_treatment, buf);
@@ -339,6 +515,8 @@ public:
             num_small_z += other.num_small_z;
             sums_z += other.sums_z;
             sums_z_squared += other.sums_z_squared;
+            y0_squared += other.y0_squared;
+            y1_squared += other.y1_squared;
             total_outcome += other.total_outcome;
             total_treatment += other.total_treatment;
             total_outcome_treatment += other.total_outcome_treatment;
@@ -359,6 +537,8 @@ public:
         Float64 numerator = 0.0;
         Float64 denominator = 0.0;
         Float64 sum_node_z_squared = 0.0;
+        Float64 y0_squared = 0.0;
+        Float64 y1_squared = 0.0;
 
         Float64 sum_node = 0.0;
         UInt64 num_node_small_z = 0;
@@ -369,7 +549,7 @@ public:
 
         Int32 father = -1;
 
-        String toString()
+        String toString() const
         {
             String res;
             res += "sum_weight: " + std::to_string(sum_weight) + "\n";
@@ -377,6 +557,13 @@ public:
             res += "total_treatment: " + std::to_string(total_treatment) + "\n";
             res += "total_instrument: " + std::to_string(total_instrument) + "\n";
             res += "total_outcome_treatment: " + std::to_string(total_outcome_treatment) + "\n";
+            res += "cnt0:" + std::to_string(cnt0()) + "\n";
+            res += "cnt1:" + std::to_string(cnt1()) + "\n";
+            res += "y0_avg:" + std::to_string(y0()/cnt0()) + "\n";
+            res += "y1_avg:" + std::to_string(y1()/cnt1()) + "\n";
+            res += "y0_squared_avg:" + std::to_string(y0_squared / cnt0()) + "\n";
+            res += "y1_squared_avg:" + std::to_string(y1_squared / cnt1()) + "\n";
+            res += "effect: " + std::to_string(effect()) + "\n";
             res += "possible_split_vars: ";
             for (const auto & var : possible_split_vars)
                 res += std::to_string(var) + " ";
@@ -390,6 +577,8 @@ public:
             res += "is_stop: " + std::to_string(is_stop) + "\n";
             res += "num_samples: " + std::to_string(num_samples) + "\n";
             res += "sum_node_z_squared: " + std::to_string(sum_node_z_squared) + "\n";
+            res += "y0_squared: " + std::to_string(y0_squared) + "\n";
+            res += "y1_squared: " + std::to_string(y1_squared) + "\n";
             res += "sum_node: " + std::to_string(sum_node) + "\n";
             res += "num_node_small_z: " + std::to_string(num_node_small_z) + "\n";
             res += "quantiles_calcers: ";
@@ -427,6 +616,8 @@ public:
             writeBinary(is_stop, buf);
             writeBinary(num_samples, buf);
             writeBinary(sum_node_z_squared, buf);
+            writeBinary(y0_squared, buf);
+            writeBinary(y1_squared, buf);
             writeBinary(sum_node, buf);
             writeBinary(num_node_small_z, buf);
 
@@ -466,6 +657,8 @@ public:
             readBinary(is_stop, buf);
             readBinary(num_samples, buf);
             readBinary(sum_node_z_squared, buf);
+            readBinary(y0_squared, buf);
+            readBinary(y1_squared, buf);
             readBinary(sum_node, buf);
             readBinary(num_node_small_z, buf);
             size_t quantiles_size;
@@ -519,6 +712,8 @@ public:
                 sum_weight += other.sum_weight;
                 num_samples += other.num_samples;
                 sum_node_z_squared += other.sum_node_z_squared;
+                y0_squared += other.y0_squared;
+                y1_squared += other.y1_squared;
             }
 
             is_stop = is_stop && other.is_stop;
@@ -555,7 +750,7 @@ public:
                 is_stop = true;
             if (num_samples <= tree_options.min_node_size)
                 is_stop = true;
-            if (state >= CausalForestState::CalcNumerAndDenom && std::abs(denominator) <= 1e-10)
+            if (!tree_options.causal_tree && state >= CausalForestState::CalcNumerAndDenom && std::abs(denominator) <= 1e-10)
                 is_stop = true;
         }
 
@@ -576,13 +771,45 @@ public:
         Float64 weight_sum_node() const { return sum_weight; } // NOLINT
         Float64 sum_node_z() const { return total_instrument; } // NOLINT
                                                                 //
+        UInt64 cnt1() const { return static_cast<UInt64>(total_treatment); } // NOLINT
+        UInt64 cnt0() const { return static_cast<UInt64>(num_samples - total_treatment); } // NOLINT
+
+        Float64 y1() const { return total_outcome_treatment; }
+        Float64 y0() const { return total_outcome - total_outcome_treatment; } // NOLINT
+
         Float64 size_node() const { return sum_node_z_squared - sum_node_z() * sum_node_z() / weight_sum_node(); } // NOLINT
         //   double min_child_size = size_node * alpha;
         Float64 min_child_size(Float64 alpha) const { return size_node() * alpha; } // NOLINT
         //   double mean_z_node = sum_node_z / weight_sum_node;
         Float64 mean_z_node() const { return sum_node_z() / weight_sum_node(); } // NOLINT
+                                                                                 //
+        Float64 effect() const {
+          /*
+           *         tau = y1 - y0
+        tr_var = y1_square - y1 ** 2
+        con_var = y0_square - y0 ** 2
+        # effect = 0.5 * tau * tau * (cnt1 + cnt0) - 0.5 * 2 * (cnt1 + cnt0) * (
+        #         tr_var / cnt1 + con_var / cnt0
+        # )
+        effect = split_alpha * 0.5 * tau * tau * (cnt1+cnt0) - (1-split_alpha) * 0.5 * (1+train_to_est_ratio) * (cnt1+cnt0) * (tr_var/cnt1 + con_var/cnt0)
+        return effect
+*/
+            Float64 y0_avg = y0() / cnt0();
+            Float64 y1_avg = y1() / cnt1();
+            Float64 y0_squared_avg = y0_squared / cnt0();
+            Float64 y1_squared_avg = y1_squared / cnt1();
+            Float64 tau = y1_avg - y0_avg;
+            Float64 tr_var = y1_squared_avg - y1_avg * y1_avg;
+            Float64 con_var = y0_squared_avg - y0_avg * y0_avg;
+            Float64 split_alpha = 1;
+            Float64 train_to_est_ratio = 1;
+            Float64 effect = split_alpha * 0.5 * tau * tau * (cnt1() + cnt0()) - (1 - split_alpha) * 0.5 * (1 + train_to_est_ratio) * (cnt1() + cnt0()) * (tr_var / cnt1() + con_var / cnt0());
+            return effect;
+        }
 
         void find_best_split_value(const size_t var, size_t & best_var, double & best_value, double & best_decrease, bool & best_send_missing_left, const TreeOptions & tree_options); // NOLINT
+                                                                                                                                                                                       //
+        void find_best_split_value_cf(const size_t var, size_t & best_var, double & best_value, double & best_decrease, bool & best_send_missing_left, const TreeOptions & tree_options); // NOLINT
 
         constexpr static Float64 reduced_form_weight = 0;
     };
@@ -601,7 +828,7 @@ public:
             return is_leaf && calc_node.has_value() && calc_node.value().num_samples <= 1;
         }
 
-        String toString()
+        String toString() const
         {
             String res;
             res += "split_var: " + std::to_string(split_var) + "\n";

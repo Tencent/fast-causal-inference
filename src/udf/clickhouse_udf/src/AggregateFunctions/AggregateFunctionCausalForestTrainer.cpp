@@ -20,6 +20,7 @@ ForestTrainer::ForestTrainer(const String & context, UInt64 arguments_size_, boo
     // tree options
     UInt32 mtry = 3;
     UInt32 min_node_size = 1;
+    bool causal_tree = false;
     bool honesty = true;
     double honesty_fraction = 0.5;
     bool honesty_prune_leaves = false;
@@ -41,7 +42,7 @@ ForestTrainer::ForestTrainer(const String & context, UInt64 arguments_size_, boo
     // TDigest param
     size_t max_centroids = 2048;
     size_t max_unmerged = 2048;
-    Float32 epsilon = 0.01;
+    Float32 epsilon = static_cast<Float32>(0.01);
 
     boost::property_tree::ptree pt;
     std::istringstream json_stream(context);
@@ -63,7 +64,7 @@ ForestTrainer::ForestTrainer(const String & context, UInt64 arguments_size_, boo
             {
                 typedef std::remove_reference_t<decltype(param)> param_type; // NOLINT
                 if constexpr (std::is_floating_point_v<param_type>) 
-                    param = pt.get<double>(name);
+                    param = pt.get<float>(name);
                 else if constexpr (std::is_integral_v<param_type>) 
                     param = pt.get<UInt32>(name);
                 else 
@@ -73,6 +74,7 @@ ForestTrainer::ForestTrainer(const String & context, UInt64 arguments_size_, boo
 
         fill_param("mtry", mtry);
         fill_param("min_node_size", min_node_size);
+        fill_param("causal_tree", causal_tree);
         fill_param("honesty", honesty);
         fill_param("honesty_fraction", honesty_fraction);
         fill_param("honesty_prune_leaves", honesty_prune_leaves);
@@ -95,7 +97,7 @@ ForestTrainer::ForestTrainer(const String & context, UInt64 arguments_size_, boo
         if (instrument_index == -1)
             instrument_index = treatment_index;
         state = CausalForestState::Init;
-        tree_options = TreeOptions(mtry, quantile_size, min_node_size, honesty, honesty_fraction, honesty_prune_leaves, alpha, imbalance_penalty);
+        tree_options = TreeOptions(mtry, quantile_size, min_node_size, causal_tree, honesty, honesty_fraction, honesty_prune_leaves, alpha, imbalance_penalty);
         forest_options = ForestOptions(num_trees, ci_group_size, sample_fraction, random_seed, weight_index, outcome_index, treatment_index, instrument_index, state, arguments_size_, max_centroids, max_unmerged, epsilon);
 
         std::mt19937_64 random_number_generator(random_seed);

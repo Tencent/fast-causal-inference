@@ -51,6 +51,7 @@ public:
     TreeOptions(UInt32 mtry,
                 size_t quantile_size,
                 UInt32 min_node_size,
+                bool causal_tree,
                 bool honesty,
                 double honesty_fraction,
                 bool honesty_prune_leaves,
@@ -66,6 +67,7 @@ public:
     UInt32 mtry;
     size_t quantile_size;
     UInt32 min_node_size;
+    bool causal_tree;
     bool honesty;
     double honesty_fraction;
     bool honesty_prune_leaves;
@@ -136,7 +138,7 @@ public:
 
     size_t max_centroids = 2048;
     size_t max_unmerged = 2048;
-    Float32 epsilon = 0.01;
+    Float32 epsilon = static_cast<Float32>(0.01);
 };
 
 }

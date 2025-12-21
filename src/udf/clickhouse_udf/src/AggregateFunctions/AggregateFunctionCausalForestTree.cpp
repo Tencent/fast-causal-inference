@@ -124,6 +124,10 @@ void Tree::addInit(const IColumn ** columns, size_t row_num,
     calc_node.sum_weight += weight;
     calc_node.num_samples ++;
     calc_node.sum_node_z_squared += weight * pow(columns[forest_options.instrument_index]->getFloat64(row_num), 2);
+    if (columns[forest_options.treatment_index]->get64(row_num) == 0)
+        calc_node.y0_squared += weight * pow(columns[forest_options.outcome_index]->getFloat64(row_num), 2);
+    else
+        calc_node.y1_squared += weight * pow(columns[forest_options.outcome_index]->getFloat64(row_num), 2);
 }
 
 bool Tree::getCalcNode(const IColumn ** columns, size_t row_num, size_t & res)
@@ -217,7 +221,7 @@ void Tree::addFindBestSplitPre(const IColumn ** columns, size_t row_num, // NOLI
     {
         auto var = node.possible_split_vars[i];
         auto & quantiles_calcer = node.quantiles_calcers[i];
-        quantiles_calcer.add(columns[var]->getFloat64(row_num));
+        quantiles_calcer.add(columns[var]->getFloat32(row_num));
     }
 }
 
@@ -263,15 +267,20 @@ void Tree::addFindBestSplit(const IColumn ** columns, size_t row_num, const Fore
         split_node.total_outcome_treatment += weight * outcome * treatment;
         if (instrument < node.mean_z_node())
             split_node.num_small_z++;
+        if (treatment == 0)
+            split_node.y0_squared += outcome * outcome;
+        else
+            split_node.y1_squared += outcome * outcome;
     }
 }
 
-void Tree::addHonesty(const IColumn ** columns, size_t row_num, const ForestOptions & forest_options, const TreeOptions &)
+void Tree::addHonesty(const IColumn ** columns, size_t row_num, const ForestOptions & forest_options, const TreeOptions & tree_options)
 {
     size_t calc_node_index;
     if (!getCalcNode(columns, row_num, calc_node_index))
         return;
-    auto & node = nodes[calc_node_index].calc_node.value(); // NOLINT
+    CalcNodeInfo & node = nodes[calc_node_index].calc_node.value(); // NOLINT
+    /*
     Float64 weight = columns[forest_options.weight_index]->getFloat64(row_num);
     node.total_outcome += weight * columns[forest_options.outcome_index]->getFloat64(row_num);
     node.total_treatment += weight * columns[forest_options.treatment_index]->getFloat64(row_num);
@@ -280,7 +289,48 @@ void Tree::addHonesty(const IColumn ** columns, size_t row_num, const ForestOpti
     node.sum_weight += weight;
     node.num_samples ++;
     node.sum_node_z_squared += weight * pow(columns[forest_options.instrument_index]->getFloat64(row_num), 2);
+    if (columns[forest_options.treatment_index]->get64(row_num) == 0)
+        node.y0_squared += weight * pow(columns[forest_options.outcome_index]->getFloat64(row_num), 2);
+    else
+        node.y1_squared += weight * pow(columns[forest_options.outcome_index]->getFloat64(row_num), 2);
+    */
+    auto add_node = [&](CalcNodeInfo & node) 
+    {
+        Float64 weight = columns[forest_options.weight_index]->getFloat64(row_num);
+        node.total_outcome += weight * columns[forest_options.outcome_index]->getFloat64(row_num);
+        node.total_treatment += weight * columns[forest_options.treatment_index]->getFloat64(row_num);
+        node.total_outcome_treatment += weight * columns[forest_options.outcome_index]->getFloat64(row_num) * columns[forest_options.treatment_index]->getFloat64(row_num);
+        node.total_instrument += weight * columns[forest_options.instrument_index]->getFloat64(row_num);
+        node.sum_weight += weight;
+        node.num_samples ++;
+        node.sum_node_z_squared += weight * pow(columns[forest_options.instrument_index]->getFloat64(row_num), 2);
+        if (columns[forest_options.treatment_index]->get64(row_num) == 0)
+            node.y0_squared += weight * pow(columns[forest_options.outcome_index]->getFloat64(row_num), 2);
+        else
+            node.y1_squared += weight * pow(columns[forest_options.outcome_index]->getFloat64(row_num), 2);
+    };
+    if (tree_options.causal_tree) 
+    {
+        size_t root = 0;
+        add_node(nodes[root].calc_node.value());
+
+        while (root < nodes.size() && !nodes[root].is_leaf)
+        {
+            const auto & value = columns[nodes[root].split_var]->getFloat64(row_num);
+            if (value > nodes[root].split_value + 1e-6)
+            {
+                root = nodes[root].right_child;
+            }
+            else
+                root = nodes[root].left_child;
+            if (root < nodes.size())
+                add_node(nodes[root].calc_node.value());
+        }
+    } 
+    else
+        add_node(node);
 }
+
 
 void Tree::add(const IColumn ** columns, size_t row_num, 
     const ForestOptions & forest_options, const TreeOptions & tree_options) // NOLINT
@@ -331,6 +381,99 @@ void Tree::deserialize(ReadBuffer & buf)
     readStringBinary(str, buf);
     std::istringstream istr(str);
     istr >> random_number_generator;
+}
+
+void Tree::CalcNodeInfo::find_best_split_value_cf(const size_t var, size_t & best_var, double & best_value, double & best_decrease, bool & best_send_missing_left, const TreeOptions &) // NOLINT 
+{
+    std::vector<Float64> & possible_split_values = quantiles[var];
+    // Try next variable if all equal for this
+    if (possible_split_values.size() < 2)
+        return;
+
+    if (possible_split_values.size() != split_nodes[var].size())
+      throw Exception(ErrorCodes::BAD_ARGUMENTS, "possible_split_values.size() != split_nodes[var].size()");
+
+    UInt64 num_splits = possible_split_values.size();
+    std::vector<UInt64> cnts0(num_splits, 0), cnts1(num_splits, 0);
+    std::vector<Float64> ys0(num_splits, 0), ys1(num_splits, 0);
+    std::vector<Float64> ys1_squared(num_splits, 0), ys0_squared(num_splits, 0);
+
+    UInt64 sum_cnt0 = 0, sum_cnt1 = 0;
+    Float64 sum_y0 = 0, sum_y1 = 0;
+    Float64 sum_y1_squared = 0, sum_y0_squared = 0;
+
+    for (size_t i = 0; i < possible_split_values.size(); i++)
+    {
+        UInt64 count = split_nodes[var][i].counter;
+        UInt64 cnt1 = static_cast<UInt64>(split_nodes[var][i].total_treatment);
+        UInt64 cnt0 = static_cast<UInt64>(count - split_nodes[var][i].total_treatment);
+        cnts1[i] = cnt1;
+        cnts0[i] = cnt0;
+        sum_cnt1 += cnt1;
+        sum_cnt0 += cnt0;
+
+        Float64 y1 = split_nodes[var][i].total_outcome_treatment;
+        Float64 y0 = (split_nodes[var][i].total_outcome - split_nodes[var][i].total_outcome_treatment);
+        ys1[i] = y1;
+        ys0[i] = y0;
+        sum_y1 += y1;
+        sum_y0 += y0;
+
+        Float64 y1_square = split_nodes[var][i].y1_squared;
+        Float64 y0_square = split_nodes[var][i].y0_squared;
+        ys1_squared[i] = y1_square;
+        ys0_squared[i] = y0_square;
+        sum_y1_squared += y1_square;
+        sum_y0_squared += y0_square;
+    }
+
+    UInt64 left_cnt0 = 0, left_cnt1 = 0;
+    Float64 left_y0 = 0, left_y1 = 0;
+    Float64 left_y0_squared = 0, left_y1_squared = 0;
+
+    const Float64 train_to_est_ratio = 1.0;
+    const Float64 split_alpha = 1.0;
+    for (size_t i = 0; i < possible_split_values.size(); i++)
+    {
+        left_cnt0 += cnts0[i];
+        left_cnt1 += cnts1[i];
+        left_y0 += ys0[i];
+        left_y1 += ys1[i];
+        left_y0_squared += ys0_squared[i];
+        left_y1_squared += ys1_squared[i];
+
+        UInt64 right_cnt0 = sum_cnt0 - left_cnt0;
+        UInt64 right_cnt1 = sum_cnt1 - left_cnt1;
+        Float64 right_y0 = sum_y0 - left_y0;
+        Float64 right_y1 = sum_y1 - left_y1;
+        Float64 right_y0_squared = sum_y0_squared - left_y0_squared;
+        Float64 right_y1_squared = sum_y1_squared - left_y1_squared;
+
+        Float64 left_y0_avg = left_cnt0 > 0 ? left_y0 / left_cnt0 : 0;
+        Float64 left_y1_avg = left_cnt1 > 0 ? left_y1 / left_cnt1 : 0;
+        Float64 right_y0_avg = right_cnt0 > 0 ? right_y0 / right_cnt0 : 0;
+        Float64 right_y1_avg = right_cnt1 > 0 ? right_y1 / right_cnt1 : 0;
+        Float64 left_y0_squared_avg = left_cnt0 > 0 ? left_y0_squared / left_cnt0 : 0;
+        Float64 left_y1_squared_avg = left_cnt1 > 0 ? left_y1_squared / left_cnt1 : 0;
+        Float64 right_y0_squared_avg = right_cnt0 > 0 ? right_y0_squared / right_cnt0 : 0;
+        Float64 right_y1_squared_avg = right_cnt1 > 0 ? right_y1_squared / right_cnt1 : 0;
+
+        // left_effect = split_alpha * 0.5 * tau * tau * (cnt1+cnt0) - (1-split_alpha) * 0.5 * (1+train_to_est_ratio) * (cnt1+cnt0) * (tr_var/cnt1 + con_var/cnt0)
+        Float64 left_effect = split_alpha * 0.5 * (left_y1_avg - left_y0_avg) * (left_y1_avg - left_y0_avg) * (left_cnt1 + left_cnt0)
+            - (1 - split_alpha) * 0.5 * (1 + train_to_est_ratio) * (left_cnt1 + left_cnt0) * ((left_y1_squared_avg / left_cnt1) + (left_y0_squared_avg / left_cnt0));
+        Float64 right_effect = split_alpha * 0.5 * (right_y1_avg - right_y0_avg) * (right_y1_avg - right_y0_avg) * (right_cnt1 + right_cnt0)
+            - (1 - split_alpha) * 0.5 * (1 + train_to_est_ratio) * (right_cnt1 + right_cnt0) * ((right_y1_squared_avg / right_cnt1) + (right_y0_squared_avg / right_cnt0));
+        Float64 decrease = left_effect + right_effect - effect();
+        if (isnan(decrease) || isinf(decrease))
+            continue;
+        if (decrease > best_decrease) 
+        {
+            best_value = possible_split_values[i];
+            best_var = var;
+            best_decrease = decrease;
+            best_send_missing_left = true;
+        }
+    }
 }
 
 void Tree::CalcNodeInfo::find_best_split_value(const size_t var, size_t & best_var, double & best_value, double & best_decrease, bool & best_send_missing_left, const TreeOptions & tree_options) // NOLINT
@@ -429,7 +572,7 @@ void Tree::CalcNodeInfo::find_best_split_value(const size_t var, size_t & best_v
             // Calculate relevant quantities for the left child.
             double size_left = sum_left_z_squared - sum_left_z * sum_left_z / weight_sum_left;
             // Skip this split if the left child's variance is too small.
-            if (size_left < min_child_size(tree_options.alpha) || (tree_options.imbalance_penalty > 0.0 && size_left == 0))
+            if ((!tree_options.causal_tree && size_left < min_child_size(tree_options.alpha)) || (tree_options.imbalance_penalty > 0.0 && size_left == 0))
                 continue;
 
             // Calculate relevant quantities for the right child.
@@ -440,7 +583,7 @@ void Tree::CalcNodeInfo::find_best_split_value(const size_t var, size_t & best_v
             double size_right = sum_right_z_squared - sum_right_z * sum_right_z / weight_sum_right;
 
             // Skip this split if the right child's variance is too small.
-            if (size_right < min_child_size(tree_options.alpha) || (tree_options.imbalance_penalty > 0.0 && size_right == 0)) 
+            if ((!tree_options.causal_tree && size_right < min_child_size(tree_options.alpha)) || (tree_options.imbalance_penalty > 0.0 && size_right == 0)) 
                 continue;
 
             // Calculate the decrease in impurity.

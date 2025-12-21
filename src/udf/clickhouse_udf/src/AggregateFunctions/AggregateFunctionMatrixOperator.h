@@ -68,7 +68,7 @@ public:
     {
         Matrix data_matrix = data.getMatrix();
         if (to_inverse && !invertMatrix(data_matrix, data_matrix)) 
-          throw Exception("InvertMatrix failed. some variables in the table are perfectly collinear.", ErrorCodes::BAD_ARGUMENTS);
+          throw Exception(ErrorCodes::BAD_ARGUMENTS, "InvertMatrix failed. some variables in the table are perfectly collinear.");
 
         auto & data_to = assert_cast<ColumnFloat64 &>(assert_cast<ColumnArray &>(
               assert_cast<ColumnArray &>(to).getData()).getData()
@@ -103,7 +103,7 @@ private:
 public:
     explicit AggregateFunctionMatrixOperator(const DataTypes & arguments, const Array & params)
         :IAggregateFunctionDataHelper<AggregateFunctionMatrixOperatorData, 
-        AggregateFunctionMatrixOperator<AggregateFunctionMatrixOperatorData>> ({arguments}, {})
+        AggregateFunctionMatrixOperator<AggregateFunctionMatrixOperatorData>> ({arguments}, {}, getReturnType())
     {
         arguments_num = arguments.size();
         if (!params.empty())
@@ -119,7 +119,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return false; } 
 
-    DataTypePtr getReturnType() const override
+    static DataTypePtr getReturnType()
     {
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat64>()));
     }
